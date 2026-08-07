@@ -30,12 +30,23 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — never commit secrets
+.env
+.env.*
+!.env.example
 
-# vercel
+# local session / cookie jars from smoke tests
+cookies.txt
+*.cookies
+
+# vercel / railway local
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+# local DB dumps / backups (keep Drizzle migrations)
+*.sql
+*.dump
+*.bak
+!drizzle/migrations/*.sql

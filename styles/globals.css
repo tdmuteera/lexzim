@@ -1,0 +1,87 @@
+/* LexZim global styles — TPfigu design system (ported from tpfigu-build/css.js) */
+@import "./tpfigu.css";
+@import "./ai-chat.css";
+
+/*
+  App shell (P0-03): match demo fixed viewport.
+  Login splash pages (P0-09) can opt into .lexzim-splash scrolling separately.
+*/
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Utility helpers used by React primitives */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Next.js Link styled as demo nav buttons */
+a.nav-item {
+  text-decoration: none;
+}
+
+.lexzim-splash {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bg-0);
+  overflow: auto;
+}
+
+.lexzim-splash-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: 16px;
+  padding: 2.25rem;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  animation: fadeUp 0.55s var(--ease);
+}
+
+.lexzim-splash-card .login-mark {
+  margin: 0 auto 1.25rem;
+}
+
+.lexzim-splash-card h1 {
+  font-family: var(--font-brand);
+  font-size: 1.85rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.lexzim-splash-card h1 span {
+  color: var(--gold);
+}
+
+.lexzim-splash-card .sub {
+  color: var(--text-3);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.lexzim-splash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
+/* Auth routes: allow scroll on login/setup full-screen */
+body:has(#login-screen) {
+  overflow: auto;
+}

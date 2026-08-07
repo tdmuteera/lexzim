@@ -6,19 +6,44 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push",
+    "db:seed:rbac": "tsx scripts/seed-rbac.ts",
+    "db:seed:demo-firm": "tsx scripts/seed-demo-firm.ts",
+    "db:seed:dev-users": "tsx scripts/seed-dev-users.ts",
+    "db:seed:phase1-demo": "tsx scripts/seed-phase1-demo.ts",
+    "smoke:phase0": "tsx scripts/phase0-smoke.ts",
+    "smoke:phase1": "tsx scripts/phase1-smoke.ts",
+    "smoke:phase1-rbac": "tsx scripts/phase1-rbac-smoke.ts",
+    "smoke:phase2": "tsx scripts/phase2-smoke.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.1",
+    "docx": "^9.7.1",
+    "drizzle-orm": "^0.45.2",
+    "jszip": "^3.10.1",
     "next": "16.3.0",
+    "postgres": "^3.4.9",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.23.7",
     "typescript": "^5"
   }
 }

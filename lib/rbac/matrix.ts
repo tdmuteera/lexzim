@@ -1,0 +1,131 @@
+/**
+ * RBAC seed definitions for P0-06.
+ * Managing Partner gets every permission; other roles get a sensible subset.
+ */
+import type { PermissionCode, RoleCode } from "@/lib/db/types";
+
+export const ROLE_DEFS: {
+  code: RoleCode;
+  name: string;
+  description: string;
+}[] = [
+  {
+    code: "managing_partner",
+    name: "Managing Partner",
+    description: "Full firm access including users, trust, settings, and audit.",
+  },
+  {
+    code: "senior_associate",
+    name: "Senior Associate",
+    description: "Broad practice access; limited admin and trust management.",
+  },
+  {
+    code: "junior_associate",
+    name: "Junior Associate",
+    description: "Assigned-matter focused; no matters.view_all.",
+  },
+  {
+    code: "secretary",
+    name: "Secretary / Paralegal",
+    description: "Clients, documents, calendar, and intake support.",
+  },
+  {
+    code: "accounts",
+    name: "Accounts / Bookkeeper",
+    description: "Billing, trust, and reports with limited matter visibility.",
+  },
+];
+
+export const PERMISSION_DEFS: {
+  code: PermissionCode;
+  name: string;
+  description: string;
+  module: string;
+}[] = [
+  { code: "dashboard.view", name: "View dashboard", description: "See home dashboard", module: "dashboard" },
+  { code: "clients.view", name: "View clients", description: "List and open clients", module: "clients" },
+  { code: "clients.create", name: "Create clients", description: "Register clients", module: "clients" },
+  { code: "clients.edit", name: "Edit clients", description: "Update client records", module: "clients" },
+  { code: "clients.delete", name: "Delete/archive clients", description: "Archive clients", module: "clients" },
+  { code: "matters.view", name: "View matters", description: "View allowed matters", module: "matters" },
+  { code: "matters.create", name: "Create matters", description: "Open new matters", module: "matters" },
+  { code: "matters.edit", name: "Edit matters", description: "Update matters", module: "matters" },
+  { code: "matters.delete", name: "Delete/archive matters", description: "Close/archive matters", module: "matters" },
+  { code: "matters.view_all", name: "View all matters", description: "See all firm matters, not only assigned", module: "matters" },
+  { code: "documents.view", name: "View documents", description: "Open matter documents", module: "documents" },
+  { code: "documents.manage", name: "Manage documents", description: "Upload/delete documents", module: "documents" },
+  { code: "templates.view", name: "View templates", description: "Browse templates", module: "templates" },
+  { code: "templates.manage", name: "Manage templates", description: "Edit/approve templates", module: "templates" },
+  { code: "calendar.view", name: "View calendar", description: "See diary events", module: "calendar" },
+  { code: "calendar.manage", name: "Manage calendar", description: "Create/edit events", module: "calendar" },
+  { code: "billing.view", name: "View billing", description: "See invoices and time", module: "billing" },
+  { code: "billing.manage", name: "Manage billing", description: "Create invoices and payments", module: "billing" },
+  { code: "trust.view", name: "View trust", description: "See trust balances", module: "trust" },
+  { code: "trust.manage", name: "Manage trust", description: "Post trust ledger entries", module: "trust" },
+  { code: "intake.view", name: "View intake", description: "See prospects", module: "intake" },
+  { code: "intake.manage", name: "Manage intake", description: "Create/convert intakes", module: "intake" },
+  { code: "ai.use", name: "Use AI", description: "Open AI assistant", module: "ai" },
+  { code: "ai.manage_settings", name: "Manage AI settings", description: "Change AI keys/settings", module: "ai" },
+  { code: "audit.view", name: "View audit log", description: "Read audit events", module: "audit" },
+  { code: "settings.manage", name: "Manage settings", description: "Firm settings and exports", module: "settings" },
+  { code: "users.manage", name: "Manage users", description: "Invite/deactivate users", module: "users" },
+  { code: "reports.view", name: "View reports", description: "Run management reports", module: "reports" },
+];
+
+const allCodes = PERMISSION_DEFS.map((p) => p.code);
+
+function except(codes: PermissionCode[], remove: PermissionCode[]): PermissionCode[] {
+  const ban = new Set(remove);
+  return codes.filter((c) => !ban.has(c));
+}
+
+/** Default role → permission codes matrix */
+export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
+  managing_partner: allCodes,
+  senior_associate: except(allCodes, [
+    "users.manage",
+    "trust.manage",
+    "settings.manage",
+    "ai.manage_settings",
+  ]),
+  junior_associate: [
+    "dashboard.view",
+    "clients.view",
+    "matters.view",
+    "matters.create",
+    "matters.edit",
+    "documents.view",
+    "documents.manage",
+    "templates.view",
+    "calendar.view",
+    "calendar.manage",
+    "intake.view",
+    "ai.use",
+  ],
+  secretary: [
+    "dashboard.view",
+    "clients.view",
+    "clients.create",
+    "clients.edit",
+    "matters.view",
+    "documents.view",
+    "documents.manage",
+    "templates.view",
+    "calendar.view",
+    "calendar.manage",
+    "intake.view",
+    "intake.manage",
+    "ai.use",
+  ],
+  accounts: [
+    "dashboard.view",
+    "clients.view",
+    "matters.view",
+    "matters.view_all",
+    "billing.view",
+    "billing.manage",
+    "trust.view",
+    "trust.manage",
+    "reports.view",
+  ],
+};

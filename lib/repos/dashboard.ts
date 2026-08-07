@@ -1,0 +1,278 @@
+/**
+ * Dashboard aggregates (P1-10). Always firm-scoped; apply viewAll for matter visibility.
+ */
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import {
+  clients,
+  matterEvents,
+  matterTeam,
+  matters,
+  pendingProcedures,
+  users,
+} from "@/lib/db/schema";
+import {
+  CLOSED_MATTER_STATUSES,
+  OPEN_MATTER_STATUSES,
+} from "@/lib/matters/validation";
+import { serializeProcedure } from "@/lib/procedures/serialize";
+
+function accessibleMatterIdsSubquery(firmId: string, userId: string) {
+  const db = getDb();
+  return db
+    .select({ matterId: matterTeam.matterId })
+    .from(matterTeam)
+    .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, userId)));
+}
+
+function matterAccessCondition(
+  firmId: string,
+  userId: string,
+  viewAll: boolean,
+) {
+  if (viewAll) return eq(matters.firmId, firmId);
+  return and(
+    eq(matters.firmId, firmId),
+    or(
+      eq(matters.responsibleLawyerId, userId),
+      inArray(matters.id, accessibleMatterIdsSubquery(firmId, userId)),
+    ),
+  )!;
+}
+
+export async function getDashboardStats(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+
+  const openRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(matters)
+    .where(and(matterAccess, inArray(matters.status, [...OPEN_MATTER_STATUSES])));
+
+  const closedRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(matters)
+    .where(and(matterAccess, inArray(matters.status, [...CLOSED_MATTER_STATUSES])));
+
+  // Clients: firm-wide for view_all; otherwise still firm-wide if user can view clients
+  // Dashboard shows firm client count when viewAll; assigned users see firm clients too if they have clients.view
+  // Prompt: "new clients this month" — firm scoped always (clients are firm registry)
+  const newClientsRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.firmId, input.firmId),
+        gte(clients.createdAt, monthStart),
+      ),
+    );
+
+  const overdueProcConditions = [
+    eq(pendingProcedures.firmId, input.firmId),
+    eq(pendingProcedures.status, "todo"),
+    isNotNull(pendingProcedures.dueAt),
+    lt(pendingProcedures.dueAt, now),
+  ];
+  if (!input.viewAll) {
+    overdueProcConditions.push(eq(pendingProcedures.assignedTo, input.userId));
+  }
+  const overdueRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingProcedures)
+    .where(and(...overdueProcConditions));
+
+  return {
+    openMatters: openRows[0]?.count ?? 0,
+    closedMatters: closedRows[0]?.count ?? 0,
+    newClientsThisMonth: newClientsRows[0]?.count ?? 0,
+    overdueProcedures: overdueRows[0]?.count ?? 0,
+  };
+}
+
+export async function listDashboardProcedures(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  mode: "overdue" | "due_soon";
+  limit?: number;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const conditions = [
+    eq(pendingProcedures.firmId, input.firmId),
+    eq(pendingProcedures.status, "todo"),
+    isNotNull(pendingProcedures.dueAt),
+  ];
+
+  if (!input.viewAll) {
+    conditions.push(eq(pendingProcedures.assignedTo, input.userId));
+  }
+
+  if (input.mode === "overdue") {
+    conditions.push(lt(pendingProcedures.dueAt, now));
+  } else {
+    conditions.push(gte(pendingProcedures.dueAt, now));
+    conditions.push(lte(pendingProcedures.dueAt, in7));
+  }
+
+  const rows = await db
+    .select({
+      procedure: pendingProcedures,
+      assigneeName: users.fullName,
+      matterTitle: matters.title,
+    })
+    .from(pendingProcedures)
+    .innerJoin(
+      matters,
+      and(eq(matters.id, pendingProcedures.matterId), eq(matters.firmId, input.firmId)),
+    )
+    .leftJoin(users, eq(users.id, pendingProcedures.assignedTo))
+    .where(and(...conditions))
+    .orderBy(asc(pendingProcedures.dueAt))
+    .limit(input.limit ?? 10);
+
+  return rows.map((row) =>
+    serializeProcedure(
+      { ...row.procedure },
+      { assigneeName: row.assigneeName ?? null, matterTitle: row.matterTitle },
+    ),
+  );
+}
+
+export async function listUpcomingHearings(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  limit?: number;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+
+  const rows = await db
+    .select({
+      id: matters.id,
+      title: matters.title,
+      nextHearingAt: matters.nextHearingAt,
+      courtName: matters.courtName,
+      caseNumber: matters.caseNumber,
+      status: matters.status,
+      responsibleLawyerName: users.fullName,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      clientType: clients.clientType,
+    })
+    .from(matters)
+    .innerJoin(clients, and(eq(clients.id, matters.clientId), eq(clients.firmId, input.firmId)))
+    .leftJoin(users, eq(users.id, matters.responsibleLawyerId))
+    .where(
+      and(
+        matterAccess,
+        isNotNull(matters.nextHearingAt),
+        gte(matters.nextHearingAt, now),
+      ),
+    )
+    .orderBy(asc(matters.nextHearingAt))
+    .limit(input.limit ?? 10);
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    nextHearingAt: row.nextHearingAt!.toISOString(),
+    courtName: row.courtName,
+    caseNumber: row.caseNumber,
+    status: row.status,
+    responsibleLawyerName: row.responsibleLawyerName ?? null,
+    clientDisplayName:
+      row.clientType === "company"
+        ? row.clientTradingName || row.clientLegalName || "Unnamed company"
+        : row.clientFullName || "Unnamed client",
+  }));
+}
+
+export async function listRecentActivity(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  limit?: number;
+}) {
+  const db = getDb();
+  const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+
+  const rows = await db
+    .select({
+      id: matterEvents.id,
+      matterId: matterEvents.matterId,
+      eventType: matterEvents.eventType,
+      title: matterEvents.title,
+      body: matterEvents.body,
+      eventAt: matterEvents.eventAt,
+      matterTitle: matters.title,
+      createdByName: users.fullName,
+    })
+    .from(matterEvents)
+    .innerJoin(matters, and(eq(matters.id, matterEvents.matterId), matterAccess))
+    .leftJoin(users, eq(users.id, matterEvents.createdBy))
+    .where(eq(matterEvents.firmId, input.firmId))
+    .orderBy(desc(matterEvents.eventAt))
+    .limit(input.limit ?? 12);
+
+  return rows.map((row) => ({
+    id: row.id,
+    matterId: row.matterId,
+    matterTitle: row.matterTitle,
+    eventType: row.eventType,
+    title: row.title,
+    body: row.body,
+    eventAt: row.eventAt.toISOString(),
+    createdByName: row.createdByName ?? null,
+  }));
+}
+
+/** Managing Partner workload: open matters per responsible lawyer. */
+export async function listWorkloadByLawyer(firmId: string) {
+  const db = getDb();
+  const rows = await db
+    .select({
+      lawyerId: matters.responsibleLawyerId,
+      lawyerName: users.fullName,
+      openCount: sql<number>`count(*)::int`,
+    })
+    .from(matters)
+    .leftJoin(users, eq(users.id, matters.responsibleLawyerId))
+    .where(
+      and(
+        eq(matters.firmId, firmId),
+        inArray(matters.status, [...OPEN_MATTER_STATUSES]),
+      ),
+    )
+    .groupBy(matters.responsibleLawyerId, users.fullName)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows.map((row) => ({
+    lawyerId: row.lawyerId,
+    lawyerName: row.lawyerName ?? "Unassigned",
+    openMatters: row.openCount,
+  }));
+}
