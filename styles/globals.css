@@ -85,3 +85,23 @@ a.nav-item {
 body:has(#login-screen) {
   overflow: auto;
 }
+
+/* Fee note printable view (P3-07) */
+@media print {
+  .sidebar,
+  .topbar,
+  .no-print,
+  .sidebar-backdrop {
+    display: none !important;
+  }
+  .main,
+  .content,
+  .view {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .invoice-sheet {
+    border: none !important;
+    box-shadow: none !important;
+  }
+}

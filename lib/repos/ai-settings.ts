@@ -1,10 +1,22 @@
 /**
- * AI settings repository stubs (P2-01).
- * Keys are never stored here — see P2-02.
+ * AI settings repository. Keys are never stored here — see secrets.ts.
  */
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
+
+export type AiRoutingMode = "auto" | "manual";
+export type AiKeyMode = "direct" | "proxy";
+
+const DEFAULT_MAX_OUTPUT_TOKENS = 1200;
+
+export function normalizeRoutingMode(raw: string | null | undefined): AiRoutingMode {
+  return raw === "manual" ? "manual" : "auto";
+}
+
+export function normalizeKeyMode(raw: string | null | undefined): AiKeyMode {
+  return raw === "proxy" ? "proxy" : "direct";
+}
 
 export async function getAiSettings(firmId: string) {
   const db = getDb();
@@ -19,6 +31,11 @@ export async function upsertAiSettings(
     modelDefault?: string;
     embeddingsModel?: string;
     webLookupEnabled?: boolean;
+    routingMode?: AiRoutingMode;
+    monthlySoftBudget?: number | null;
+    maxOutputTokens?: number;
+    matterContextEnabled?: boolean;
+    keyMode?: AiKeyMode;
   },
 ) {
   const db = getDb();
@@ -32,6 +49,12 @@ export async function upsertAiSettings(
         modelDefault: input.modelDefault ?? "gemini-2.0-flash",
         embeddingsModel: input.embeddingsModel ?? "text-embedding-004",
         webLookupEnabled: input.webLookupEnabled ?? false,
+        routingMode: input.routingMode ?? "auto",
+        monthlySoftBudget:
+          input.monthlySoftBudget === undefined ? 500 : input.monthlySoftBudget,
+        maxOutputTokens: input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        matterContextEnabled: input.matterContextEnabled ?? true,
+        keyMode: input.keyMode ?? "direct",
         updatedAt: new Date(),
       })
       .returning();
@@ -48,9 +71,26 @@ export async function upsertAiSettings(
         input.webLookupEnabled !== undefined
           ? input.webLookupEnabled
           : existing.webLookupEnabled,
+      routingMode:
+        input.routingMode !== undefined ? input.routingMode : existing.routingMode,
+      monthlySoftBudget:
+        input.monthlySoftBudget !== undefined
+          ? input.monthlySoftBudget
+          : existing.monthlySoftBudget,
+      maxOutputTokens:
+        input.maxOutputTokens !== undefined
+          ? input.maxOutputTokens
+          : existing.maxOutputTokens,
+      matterContextEnabled:
+        input.matterContextEnabled !== undefined
+          ? input.matterContextEnabled
+          : existing.matterContextEnabled,
+      keyMode: input.keyMode !== undefined ? input.keyMode : existing.keyMode,
       updatedAt: new Date(),
     })
     .where(eq(aiSettings.firmId, firmId))
     .returning();
   return rows[0];
 }
+
+export { DEFAULT_MAX_OUTPUT_TOKENS };

@@ -13,7 +13,12 @@ import {
   validatePassword,
 } from "@/lib/auth/password";
 import { authCurrentUser, loadSessionUser } from "@/lib/auth/session";
+import {
+  decodeAccessTokenClaims,
+  registerStaffSession,
+} from "@/lib/auth/staff-sessions";
 import { AuthError, type AuthSessionUser, type SetupFirmInput } from "@/lib/auth/types";
+import { ensureTrialLicence } from "@/lib/repos/licences";
 
 /** True when no firm exists yet (bootstrap tenant #1 on empty platform). */
 export async function authNeedsSetup(): Promise<boolean> {
@@ -121,6 +126,11 @@ export async function authSetupFirm(
       metadata: { email, firmName, slug },
       ipOrUserAgent: opts?.ipOrUserAgent ?? null,
     });
+
+    await ensureTrialLicence(firm.id, {
+      issuedBy: "bootstrap",
+      notes: "Bootstrap trial licence",
+    });
   } catch (err) {
     // Best-effort rollback of auth user if DB failed mid-setup.
     await admin.auth.admin.deleteUser(authUserId).catch(() => undefined);
@@ -176,6 +186,25 @@ export async function authLogin(
   const profile = await loadSessionUser(data.user.id);
   if (!profile) {
     await supabase.auth.signOut();
+    const statusRows = await db
+      .select({ status: firms.status, isActive: users.isActive })
+      .from(users)
+      .innerJoin(firms, eq(users.firmId, firms.id))
+      .where(eq(users.id, data.user.id))
+      .limit(1);
+    const firmStatus = statusRows[0]?.status;
+    if (firmStatus === "suspended" || firmStatus === "archived") {
+      await writeAuditLog({
+        action: "auth.login_failed",
+        userId: data.user.id,
+        metadata: { email, reason: "firm_disabled", firmStatus },
+        ipOrUserAgent: opts?.ipOrUserAgent ?? null,
+      }).catch(() => undefined);
+      throw new AuthError(
+        "forbidden",
+        "This firm is suspended. Contact LexZim support.",
+      );
+    }
     await writeAuditLog({
       action: "auth.login_failed",
       userId: data.user.id,
@@ -190,11 +219,22 @@ export async function authLogin(
     .set({ lastLoginAt: new Date(), updatedAt: new Date() })
     .where(eq(users.id, profile.id));
 
+  const accessToken = data.session?.access_token ?? null;
+  const { sessionId } = accessToken
+    ? decodeAccessTokenClaims(accessToken)
+    : { sessionId: null };
+  await registerStaffSession({
+    firmId: profile.firm.id,
+    userId: profile.id,
+    sessionId,
+    ipOrUserAgent: opts?.ipOrUserAgent ?? null,
+  });
+
   await writeAuditLog({
     action: "auth.login",
     firmId: profile.firm.id,
     userId: profile.id,
-    metadata: { email: profile.email },
+    metadata: { email: profile.email, sessionId },
     ipOrUserAgent: opts?.ipOrUserAgent ?? null,
   });
 

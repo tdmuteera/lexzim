@@ -17,10 +17,15 @@ import {
 import { getDb } from "@/lib/db";
 import {
   clients,
+  feePayments,
+  intakes,
+  invoices,
   matterEvents,
   matterTeam,
   matters,
   pendingProcedures,
+  trustAccounts,
+  trustLedgerEntries,
   users,
 } from "@/lib/db/schema";
 import {
@@ -276,3 +281,202 @@ export async function listWorkloadByLawyer(firmId: string) {
     openMatters: row.openCount,
   }));
 }
+
+/** Fee invoices with outstanding balance past due (billing.view only on call site). */
+export async function listDashboardOverdueInvoices(
+  firmId: string,
+  opts?: { limit?: number },
+) {
+  const db = getDb();
+  const now = new Date();
+  const rows = await db
+    .select({
+      invoice: invoices,
+      matterTitle: matters.title,
+      matterNumber: matters.matterNumber,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      clientType: clients.clientType,
+      paidCents: sql<number>`coalesce((
+        select sum(${feePayments.amountCents}) from ${feePayments}
+        where ${feePayments.firmId} = ${firmId}
+          and ${feePayments.invoiceId} = ${invoices.id}
+      ), 0)::int`,
+    })
+    .from(invoices)
+    .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
+    .leftJoin(clients, and(eq(clients.id, invoices.clientId), eq(clients.firmId, firmId)))
+    .where(
+      and(
+        eq(invoices.firmId, firmId),
+        inArray(invoices.status, ["sent", "overdue"]),
+        isNotNull(invoices.dueDate),
+        lt(invoices.dueDate, now),
+      ),
+    )
+    .orderBy(asc(invoices.dueDate))
+    .limit((opts?.limit ?? 8) * 3);
+
+  return rows
+    .map((r) => {
+      const paidCents = Number(r.paidCents) || 0;
+      const balanceCents = Math.max(0, r.invoice.totalCents - paidCents);
+      if (balanceCents <= 0) return null;
+      return {
+        id: r.invoice.id,
+        invoiceNumber: r.invoice.invoiceNumber,
+        status: r.invoice.status,
+        dueDate: r.invoice.dueDate!.toISOString().slice(0, 10),
+        currency: r.invoice.currency,
+        balanceCents,
+        matterId: r.invoice.matterId,
+        matterTitle: r.matterTitle,
+        matterNumber: r.matterNumber,
+        clientName: r.clientType
+          ? r.clientType === "company"
+            ? r.clientTradingName || r.clientLegalName || "Unnamed company"
+            : r.clientFullName || "Unnamed client"
+          : "n/a",
+        href: `/billing/invoices/${r.invoice.id}`,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, opts?.limit ?? 8) as Array<{
+    id: string;
+    invoiceNumber: string;
+    status: string;
+    dueDate: string;
+    currency: string;
+    balanceCents: number;
+    matterId: string;
+    matterTitle: string;
+    matterNumber: string | null;
+    clientName: string;
+    href: string;
+  }>;
+}
+
+/** Trust attention: account balances + client balances needing review (trust.view only). */
+export async function listDashboardTrustAttention(firmId: string) {
+  const db = getDb();
+  const accounts = await db
+    .select({
+      id: trustAccounts.id,
+      name: trustAccounts.name,
+      currency: trustAccounts.currency,
+      isActive: trustAccounts.isActive,
+      balanceCents: sql<number>`coalesce((
+        select sum(${trustLedgerEntries.amountCents}) from ${trustLedgerEntries}
+        where ${trustLedgerEntries.firmId} = ${firmId}
+          and ${trustLedgerEntries.trustAccountId} = ${trustAccounts.id}
+      ), 0)::int`,
+    })
+    .from(trustAccounts)
+    .where(eq(trustAccounts.firmId, firmId))
+    .orderBy(asc(trustAccounts.name));
+
+  const clientBalances = await db
+    .select({
+      clientId: trustLedgerEntries.clientId,
+      currency: trustLedgerEntries.currency,
+      balanceCents: sql<number>`coalesce(sum(${trustLedgerEntries.amountCents}), 0)::int`,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      clientType: clients.clientType,
+    })
+    .from(trustLedgerEntries)
+    .innerJoin(
+      clients,
+      and(eq(clients.id, trustLedgerEntries.clientId), eq(clients.firmId, firmId)),
+    )
+    .where(
+      and(eq(trustLedgerEntries.firmId, firmId), isNotNull(trustLedgerEntries.clientId)),
+    )
+    .groupBy(
+      trustLedgerEntries.clientId,
+      trustLedgerEntries.currency,
+      clients.fullName,
+      clients.legalName,
+      clients.tradingName,
+      clients.clientType,
+    )
+    .orderBy(desc(sql`abs(sum(${trustLedgerEntries.amountCents}))`))
+    .limit(8);
+
+  const accountRows = accounts.map((a) => ({
+    id: a.id,
+    name: a.name,
+    currency: a.currency,
+    isActive: a.isActive,
+    balanceCents: Number(a.balanceCents) || 0,
+    flag:
+      !a.isActive && (Number(a.balanceCents) || 0) !== 0
+        ? "inactive_with_balance"
+        : (Number(a.balanceCents) || 0) < 0
+          ? "negative"
+          : null,
+  }));
+
+  const clientRows = clientBalances.map((c) => {
+    const balanceCents = Number(c.balanceCents) || 0;
+    return {
+      clientId: c.clientId!,
+      clientName:
+        c.clientType === "company"
+          ? c.clientTradingName || c.clientLegalName || "Unnamed company"
+          : c.clientFullName || "Unnamed client",
+      currency: c.currency,
+      balanceCents,
+      flag: balanceCents < 0 ? "negative" : balanceCents === 0 ? null : "held",
+      href: `/trust`,
+    };
+  });
+
+  return {
+    note: "Trust money only. Fee invoice AR is under Billing.",
+    accounts: accountRows,
+    clients: clientRows.filter((c) => c.balanceCents !== 0 || c.flag === "negative"),
+    attentionCount:
+      accountRows.filter((a) => a.flag).length +
+      clientRows.filter((c) => c.flag === "negative").length,
+  };
+}
+
+/** Open intakes for intake.view holders. */
+export async function listDashboardOpenIntakes(firmId: string, limit = 8) {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: intakes.id,
+      prospectName: intakes.prospectName,
+      areaOfLaw: intakes.areaOfLaw,
+      opposingParty: intakes.opposingParty,
+      status: intakes.status,
+      updatedAt: intakes.updatedAt,
+      assigneeName: users.fullName,
+    })
+    .from(intakes)
+    .leftJoin(users, eq(users.id, intakes.assignedTo))
+    .where(
+      and(
+        eq(intakes.firmId, firmId),
+        inArray(intakes.status, ["open", "draft", "submitted"]),
+      ),
+    )
+    .orderBy(desc(intakes.updatedAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    prospectName: r.prospectName,
+    areaOfLaw: r.areaOfLaw,
+    opposingParty: r.opposingParty,
+    status: r.status,
+    assigneeName: r.assigneeName ?? null,
+    updatedAt: r.updatedAt.toISOString(),
+    href: `/intake/${r.id}`,
+  }));
+}
+

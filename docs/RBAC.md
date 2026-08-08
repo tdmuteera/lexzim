@@ -1,4 +1,4 @@
-# LexZim RBAC (Phase 0 + Phase 1)
+# LexZim RBAC (Phase 0 to Phase 3)
 
 Email is **unique globally** for MVP. Users belong to one `firm_id`.
 
@@ -80,9 +80,28 @@ Templates are firm-wide (permission-gated). Party search and client party lists 
 | Documents | `/api/documents*`, matter nested | `documents.*` | via matter |
 | Templates | `/api/templates*` | `templates.*` | `firm_id` |
 | Search | `/api/search` | `clients.view` and/or `matters.view` | matters assigned |
-| Dashboard | `/api/dashboard` | `dashboard.view` | assignment |
+| Dashboard | `/api/dashboard` | `dashboard.view` | assignment; money/intake slices permission-gated |
 | Export | `/api/export` | `settings.manage` | whole firm (MP) |
 | Audit / staff | `/api/audit`, `/api/staff` | `audit.view` / `users.manage` | `firm_id` |
+
+## Phase 3 money & practice-ops routes
+
+**Trust ≠ Fees.** Billing and Trust stay separate in nav, APIs, and audit notes.
+
+| Area | Routes | Permission(s) | Extra scoping |
+|---|---|---|---|
+| Fee invoices | `/api/invoices*` | `billing.view` / `billing.manage` | `firm_id` + matter access |
+| Fee payments | `/api/invoices/[id]/payments` | `billing.manage` | matter access; never posts to trust |
+| Time | `/api/matters/[id]/time-entries`, `/api/time-entries/[id]` | `billing.*` | matter access |
+| Disbursements | `/api/matters/[id]/disbursements`, `/api/disbursements/[id]` | `billing.*` | matter access |
+| Trust accounts | `/api/trust/accounts*` | `trust.view` / `trust.manage` | `firm_id` |
+| Trust ledger | `/api/trust/ledger` | `trust.view` / `trust.manage` | `firm_id`; matter access when `matterId` set |
+| Trust statement | `/api/trust/clients/[id]/statement` | `trust.view` | client must belong to firm |
+| Reports | `/api/reports/[type]` | `reports.view` | `firm_id`; fee vs trust report types labeled |
+| Calendar / reminders | `/api/calendar*`, `/api/reminders` | `calendar.view` / `calendar.manage` | matter access when !view_all |
+| Intake / conflicts | `/api/intakes*` | `intake.view` / `intake.manage` | `firm_id`; MP override for conflicts |
+
+Dashboard money widgets never return invoice or trust payloads without `billing.view` / `trust.view`.
 
 ## UI `<Can>`
 
@@ -143,4 +162,4 @@ Isolation fixture: firm `isolation-test-firm`, user `isolation@lexzim.local` / `
 
 ## Next
 
-**P1-14:** Demo seeds, smoke docs, Phase 2 handoff.
+**PHASE 3 COMPLETE.** See `docs/PHASE4_READY_CHECKLIST.md`.

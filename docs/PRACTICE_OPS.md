@@ -79,7 +79,21 @@ Already in `lib/rbac/matrix.ts` (seed with `npm run db:seed:rbac`):
 - Repos: `lib/repos/calendar.ts` (events CRUD), stubs in `billing.ts`, `trust.ts`, `intake.ts`
 - Calendar UI: `docs/CALENDAR.md`, `/calendar`, `/api/calendar`
 - Deadlines: `docs/DEADLINES.md`, Settings templates, matter Deadlines tab
+- Reminders: `docs/REMINDERS.md`, `/reminders`, topbar bell, optional browser alerts
+- Time: `docs/TIME.md`, matter Time tab, `/api/matters/[id]/time-entries`
+- Disbursements: `docs/BILLING.md`, matter Costs tab (fee side ≠ trust)
+- Invoices: `/billing`, fee notes from unbilled time/costs, fee payments (not trust)
+- Trust: `docs/TRUST.md`, `/trust` (separate from billing)
+- Intake: `docs/INTAKE.md`, `/intake` list/create/detail (no auto client)
+- Conflicts: `docs/CONFLICTS.md`, run check on intake, MP override audited
+- Conversion: `docs/INTAKE_CONVERT.md`, intake → client + matter + opposing party
+- Reports: `docs/REPORTS.md`, `/reports`, `/api/reports/[type]` (+ CSV)
+- Dashboard: `docs/DASHBOARD.md`, role-aware money/intake widgets; invoice matter access hardened
+- Handoff: `docs/PHASE3_SMOKE_TEST.md`, `docs/ARCHITECTURE_PHASE3.md`, `docs/PHASE4_READY_CHECKLIST.md`
 
 ## Next
 
-**P3-04:** Reminders center.
+**PHASE 3 COMPLETE — ready for Phase 4 prompts (Sell & Ship: production AI, licensing, onboarding, pilots on Railway)**
+
+Open `PHASE 4 - Sell & Ship Prompts.md`. Do not implement Phase 4/5 under Phase 3 prompts.
+

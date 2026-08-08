@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { RouteGuard } from "@/components/auth/RouteGuard";
+import { BrowserNotifications } from "@/components/reminders/BrowserNotifications";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { AppTopbar } from "@/components/shell/AppTopbar";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
       <div id="app-shell" className="active" aria-label="LexZim Platform">
+        <BrowserNotifications />
         <div
           className={["sidebar-backdrop", mobileNavOpen ? "open" : ""]
             .filter(Boolean)

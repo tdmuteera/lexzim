@@ -12,7 +12,9 @@ Sidebar and routes are gated by permissions from `lib/nav.ts`.
 | `/documents` | `documents.view` | Documents |
 | `/calendar` | `calendar.view` | Calendar |
 | `/intake` | `intake.view` | Intake & Conflicts |
-| `/billing` | `billing.view` | Billing & Trust |
+| `/billing` | `billing.view` | Billing (fees) |
+| `/trust` | `trust.view` | Trust (client money) |
+| `/reminders` | `calendar.view` | Reminders |
 | `/staff` | `users.manage` | Lawyers & Staff |
 | `/reports` | `reports.view` | Reports |
 | `/ai` | `ai.use` | AI Assistant |
@@ -33,7 +35,8 @@ Based on `lib/rbac/matrix.ts`:
 | Documents | ✓ | ✓ | ✓ | ✓ | |
 | Calendar | ✓ | ✓ | ✓ | ✓ | |
 | Intake | ✓ | ✓ | ✓ | ✓ | |
-| Billing & Trust | ✓ | ✓ | | | ✓ |
+| Billing (fees) | ✓ | ✓ | | | ✓ |
+| Trust (client money) | ✓ | ✓ | | | ✓ |
 | Lawyers & Staff | ✓ | | | | |
 | Reports | ✓ | ✓ | | | ✓ |
 | AI Assistant | ✓ | ✓ | ✓ | ✓ | ✓ |

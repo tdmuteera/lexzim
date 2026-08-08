@@ -25,6 +25,8 @@ LexZim is a **hosted Next.js web app**. Phase 0 uses:
 
 Supabase Free is fine for a small pilot if you stay within limits (DB size, storage, egress, paused projects after inactivity). Expect to upgrade later for production. Pause/sleep on unused free projects can make the app look “down” until the project wakes.
 
+**When to leave Free / trial:** see the scale checklist in `docs/cloud/OPS_RUNBOOK.md` (PITR needed, pause hurts pilots, egress/DB pressure, live portal + SLA).
+
 ## 2. Local env file
 
 ```bash
@@ -46,8 +48,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 2. **New Project → Deploy from GitHub** (connect the LexZim repo).
 3. Set the same environment variables as `.env.example` in Railway **Variables**.
 4. Set `NEXT_PUBLIC_APP_URL` to your Railway public URL (e.g. `https://lexzim-production.up.railway.app`).
-5. Railway should build with `npm run build` and start with `npm run start` (see `railway.toml`).
-6. Health check path: `/api/health`.
+5. Railway should build with `npm ci && npm run build` and start with `npm run start` (see `railway.toml` / `docs/RAILWAY.md`).
+6. Health check path: `/api/health` (restart on failure configured in `railway.toml`).
+
+Full production runbook: **`docs/RAILWAY.md`** (staging vs production, rollback, sizing, log redaction).
+
+Phase 5 ops hub (backup drill, portal rate limits, security headers, free-tier exit): **`docs/cloud/OPS_RUNBOOK.md`**.
+
+Domain, SSL, and secrets checklist: **`docs/PRODUCTION_SECRETS.md`**.
 
 ### Deploy flow
 
@@ -60,6 +68,16 @@ Until the repo is on GitHub and linked, deploy is documented but not live.
 ### Free / trial honesty
 
 Railway often starts with trial credits, then paid usage. Prefer Railway over “free dynos that sleep” so pilots do not see random cold starts. Budget a small monthly cost once credits end.
+
+### Production / staging URL (record when live)
+
+| Environment | URL | Notes |
+|-------------|-----|-------|
+| Local | `http://localhost:3000` | Dev |
+| Staging | **TBD** | Set `SMOKE_BASE_URL` for `npm run smoke:phase4` |
+| Production | **TBD** | Also set `NEXT_PUBLIC_APP_URL`; confirm `GET /api/health` |
+
+Phase 4 release smoke: `docs/PHASE4_SMOKE_TEST.md`.
 
 ## 4. Verify locally
 
@@ -78,6 +96,7 @@ Expected JSON shape:
 {
   "ok": true,
   "service": "lexzim",
+  "version": "0.4.0",
   "env": {
     "supabaseUrl": true,
     "databaseUrl": true,

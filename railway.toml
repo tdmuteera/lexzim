@@ -1,9 +1,17 @@
 [build]
 builder = "NIXPACKS"
+# Explicit Next.js production build (Nixpacks also detects npm scripts)
+buildCommand = "npm ci && npm run build"
 
 [deploy]
+# Production process: Next.js standalone-style start via next start
 startCommand = "npm run start"
+# Railway healthcheck (must return 200 when env is ready)
 healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 60
+# Restart crashed replicas (not MSI/desktop: web only)
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5
+
+# Optional: set in Railway dashboard if you prefer UI over this file
+# Multi-environment: create Staging + Production services/envs sharing the same repo

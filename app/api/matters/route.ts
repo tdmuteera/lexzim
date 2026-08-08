@@ -6,6 +6,7 @@ import { serializeMatter } from "@/lib/matters/serialize";
 import { MATTER_STATUSES, parseMatterInput } from "@/lib/matters/validation";
 import { createMatterEvent } from "@/lib/repos/matter-workflow";
 import { createMatter, listFirmLawyers, listMatters } from "@/lib/repos/matters";
+import { assertCanCreateMatter } from "@/lib/licensing/policy";
 import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 import type { MatterStatus } from "@/lib/db/mvp-types";
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
   try {
     const session = await requirePermission("matters.create");
     const firmId = tenantFirmId(session);
+    await assertCanCreateMatter(firmId);
     const body = await request.json();
     const input = parseMatterInput(body);
 

@@ -4,11 +4,25 @@ import "server-only";
 export const GEMINI_CHAT_MODEL_ID = "gemini-2.0-flash";
 export const GEMINI_EMBEDDINGS_MODEL_ID = "text-embedding-004";
 
+export const CLAUDE_CHAT_MODEL_ID = "claude-sonnet-4-5";
+export const OPENAI_CHAT_MODEL_ID = "gpt-4.1";
+/** Requested at 768 dims to match ai_embeddings vector(768). */
+export const OPENAI_EMBEDDINGS_MODEL_ID = "text-embedding-3-small";
+
 /** Re-export aliases used by settings defaults. */
 export const DEFAULT_GEMINI_CHAT_MODEL = GEMINI_CHAT_MODEL_ID;
 export const DEFAULT_GEMINI_EMBEDDINGS_MODEL = GEMINI_EMBEDDINGS_MODEL_ID;
 
 export type LlmProviderId = "gemini" | "claude" | "openai";
+
+export const DEFAULT_MODELS: Record<
+  LlmProviderId,
+  { chat: string; embeddings: string }
+> = {
+  gemini: { chat: GEMINI_CHAT_MODEL_ID, embeddings: GEMINI_EMBEDDINGS_MODEL_ID },
+  claude: { chat: CLAUDE_CHAT_MODEL_ID, embeddings: GEMINI_EMBEDDINGS_MODEL_ID },
+  openai: { chat: OPENAI_CHAT_MODEL_ID, embeddings: OPENAI_EMBEDDINGS_MODEL_ID },
+};
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -40,6 +54,8 @@ export type EmbedResult = {
   provider: LlmProviderId;
   dimensions: number;
   latencyMs: number;
+  /** True when chat provider has no native embed and Gemini fallback was used. */
+  fallbackProvider?: LlmProviderId;
 };
 
 export type LlmProvider = {

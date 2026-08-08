@@ -7,42 +7,70 @@
 | `ai.use` | All roles (open AI assistant) |
 | `ai.manage_settings` | Managing Partner only |
 
-## Keys (P2-02)
+## Keys (P4-02)
 
 | Mode | How |
 |---|---|
-| **Server default (Phase 2 testing)** | `GEMINI_API_KEY` in Railway / `.env.local` (server only, never sent to the browser) |
-| **Firm BYO** | Stubbed as “coming” (Phase 4 / encrypted vault). Not stored in `ai_settings`. |
+| **Managed (server env)** | `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` on Railway / `.env.local` |
+| **Firm BYO** | Settings → AI: optional encrypted per-firm keys (`ai_byo_*` in `firm_settings`, stripped from export). BYO wins over env for that firm. |
+
+Vault encryption uses `AI_VAULT_SECRET` (or `AUTH_SECRET` fallback). Never return raw keys to the browser.
 
 Settings → **AI**:
-- Provider: Gemini
-- Model: Flash (default `gemini-2.0-flash`)
-- **Test connection** / **Dev ping**
-- Help text explains LexZim-managed key for testing vs BYO later
+- Provider select: Gemini | Claude | OpenAI
+- Chat + embeddings model defaults
+- **Test connection** / **Dev ping** (uses `getProvider()`)
+- Optional BYO key fields
 
 APIs:
 - `GET/PATCH /api/ai/settings` (`ai.manage_settings`)
-- `POST /api/ai/test` → health check
-- `POST /api/ai/ping` → `getProvider().chat()` ping (Managing Partner)
+- `POST /api/ai/test` → health check for the selected provider
+- `POST /api/ai/ping` → `getProvider().chat()` ping
 
-## Providers (P2-03)
+## Providers (P4-02)
 
-Abstraction: `chat(messages)` + `embed(text)` via `getProvider(firmId)`.
+Abstraction: `chat(messages)` + `embed(text)` via `getProvider(firmId)`. RAG safety rules unchanged.
 
-| Provider | Status | Chat model ID | Embeddings model ID |
+| Provider | Status | Chat model ID | Embeddings |
 |---|---|---|---|
 | **Gemini** | Live | `gemini-2.0-flash` | `text-embedding-004` (768-d) |
-| Claude | Stub (Phase 4) | `claude-sonnet-4-5` | n/a |
-| OpenAI | Stub (Phase 4) | `gpt-4.1` | `text-embedding-3-small` |
+| **Claude** | Live | `claude-sonnet-4-5` | No native embed. **Falls back to Gemini** when a Gemini key is present |
+| **OpenAI** | Live | `gpt-4.1` | `text-embedding-3-small` with `dimensions=768` to match `ai_embeddings` |
 
 Code:
 - `lib/ai/types.ts` — interface
-- `lib/ai/errors.ts` — `MissingKey`, `InvalidKey`, `RateLimited`, `NetworkError`, `ProviderError`, `NotImplemented`
-- `lib/ai/providers/gemini.ts` — Flash chat + embeddings
-- `lib/ai/providers/claude.ts` / `openai.ts` — stubs
-- `lib/ai/providers/index.ts` — `getProvider()` from `ai_settings` + secrets
+- `lib/ai/providers/gemini.ts` / `claude.ts` / `openai.ts`
+- `lib/ai/providers/index.ts` — `getProvider()`
+- `lib/ai/secrets.ts` — managed + BYO resolution
 
-Switching later: implement Claude/OpenAI against the same interface and set `ai_settings.provider_default`.
+All AI paths (ask, matter-ask, draft polish, KB embed, firm memory, status) use `getProvider()`.
+
+## Routing, budgets & safety (P4-03)
+
+| Setting | Default | Behaviour |
+|---|---|---|
+| `routing_mode` | `auto` | Legal research prefers **Claude** when a Claude key is present, else **Gemini Flash**. Other modes use `provider_default`. `manual` always uses the selected provider. |
+| `monthly_soft_budget` | `500` | Soft cap on firm `ai_usage_events` per UTC month. At limit, new LLM chats soft-block (429). `null` / unlimited clears the cap. |
+| `max_output_tokens` | `1200` | Applied to legal / matter / draft chat calls (clamped 256–4096). |
+| `web_lookup_enabled` | `false` | Stays off unless Managing Partner enables it. |
+| `matter_context_enabled` | `true` | When false, Matter Assist refuses matter-file context. |
+| Disclaimer | always on | Cannot be disabled; answers append the mandatory disclaimer. |
+
+Settings → **AI** includes routing, safety toggles, and **Usage** (this month’s call counts + budget).
+
+APIs: `GET /api/ai/usage` (`ai.manage_settings`).
+
+Code: `lib/ai/routing.ts`, `lib/ai/budget.ts`, `getProvider(firmId, { mode })`.
+
+## LexZim AI Proxy (P4-06)
+
+Optional Firm-edition mode. Master provider keys stay on the proxy/app server. Firms use a `lzp_` token (Settings → AI). See `docs/AI_PROXY.md`.
+
+| Item | Detail |
+|---|---|
+| `key_mode` | `direct` (BYO/managed) or `proxy` |
+| Endpoints | `/api/ai/proxy/v1/chat`, `/v1/embed`; optional `services/ai-proxy` |
+| Gate | `canUse('ai_proxy')` (Firm edition) |
 
 ## Schema (P2-01)
 
@@ -236,6 +264,17 @@ Code: `lib/ai/web/trusted-lookup.ts` (wired in `aiLegalAsk`).
 7. Keys server-side only.
 8. `firm_id` + RBAC for firm memory.
 9. Web results labelled UNVERIFIED.
+
+## Conversation retention (P5-12)
+
+Minimize stored AI chat: default **90 days** from conversation `updated_at`.
+
+- Settings → AI → **Purge old AI conversations**
+- API: `GET/POST /api/ai/retention`
+- Cron/ops: `npm run privacy:purge-ai` (optional `--firm=`, `--days=`, `--dry-run`)
+- Override: `AI_CONVERSATION_RETENTION_DAYS` or firm setting `ai_conversation_retention_days`
+
+Does not delete KB embeddings. Privacy template: `docs/cloud/PRIVACY.md`.
 
 ## Status
 

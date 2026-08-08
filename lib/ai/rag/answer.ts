@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getProvider } from "@/lib/ai/providers";
+import { assertAiSoftBudget } from "@/lib/ai/budget";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
@@ -11,7 +12,10 @@ import {
   createMessage,
   getConversation,
 } from "@/lib/repos/ai-conversations";
-import { getAiSettings } from "@/lib/repos/ai-settings";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  getAiSettings,
+} from "@/lib/repos/ai-settings";
 import { recordAiUsageEvent } from "@/lib/repos/ai-usage";
 import { AiProviderError } from "@/lib/ai/errors";
 import {
@@ -135,6 +139,10 @@ export async function aiLegalAsk(input: {
 
   const settings = await getAiSettings(input.firmId);
   const webEnabled = Boolean(settings?.webLookupEnabled);
+  const maxOutputTokens = Math.min(
+    4096,
+    Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
+  );
 
   const retrieval = await retrieveLegalContext({
     firmIdForProvider: input.firmId,
@@ -170,7 +178,7 @@ export async function aiLegalAsk(input: {
     await recordAiUsageEvent({
       firmId: input.firmId,
       userId: input.userId,
-      provider: "gemini",
+      provider: settings?.providerDefault ?? "gemini",
       model: retrieval.retrievalMeta.embeddingsModel,
       mode: "legal_research",
       success: true,
@@ -212,8 +220,12 @@ export async function aiLegalAsk(input: {
 
   let provider;
   try {
-    provider = await getProvider(input.firmId);
+    await assertAiSoftBudget(input.firmId);
+    provider = await getProvider(input.firmId, { mode: "legal_research" });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "budget_exceeded") {
+      throw err;
+    }
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     const fallback =
       retrieval.hits.length > 0
@@ -234,6 +246,16 @@ export async function aiLegalAsk(input: {
         confidenceLabel: "low",
         webLookup: webMeta(web),
       },
+    });
+    await recordAiUsageEvent({
+      firmId: input.firmId,
+      userId: input.userId,
+      provider: settings?.providerDefault ?? "gemini",
+      model: retrieval.retrievalMeta.embeddingsModel,
+      mode: "legal_research",
+      success: false,
+      errorCode,
+      latencyMs: retrieval.retrievalMeta.latencyMs + web.latencyMs,
     });
     return {
       conversationId,
@@ -261,7 +283,7 @@ export async function aiLegalAsk(input: {
           content: `Question:\n${question}\n\nLOCAL Zimbabwe knowledge-base context (primary grounding):\n${contextBlock}\n\nOPTIONAL allowlisted WEB excerpts (all UNVERIFIED; never treat as confirmed authority):\n${webBlock || "(none)"}\n\nInstructions:\n- Ground authorities in LOCAL context when present.\n- If only UNVERIFIED web excerpts exist, say the local KB had no match and list them as unverified leads only.\n- Cite labels exactly, including [UNVERIFIED] where applicable.\n- End with this exact disclaimer paragraph:\n${LEGAL_DISCLAIMER}`,
         },
       ],
-      { temperature: 0.2, maxOutputTokens: 1200 },
+      { temperature: 0.2, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;

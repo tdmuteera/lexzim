@@ -68,6 +68,25 @@ Seeds into the pilot firm (idempotent via `firm_settings.phase1_demo_seeded_at`)
 - Text document fixture + Family/Civil/Labour starter templates (if missing)
 - Junior assigned to civil (responsible) and family (assisting) when junior user exists
 
+## Phase 3 practice-ops demo data
+
+```powershell
+$env:DEV_SEED_ENABLED = "1"
+npm run db:seed:phase1-demo
+npm run db:seed:phase3-demo
+```
+
+Seeds into the pilot firm (idempotent via `firm_settings.phase3_demo_seeded_at`):
+
+- Calendar hearing on an existing matter
+- Deadline template + open matter deadline
+- Billable time + disbursement → fee invoice `P3-DEMO-001` + partial fee payment
+- Trust account + client trust receipt (separate from fees)
+- Open intake (Rutendo Chikwanda) with clear conflict check
+- Optional related-party fixture for conflict demos
+
+Smoke: `npm run smoke:phase3` (see `docs/PHASE3_SMOKE_TEST.md`).
+
 ## Audit
 
 Seed actions write `dev.seed_user`, `dev.seed_isolation_firm`, and `dev.seed_isolation_marker` to `audit_logs`.

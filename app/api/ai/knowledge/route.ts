@@ -1,11 +1,11 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AiProviderError } from "@/lib/ai/errors";
+import { enqueueAiJob, serializeAiJob } from "@/lib/ai/jobs/enqueue";
+import { kickAiJobInBackground } from "@/lib/ai/jobs/process";
 import {
-  embedSystemKnowledgeChunks,
   getKnowledgePackStats,
   ingestZimbabweStarterPack,
-  kbReingestAll,
 } from "@/lib/repos/knowledge";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -24,16 +24,21 @@ export async function GET() {
 /**
  * Re-ingest knowledge.
  * body.mode:
- * - "all" (default): reload starter pack + embed (kb_reingest)
- * - "pack": text/chunks only
- * - "embed": embed existing system chunks only (kb_ingest_all embeddings)
+ * - "all" (default): queue kb_reingest_all (pack + embed)
+ * - "pack": text/chunks only (sync; fast)
+ * - "embed": queue kb_embed
+ * body.async: default true for all/embed; false forces legacy sync (may time out)
  */
 export async function POST(request: Request) {
   try {
     const session = await requirePermission("ai.manage_settings");
     const firmId = tenantFirmId(session);
-    const body = (await request.json().catch(() => ({}))) as { mode?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      mode?: string;
+      async?: boolean;
+    };
     const mode = (body.mode ?? "all").trim().toLowerCase();
+    const preferAsync = body.async !== false;
 
     if (mode === "pack") {
       const result = await ingestZimbabweStarterPack();
@@ -55,6 +60,43 @@ export async function POST(request: Request) {
       return jsonOk({ mode, result, stats });
     }
 
+    if (mode === "embed" || mode === "all") {
+      if (preferAsync) {
+        const jobType = mode === "embed" ? "kb_embed" : "kb_reingest_all";
+        const job = await enqueueAiJob({
+          firmId,
+          jobType,
+          createdByUserId: session.id,
+          payload: { mode },
+        });
+        await writeAuditLog({
+          action: mode === "embed" ? "ai.kb_embed_queued" : "ai.kb_reingest_all_queued",
+          firmId,
+          userId: session.id,
+          entityType: "ai_job",
+          entityId: job.id,
+          metadata: { mode, jobType },
+          ipOrUserAgent: clientInfo(request),
+        });
+        kickAiJobInBackground(job.id);
+        return jsonOk(
+          {
+            mode,
+            async: true,
+            job: serializeAiJob(job),
+            message:
+              "Job queued. Poll GET /api/ai/jobs/{id}. Worker: npm run jobs:ai (optional dedicated Railway service).",
+          },
+          { status: 202 },
+        );
+      }
+    }
+
+    // Legacy sync path (async: false) — may hit web timeouts on large packs.
+    const { embedSystemKnowledgeChunks, kbReingestAll } = await import(
+      "@/lib/repos/knowledge"
+    );
+
     if (mode === "embed") {
       const result = await embedSystemKnowledgeChunks({ firmIdForProvider: firmId });
       await writeAuditLog({
@@ -68,11 +110,12 @@ export async function POST(request: Request) {
           embedded: result.embedded,
           failed: result.failed,
           errorCode: result.errorCode ?? null,
+          async: false,
         },
         ipOrUserAgent: clientInfo(request),
       });
       const stats = await getKnowledgePackStats();
-      return jsonOk({ mode, result, stats });
+      return jsonOk({ mode, result, stats, async: false });
     }
 
     const result = await kbReingestAll(firmId);
@@ -90,12 +133,13 @@ export async function POST(request: Request) {
         embedFailed: result.embeddings.failed,
         embedErrorCode: result.embeddings.errorCode ?? null,
         steps: result.steps,
+        async: false,
       },
       ipOrUserAgent: clientInfo(request),
     });
 
     const stats = await getKnowledgePackStats();
-    return jsonOk({ mode: "all", result, stats });
+    return jsonOk({ mode: "all", result, stats, async: false });
   } catch (err) {
     if (err instanceof AiProviderError) {
       return jsonError(err);

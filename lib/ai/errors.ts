@@ -6,7 +6,8 @@ export type AiProviderErrorCode =
   | "rate_limited"
   | "network_error"
   | "provider_error"
-  | "not_implemented";
+  | "not_implemented"
+  | "budget_exceeded";
 
 export class AiProviderError extends Error {
   readonly code: AiProviderErrorCode;
@@ -59,7 +60,7 @@ export class NotImplementedProviderError extends AiProviderError {
   constructor(provider: string) {
     super(
       "not_implemented",
-      `${provider} is stubbed for Phase 4. Use Gemini in Phase 2.`,
+      `${provider} provider is not available in this build.`,
       501,
     );
     this.name = "NotImplementedProviderError";

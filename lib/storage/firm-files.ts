@@ -141,6 +141,48 @@ export async function deleteFirmFile(storagePath: string, firmId: string): Promi
   }
 }
 
+/**
+ * Best-effort recursive remove of all objects under firms/{firmId}/.
+ * Used by privacy purge (P5-11).
+ */
+export async function deleteFirmStoragePrefix(firmId: string): Promise<number> {
+  const prefix = firmStoragePrefix(firmId);
+  await ensureFirmFilesBucket();
+  const admin = createAdminClient();
+  let removed = 0;
+
+  async function walk(path: string) {
+    const { data, error } = await admin.storage.from(FIRM_FILES_BUCKET).list(path, {
+      limit: 1000,
+    });
+    if (error) {
+      throw new Error(`Storage list failed: ${error.message}`);
+    }
+    const entries = data ?? [];
+    const filePaths: string[] = [];
+    for (const entry of entries) {
+      const full = `${path}/${entry.name}`;
+      // Supabase: folders typically have id === null
+      if (entry.id == null) {
+        await walk(full);
+      } else {
+        filePaths.push(full);
+      }
+    }
+    for (let i = 0; i < filePaths.length; i += 100) {
+      const batch = filePaths.slice(i, i + 100);
+      const { error: rmErr } = await admin.storage.from(FIRM_FILES_BUCKET).remove(batch);
+      if (rmErr) {
+        throw new Error(`Storage batch delete failed: ${rmErr.message}`);
+      }
+      removed += batch.length;
+    }
+  }
+
+  await walk(prefix);
+  return removed;
+}
+
 export async function downloadFirmFile(
   storagePath: string,
   firmId: string,

@@ -1126,3 +1126,56 @@ table.data tbody tr:hover { background: rgba(160,124,56,0.07); }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* P4-11 in-app Help prose */
+.help-prose h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+}
+.help-prose h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.1rem;
+}
+.help-prose h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+}
+.help-prose p,
+.help-prose li {
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.help-prose ul,
+.help-prose ol {
+  margin: 0.4rem 0 0.75rem;
+  padding-left: 1.25rem;
+}
+.help-prose code {
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+.help-prose hr {
+  border: 0;
+  border-top: 1px solid var(--border, #e5e5e5);
+  margin: 1.25rem 0;
+}
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+.help-table th,
+.help-table td {
+  border: 1px solid var(--border, #e5e5e5);
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+.help-table th {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.03);
+}
+

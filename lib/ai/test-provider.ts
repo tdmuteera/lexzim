@@ -1,20 +1,23 @@
 import "server-only";
 
 import { AiProviderError } from "@/lib/ai/errors";
-import { createGeminiProvider } from "@/lib/ai/providers/gemini";
-import { getGeminiApiKey } from "@/lib/ai/secrets";
+import { getProvider } from "@/lib/ai/providers";
+import { resolveProviderApiKey } from "@/lib/ai/secrets";
 import {
+  DEFAULT_MODELS,
+  type LlmProviderId,
+} from "@/lib/ai/types";
+
+export {
   DEFAULT_GEMINI_CHAT_MODEL,
   DEFAULT_GEMINI_EMBEDDINGS_MODEL,
 } from "@/lib/ai/types";
-
-export { DEFAULT_GEMINI_CHAT_MODEL, DEFAULT_GEMINI_EMBEDDINGS_MODEL };
 
 export type AiConnectionStatus = "connected" | "missing" | "invalid";
 
 export type AiTestProviderResult = {
   status: AiConnectionStatus;
-  provider: "gemini";
+  provider: LlmProviderId;
   model: string;
   latencyMs: number;
   errorCode?: string;
@@ -22,25 +25,26 @@ export type AiTestProviderResult = {
 };
 
 /**
- * Tiny Gemini health check via provider.chat(). Never logs or returns the API key.
+ * Tiny chat health check via getProvider(). Never logs or returns the API key.
  */
-export async function aiTestProvider(opts?: {
+export async function aiTestProvider(opts: {
+  firmId: string;
   model?: string;
 }): Promise<AiTestProviderResult> {
-  const model = opts?.model?.trim() || DEFAULT_GEMINI_CHAT_MODEL;
+  const provider = await getProvider(opts.firmId);
+  const model = opts.model?.trim() || provider.defaultChatModel;
+  const key = await resolveProviderApiKey(opts.firmId, provider.id);
 
-  if (!getGeminiApiKey()) {
+  if (!key.key) {
     return {
       status: "missing",
-      provider: "gemini",
+      provider: provider.id,
       model,
       latencyMs: 0,
       errorCode: "missing_key",
-      message: "GEMINI_API_KEY is not set on the server.",
+      message: `No API key for ${provider.id} (server env or firm BYO).`,
     };
   }
-
-  const provider = createGeminiProvider({ chatModel: model });
 
   try {
     const result = await provider.chat(
@@ -49,10 +53,10 @@ export async function aiTestProvider(opts?: {
     );
     return {
       status: "connected",
-      provider: "gemini",
+      provider: provider.id,
       model: result.model,
       latencyMs: result.latencyMs,
-      message: "Gemini connection OK.",
+      message: `${provider.id} connection OK.`,
     };
   } catch (err) {
     if (err instanceof AiProviderError) {
@@ -60,7 +64,7 @@ export async function aiTestProvider(opts?: {
         err.code === "missing_key" ? "missing" : "invalid";
       return {
         status,
-        provider: "gemini",
+        provider: provider.id,
         model,
         latencyMs: 0,
         errorCode: err.code,
@@ -69,11 +73,15 @@ export async function aiTestProvider(opts?: {
     }
     return {
       status: "invalid",
-      provider: "gemini",
+      provider: provider.id,
       model,
       latencyMs: 0,
       errorCode: "provider_error",
-      message: "Gemini health check failed.",
+      message: `${provider.id} health check failed.`,
     };
   }
+}
+
+export function defaultChatModelFor(provider: LlmProviderId): string {
+  return DEFAULT_MODELS[provider].chat;
 }

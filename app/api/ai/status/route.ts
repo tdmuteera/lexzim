@@ -50,6 +50,9 @@ export async function GET(request: Request) {
       sendBlockedReason,
       corePracticeNote: connectivity.corePracticeNote,
       webLookupEnabled: Boolean(settings?.webLookupEnabled),
+      matterContextEnabled: settings?.matterContextEnabled !== false,
+      maxOutputTokens: settings?.maxOutputTokens ?? 1200,
+      routingMode: settings?.routingMode === "manual" ? "manual" : "auto",
     });
   } catch (err) {
     return jsonError(err);

@@ -88,8 +88,11 @@ export function FirmMemoryPanel() {
       const body = (await res.json()) as {
         ok: boolean;
         data?: {
-          stats: FirmMemoryStats;
-          result: {
+          async?: boolean;
+          job?: { id: string };
+          message?: string;
+          stats?: FirmMemoryStats;
+          result?: {
             embedded?: number;
             failed?: number;
             message?: string;
@@ -98,15 +101,50 @@ export function FirmMemoryPanel() {
         };
         error?: { message: string };
       };
-      if (!res.ok || !body.ok || !body.data) {
-        setError(body.error?.message ?? "Re-index failed.");
-        toast("Firm memory re-index failed.");
+      if ((!res.ok && res.status !== 202) || !body.ok || !body.data) {
+        setError(body.error?.message ?? "Reindex failed.");
         return;
       }
-      setStats(body.data.stats);
-      toast(body.data.result.message ?? "Firm memory re-indexed.");
+
+      if (body.data.async && body.data.job?.id) {
+        toast(body.data.message ?? "Firm memory reindex queued…");
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const jRes = await fetch(`/api/ai/jobs/${body.data!.job!.id}`, {
+            credentials: "include",
+          });
+          const jBody = (await jRes.json()) as {
+            ok: boolean;
+            data?: { job: { status: string; errorMessage?: string | null } };
+          };
+          const status = jBody.data?.job?.status;
+          if (status === "completed") {
+            toast("Firm memory reindex completed.");
+            await load();
+            return;
+          }
+          if (status === "failed") {
+            setError(jBody.data?.job?.errorMessage ?? "Reindex job failed.");
+            return;
+          }
+        }
+        setError("Job still running. Refresh later or run npm run jobs:ai.");
+        return;
+      }
+
+      if (body.data.stats) setStats(body.data.stats);
+      const failed = body.data.result?.failed ?? 0;
+      if (failed > 0 || body.data.result?.errorCode) {
+        setError(body.data.result?.message ?? "Reindex reported failures.");
+      } else {
+        toast(
+          action === "reindex_all"
+            ? "Firm memory reindex complete."
+            : `Matter reindexed (${body.data.result?.embedded ?? 0} embeddings).`,
+        );
+      }
     } catch {
-      setError("Re-index failed.");
+      setError("Reindex failed.");
     } finally {
       setBusy(false);
     }

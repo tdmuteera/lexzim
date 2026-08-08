@@ -14,23 +14,36 @@ export function BackupExportPanel() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [firmSlug, setFirmSlug] = useState("");
+  const [confirmSlug, setConfirmSlug] = useState("");
+  const [deactivating, setDeactivating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/export", { credentials: "include" });
-      const body = (await res.json()) as {
+      const [exportRes, meRes] = await Promise.all([
+        fetch("/api/export", { credentials: "include" }),
+        fetch("/api/auth/me", { credentials: "include" }),
+      ]);
+      const body = (await exportRes.json()) as {
         ok: boolean;
         data?: { lastExportAt: string | null; warnings: string[] };
         error?: { message: string };
       };
-      if (!res.ok || !body.ok) {
+      if (!exportRes.ok || !body.ok) {
         setError(body.error?.message ?? "Could not load export status.");
         return;
       }
       setLastExportAt(body.data?.lastExportAt ?? null);
       setWarnings(body.data?.warnings ?? []);
+      if (meRes.ok) {
+        const meBody = (await meRes.json()) as {
+          ok?: boolean;
+          data?: { user?: { firm?: { slug?: string } } };
+        };
+        setFirmSlug(meBody.data?.user?.firm?.slug ?? "");
+      }
     } catch {
       setError("Could not load export status.");
     } finally {
@@ -83,6 +96,39 @@ export function BackupExportPanel() {
       setError("Export failed.");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function onDeactivate() {
+    if (!firmSlug || confirmSlug.trim() !== firmSlug) {
+      setError(`Type your firm slug (${firmSlug || "…"}) to confirm deactivation.`);
+      return;
+    }
+    if (!window.confirm("Suspend this firm? Staff will be unable to sign in.")) return;
+    setDeactivating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/firm/deactivate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmSlug }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { message?: string };
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Deactivation failed.");
+        return;
+      }
+      toast(body.data?.message ?? "Firm suspended.");
+      setConfirmSlug("");
+    } catch {
+      setError("Deactivation failed.");
+    } finally {
+      setDeactivating(false);
     }
   }
 
@@ -168,8 +214,47 @@ export function BackupExportPanel() {
 
         <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
           Platform backups (Supabase PITR / daily backups and Railway redeploys) are separate from
-          this firm export. See docs/BACKUP.md.
+          this firm export. See docs/BACKUP.md and docs/cloud/RETENTION.md. Desktop/local wipe is
+          not applicable (hosted SaaS only).
         </p>
+
+        <div
+          style={{
+            marginTop: "0.5rem",
+            paddingTop: "1rem",
+            borderTop: "1px solid var(--border)",
+            display: "grid",
+            gap: "0.65rem",
+          }}
+        >
+          <strong style={{ fontSize: "0.9rem" }}>Deactivate firm (suspend)</strong>
+          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+            Soft-disable: blocks staff login. Export first. Permanent purge is LexZim ops only
+            (typed DELETE FIRM).
+          </p>
+          <label style={{ fontSize: "0.85rem" }}>
+            Type firm slug to confirm{firmSlug ? ` (${firmSlug})` : ""}
+            <input
+              value={confirmSlug}
+              onChange={(e) => setConfirmSlug(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                maxWidth: "20rem",
+                marginTop: "0.35rem",
+                padding: "0.45rem 0.6rem",
+              }}
+              disabled={deactivating || !firmSlug}
+            />
+          </label>
+          <Button
+            variant="outline"
+            onClick={() => void onDeactivate()}
+            disabled={deactivating || loading || !firmSlug}
+          >
+            {deactivating ? "Suspending…" : "Suspend firm access"}
+          </Button>
+        </div>
       </div>
     </>
   );

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getProvider } from "@/lib/ai/providers";
+import { assertAiSoftBudget } from "@/lib/ai/budget";
 import { AiProviderError } from "@/lib/ai/errors";
 import { retrieveFirmContext } from "@/lib/ai/firm-memory/retrieve";
 import { retrieveLegalContext } from "@/lib/ai/rag/retrieve";
@@ -12,6 +13,10 @@ import {
   createMessage,
   getConversation,
 } from "@/lib/repos/ai-conversations";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  getAiSettings,
+} from "@/lib/repos/ai-settings";
 import { recordAiUsageEvent } from "@/lib/repos/ai-usage";
 import { userCanAccessMatter } from "@/lib/repos/matters";
 
@@ -114,6 +119,15 @@ export async function aiMatterAsk(input: {
   );
   if (!allowed) throw new Error("matter_forbidden");
 
+  const settings = await getAiSettings(input.firmId);
+  if (settings && settings.matterContextEnabled === false) {
+    throw new Error("matter_context_disabled");
+  }
+  const maxOutputTokens = Math.min(
+    4096,
+    Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
+  );
+
   const snapshot = await buildMatterAssistSnapshot(input.firmId, matterId);
   if (!snapshot) throw new Error("matter_not_found");
 
@@ -210,8 +224,12 @@ export async function aiMatterAsk(input: {
   // No LLM path: still answer from live snapshot (read-only).
   let provider;
   try {
-    provider = await getProvider(input.firmId);
+    await assertAiSoftBudget(input.firmId);
+    provider = await getProvider(input.firmId, { mode: "matter_assist" });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "budget_exceeded") {
+      throw err;
+    }
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     const answer = deterministicAnswer(question, snapshot);
     const assistantMessage = await createMessage({
@@ -234,7 +252,7 @@ export async function aiMatterAsk(input: {
     await recordAiUsageEvent({
       firmId: input.firmId,
       userId: input.userId,
-      provider: "gemini",
+      provider: settings?.providerDefault ?? "gemini",
       mode: "matter_assist",
       success: false,
       errorCode,
@@ -276,7 +294,7 @@ export async function aiMatterAsk(input: {
           content: `Matter question:\n${question}\n\nLive matter facts (source of truth for this file):\n${snapshot.combinedText}\n\nRetrieved firm-memory snippets:\n${firmBlock}\n\nOptional Zimbabwe legal snippets:\n${legalBlock}\n\nEnd with this exact disclaimer:\n${MATTER_ASSIST_DISCLAIMER}`,
         },
       ],
-      { temperature: 0.2, maxOutputTokens: 1400 },
+      { temperature: 0.2, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;

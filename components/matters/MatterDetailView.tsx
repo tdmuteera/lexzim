@@ -7,9 +7,12 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MatterDeadlinesPanel } from "@/components/matters/MatterDeadlinesPanel";
+import { MatterDisbursementsPanel } from "@/components/matters/MatterDisbursementsPanel";
+import { MatterTimePanel } from "@/components/matters/MatterTimePanel";
 import { MatterProceduresPanel } from "@/components/matters/MatterProceduresPanel";
 import { MatterTimelinePanel } from "@/components/matters/MatterTimelinePanel";
 import { MatterDocumentsPanel } from "@/components/matters/MatterDocumentsPanel";
+import { MatterPortalPanel } from "@/components/matters/MatterPortalPanel";
 import { RelatedPartiesPanel } from "@/components/parties/RelatedPartiesPanel";
 import type { MatterFormValues } from "@/components/matters/MatterForm";
 import { MATTER_STATUSES, statusLabel } from "@/lib/matters/validation";
@@ -53,8 +56,11 @@ type TabId =
   | "overview"
   | "procedures"
   | "deadlines"
+  | "time"
+  | "costs"
   | "timeline"
   | "documents"
+  | "portal"
   | "parties";
 
 type MatterDetailViewProps = {
@@ -113,8 +119,11 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
     { id: "overview", label: "Overview" },
     { id: "procedures", label: "Procedures" },
     { id: "deadlines", label: "Deadlines" },
+    { id: "time", label: "Time" },
+    { id: "costs", label: "Costs" },
     { id: "timeline", label: "Timeline" },
     { id: "documents", label: "Documents" },
+    { id: "portal", label: "Portal" },
     { id: "parties", label: "Parties" },
   ];
 
@@ -217,7 +226,16 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
 
           {tab === "procedures" ? <MatterProceduresPanel matterId={matter.id} /> : null}
           {tab === "deadlines" ? <MatterDeadlinesPanel matterId={matter.id} /> : null}
+          {tab === "time" ? <MatterTimePanel matterId={matter.id} /> : null}
+          {tab === "costs" ? <MatterDisbursementsPanel matterId={matter.id} /> : null}
           {tab === "documents" ? <MatterDocumentsPanel matterId={matter.id} /> : null}
+          {tab === "portal" ? (
+            <MatterPortalPanel
+              matterId={matter.id}
+              clientId={matter.clientId}
+              clientDisplayName={matter.clientDisplayName}
+            />
+          ) : null}
           {tab === "parties" ? (
             <RelatedPartiesPanel scope="matter" scopeId={matter.id} />
           ) : null}
@@ -230,15 +248,6 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
         </div>
       </div>
     </section>
-  );
-}
-
-function ComingSoon({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div>
-      <h4 style={{ marginBottom: "0.35rem" }}>{title}</h4>
-      <p className="muted">{detail}</p>
-    </div>
   );
 }
 

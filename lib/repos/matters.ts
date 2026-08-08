@@ -230,6 +230,30 @@ export async function userCanAccessMatter(
   return team.length > 0;
 }
 
+/** Matter IDs the user can access when !viewAll (responsible or team). */
+export async function listAccessibleMatterIds(
+  firmId: string,
+  userId: string,
+): Promise<string[]> {
+  const db = getDb();
+  const responsible = await db
+    .select({ id: matters.id })
+    .from(matters)
+    .where(
+      and(eq(matters.firmId, firmId), eq(matters.responsibleLawyerId, userId)),
+    );
+  const team = await db
+    .select({ matterId: matterTeam.matterId })
+    .from(matterTeam)
+    .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, userId)));
+  return [
+    ...new Set([
+      ...responsible.map((r) => r.id),
+      ...team.map((t) => t.matterId),
+    ]),
+  ];
+}
+
 export async function createMatter(firmId: string, userId: string, input: MatterInput) {
   const db = getDb();
   const status: MatterStatus = input.status ?? "prospective";

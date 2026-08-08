@@ -6,6 +6,10 @@ import { getDb } from "@/lib/db";
 import { firms, roles, users } from "@/lib/db/schema";
 import { getPermissionCodesForRole } from "@/lib/rbac/repository";
 import { AuthError, type AuthSessionUser } from "@/lib/auth/types";
+import {
+  decodeAccessTokenClaims,
+  isStaffSessionRevoked,
+} from "@/lib/auth/staff-sessions";
 
 async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | null> {
   const db = getDb();
@@ -35,6 +39,9 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
 
   const row = rows[0];
   if (!row || !row.isActive) return null;
+  if (row.firmStatus === "suspended" || row.firmStatus === "archived") {
+    return null;
+  }
 
   const permissions = await getPermissionCodesForRole(row.roleId);
 
@@ -70,6 +77,19 @@ export async function authCurrentUser(): Promise<AuthSessionUser | null> {
   } = await supabase.auth.getUser();
 
   if (!user) return null;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+  if (accessToken) {
+    const { sessionId } = decodeAccessTokenClaims(accessToken);
+    if (await isStaffSessionRevoked(sessionId)) {
+      await supabase.auth.signOut();
+      return null;
+    }
+  }
+
   return loadSessionUser(user.id);
 }
 

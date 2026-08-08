@@ -53,6 +53,12 @@ export async function POST(request: Request) {
           "This conversation belongs to a different matter. Start a new chat.",
         );
       }
+      if (message === "matter_context_disabled") {
+        throw new AuthError(
+          "forbidden",
+          "Matter context for AI is disabled for this firm. A Managing Partner can re-enable it in Settings → AI.",
+        );
+      }
       throw err;
     }
 

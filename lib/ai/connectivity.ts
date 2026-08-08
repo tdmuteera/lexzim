@@ -3,7 +3,9 @@ import "server-only";
 import { AiProviderError } from "@/lib/ai/errors";
 import { getProvider } from "@/lib/ai/providers";
 import { withAiRetry } from "@/lib/ai/retry";
-import { getGeminiKeyStatus } from "@/lib/ai/secrets";
+import { resolveProviderApiKey } from "@/lib/ai/secrets";
+import { getAiSettings } from "@/lib/repos/ai-settings";
+import type { LlmProviderId } from "@/lib/ai/types";
 
 export type AiConnectivityState =
   | "ready"
@@ -17,6 +19,7 @@ export type AiConnectivityState =
 export type AiConnectivityReport = {
   connectivity: AiConnectivityState;
   keyStatus: "missing" | "present";
+  provider: LlmProviderId;
   probed: boolean;
   canSendLegalResearch: boolean;
   canSendMatterAssist: boolean;
@@ -28,14 +31,14 @@ export type AiConnectivityReport = {
 export const CORE_PRACTICE_NOTE =
   "LexZim core practice features (matters, clients, documents, templates, procedures, search, export) work even when AI is unavailable.";
 
-function messageFor(state: AiConnectivityState): string {
+function messageFor(state: AiConnectivityState, provider: LlmProviderId): string {
   switch (state) {
     case "ready":
-      return "AI provider is reachable.";
+      return `AI provider (${provider}) is reachable.`;
     case "missing_key":
-      return "Gemini API key is not configured on the server (GEMINI_API_KEY).";
+      return `API key for ${provider} is not configured (server env or firm BYO).`;
     case "invalid_key":
-      return "Gemini API key was rejected by the provider.";
+      return `API key for ${provider} was rejected by the provider.`;
     case "rate_limited":
       return "AI provider is rate-limiting requests. Wait and try again.";
     case "unreachable":
@@ -54,9 +57,17 @@ export async function getAiConnectivityReport(input: {
   firmId: string;
   probe?: boolean;
 }): Promise<AiConnectivityReport> {
-  const keyStatus = getGeminiKeyStatus();
+  const settings = await getAiSettings(input.firmId);
+  const providerId = (settings?.providerDefault?.trim().toLowerCase() ||
+    "gemini") as LlmProviderId;
+  const normalized: LlmProviderId =
+    providerId === "claude" || providerId === "openai" ? providerId : "gemini";
+
+  const resolved = await resolveProviderApiKey(input.firmId, normalized);
+  const keyStatus = resolved.key ? ("present" as const) : ("missing" as const);
   const base = {
     keyStatus,
+    provider: normalized,
     corePracticeNote: CORE_PRACTICE_NOTE,
   };
 
@@ -67,9 +78,8 @@ export async function getAiConnectivityReport(input: {
       probed: false,
       canSendLegalResearch: false,
       canSendMatterAssist: true,
-      sendBlockedReason:
-        "AI key missing. Legal Research needs Gemini. Matter Assist can still answer from live matter facts.",
-      message: messageFor("missing_key"),
+      sendBlockedReason: `AI key missing for ${normalized}. Legal Research needs a working chat+embed path. Matter Assist can still answer from live matter facts.`,
+      message: messageFor("missing_key", normalized),
     };
   }
 
@@ -81,7 +91,7 @@ export async function getAiConnectivityReport(input: {
       canSendLegalResearch: true,
       canSendMatterAssist: true,
       sendBlockedReason: null,
-      message: messageFor("unknown"),
+      message: messageFor("unknown", normalized),
     };
   }
 
@@ -95,7 +105,7 @@ export async function getAiConnectivityReport(input: {
       canSendLegalResearch: true,
       canSendMatterAssist: true,
       sendBlockedReason: null,
-      message: messageFor("ready"),
+      message: messageFor("ready", normalized),
     };
   } catch (err) {
     const code = err instanceof AiProviderError ? err.code : "provider_error";
@@ -119,8 +129,8 @@ export async function getAiConnectivityReport(input: {
       canSendMatterAssist: true,
       sendBlockedReason: canLegal
         ? null
-        : `${messageFor(connectivity)} Legal Research send is disabled until this is fixed. Matter Assist may still use live matter facts.`,
-      message: messageFor(connectivity),
+        : `${messageFor(connectivity, normalized)} Legal Research send is disabled until this is fixed. Matter Assist may still use live matter facts.`,
+      message: messageFor(connectivity, normalized),
     };
   }
 }

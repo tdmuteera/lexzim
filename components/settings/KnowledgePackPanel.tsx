@@ -61,6 +61,24 @@ export function KnowledgePackPanel() {
     void load();
   }, [load]);
 
+  async function pollJob(jobId: string): Promise<"completed" | "failed" | "timeout"> {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const res = await fetch(`/api/ai/jobs/${jobId}`, { credentials: "include" });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { job: { status: string; errorMessage?: string | null } };
+      };
+      const status = body.data?.job?.status;
+      if (status === "completed") return "completed";
+      if (status === "failed") {
+        setError(body.data?.job?.errorMessage ?? "Background job failed.");
+        return "failed";
+      }
+    }
+    return "timeout";
+  }
+
   async function runIngest(mode: "all" | "embed") {
     if (mode === "all") setReingesting(true);
     else setEmbeddingOnly(true);
@@ -76,8 +94,11 @@ export function KnowledgePackPanel() {
       const body = (await res.json()) as {
         ok: boolean;
         data?: {
-          stats: PackStats;
-          result: {
+          async?: boolean;
+          job?: { id: string };
+          message?: string;
+          stats?: PackStats;
+          result?: {
             pack?: { chunksWritten: number };
             embeddings?: {
               embedded: number;
@@ -95,31 +116,47 @@ export function KnowledgePackPanel() {
         };
         error?: { message: string };
       };
-      if (!res.ok || !body.ok || !body.data) {
+      if ((!res.ok && res.status !== 202) || !body.ok || !body.data) {
         setError(body.error?.message ?? "Re-ingest failed.");
         return;
       }
-      setStats(body.data.stats);
-      const steps = body.data.result.steps ?? [];
+
+      if (body.data.async && body.data.job?.id) {
+        toast(body.data.message ?? "Job queued; waiting for embeddings…");
+        setLastSteps([`Queued job ${body.data.job.id}`]);
+        const outcome = await pollJob(body.data.job.id);
+        if (outcome === "completed") {
+          toast(mode === "all" ? "Knowledge re-ingest completed." : "Embedding completed.");
+          await load();
+        } else if (outcome === "timeout") {
+          setError(
+            "Job still running. Refresh later, or run `npm run jobs:ai` on a worker if needed.",
+          );
+        }
+        return;
+      }
+
+      if (body.data.stats) setStats(body.data.stats);
+      const steps = body.data.result?.steps ?? [];
       setLastSteps(steps.map((s) => `${s.ok ? "OK" : "FAIL"} ${s.step}: ${s.detail}`));
 
       if (mode === "all") {
-        const embedded = body.data.result.embeddings?.embedded ?? 0;
-        const failed = body.data.result.embeddings?.failed ?? 0;
-        const chunks = body.data.result.pack?.chunksWritten ?? 0;
-        if (failed > 0 || body.data.result.embeddings?.errorCode) {
+        const embedded = body.data.result?.embeddings?.embedded ?? 0;
+        const failed = body.data.result?.embeddings?.failed ?? 0;
+        const chunks = body.data.result?.pack?.chunksWritten ?? 0;
+        if (failed > 0 || body.data.result?.embeddings?.errorCode) {
           setError(
-            body.data.result.embeddings?.message ??
+            body.data.result?.embeddings?.message ??
               "Pack loaded but embedding failed (check GEMINI_API_KEY).",
           );
         } else {
           toast(`Re-ingest complete: ${chunks} chunks, ${embedded} embeddings.`);
         }
       } else {
-        const embedded = body.data.result.embedded ?? 0;
-        const failed = body.data.result.failed ?? 0;
-        if (failed > 0 || body.data.result.errorCode) {
-          setError(body.data.result.message ?? "Embedding failed (check GEMINI_API_KEY).");
+        const embedded = body.data.result?.embedded ?? 0;
+        const failed = body.data.result?.failed ?? 0;
+        if (failed > 0 || body.data.result?.errorCode) {
+          setError(body.data.result?.message ?? "Embedding failed (check GEMINI_API_KEY).");
         } else {
           toast(`Embedded ${embedded} chunks.`);
         }

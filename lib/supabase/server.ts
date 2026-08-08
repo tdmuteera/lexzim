@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { assertServerSupabaseEnv } from "@/lib/env";
+import { assertServerSupabaseEnv, withProductionCookieOptions } from "@/lib/env";
 
 /**
  * Server Supabase client for Server Components, Route Handlers, and Server Actions.
@@ -18,7 +18,7 @@ export async function createClient() {
       setAll(cookiesToSet, _headers) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            cookieStore.set(name, value, withProductionCookieOptions(options));
           });
         } catch {
           // Called from a Server Component where cookies are read-only — safe to ignore.

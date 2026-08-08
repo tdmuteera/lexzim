@@ -67,6 +67,12 @@ export const navSections: NavSection[] = [
         permission: "calendar.view",
       },
       {
+        href: "/reminders",
+        label: "Reminders",
+        icon: "bell",
+        permission: "calendar.view",
+      },
+      {
         href: "/intake",
         label: "Intake & Conflicts",
         icon: "clipboard",
@@ -79,13 +85,18 @@ export const navSections: NavSection[] = [
     items: [
       {
         href: "/billing",
-        label: "Billing & Trust",
+        label: "Billing",
         icon: "invoice",
         permission: "billing.view",
       },
+      {
+        href: "/trust",
+        label: "Trust",
+        icon: "shield",
+        permission: "trust.view",
+      },
     ],
-  },
-  {
+  },  {
     title: "People & Insight",
     items: [
       { href: "/staff", label: "Lawyers & Staff", icon: "tie", permission: "users.manage" },
@@ -103,6 +114,11 @@ export const navSections: NavSection[] = [
         icon: "gear",
         permission: "settings.manage",
       },
+      {
+        href: "/help",
+        label: "Help",
+        icon: "clipboard",
+      },
     ],
   },
 ];
@@ -111,7 +127,7 @@ export type RouteMeta = {
   title: string;
   subtitle: string;
   purpose: string;
-  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+";
+  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+";
 };
 
 export const routeMeta: Record<string, RouteMeta> = {
@@ -145,6 +161,12 @@ export const routeMeta: Record<string, RouteMeta> = {
     purpose: "Local court diary and filing deadlines for the practice.",
     phaseBadge: "Phase 3+",
   },
+  "/reminders": {
+    title: "Reminders",
+    subtitle: "Overdue · due soon · hearings",
+    purpose: "In-app reminder centre for procedures, filing deadlines, and hearings.",
+    phaseBadge: "Phase 3+",
+  },
   "/intake": {
     title: "Intake & Conflicts",
     subtitle: "Prospect capture · conflict search · conversion",
@@ -152,9 +174,15 @@ export const routeMeta: Record<string, RouteMeta> = {
     phaseBadge: "Phase 3+",
   },
   "/billing": {
-    title: "Billing & Trust",
-    subtitle: "Fee notes · time · trust ledger (separated from fees)",
-    purpose: "Track time, invoices, and trust money with clear fee vs trust separation.",
+    title: "Billing",
+    subtitle: "Fee notes · time · disbursements · fee payments",
+    purpose: "Track fee invoices and fee receipts, separate from trust.",
+    phaseBadge: "Phase 3+",
+  },
+  "/trust": {
+    title: "Trust accounting",
+    subtitle: "Receipts · payments · transfers · client statements",
+    purpose: "Client money held in trust, never mixed with fee payments.",
     phaseBadge: "Phase 3+",
   },
   "/staff": {
@@ -165,7 +193,7 @@ export const routeMeta: Record<string, RouteMeta> = {
   },
   "/reports": {
     title: "Reports & Analytics",
-    subtitle: "Performance · financials · management pack",
+    subtitle: "AR · time · trust · workload · upcoming",
     purpose: "Management reports for fees, trust, time, and workload.",
     phaseBadge: "Phase 3+",
   },
@@ -183,9 +211,15 @@ export const routeMeta: Record<string, RouteMeta> = {
   },
   "/settings": {
     title: "Settings",
-    subtitle: "Account · RBAC · security · AI · backup · cloud",
-    purpose: "Firm backup/export and AI provider settings.",
-    phaseBadge: "Phase 0 placeholder",
+    subtitle: "Firm profile · licence · AI · backup",
+    purpose: "Firm profile, licence, AI provider settings, and backup/export.",
+    phaseBadge: "Phase 1+",
+  },
+  "/help": {
+    title: "Help",
+    subtitle: "Getting started · admin · billing · AI",
+    purpose: "Pilot help topics and links into the app.",
+    phaseBadge: "Phase 4+",
   },
 };
 

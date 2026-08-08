@@ -402,13 +402,24 @@ export const aiSettings = pgTable("ai_settings", {
   firmId: uuid("firm_id")
     .primaryKey()
     .references(() => firms.id, { onDelete: "cascade" }),
-  /** gemini | claude | openai (Phase 2: gemini) */
+  /** gemini | claude | openai */
   providerDefault: text("provider_default").notNull().default("gemini"),
   /** e.g. gemini-2.0-flash */
   modelDefault: text("model_default").notNull().default("gemini-2.0-flash"),
   /** e.g. text-embedding-004 */
   embeddingsModel: text("embeddings_model").notNull().default("text-embedding-004"),
+  /** Default OFF. Allowlisted web lookup only when enabled. */
   webLookupEnabled: boolean("web_lookup_enabled").notNull().default(false),
+  /** auto = legal research prefers Claude when key present, else Gemini Flash. manual = always providerDefault. */
+  routingMode: text("routing_mode").notNull().default("auto"),
+  /** Soft monthly LLM call cap (null = unlimited). Soft-blocks chat when exceeded. */
+  monthlySoftBudget: integer("monthly_soft_budget"),
+  /** Cap for chat max_output_tokens / max_tokens. */
+  maxOutputTokens: integer("max_output_tokens").notNull().default(1200),
+  /** When false, Matter Assist refuses matter-file context. */
+  matterContextEnabled: boolean("matter_context_enabled").notNull().default(true),
+  /** direct = BYO/managed keys on app server. proxy = LexZim AI proxy (licence token). */
+  keyMode: text("key_mode").notNull().default("direct"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -905,6 +916,315 @@ export const conflictChecks = pgTable(
   ],
 );
 
+// --- Phase 4 licensing (SaaS activation; not desktop licence files) ---
+
+/** One current licence row per firm (upserted on issue/activate). */
+export const firmLicences = pgTable("firm_licences", {
+  firmId: uuid("firm_id")
+    .primaryKey()
+    .references(() => firms.id, { onDelete: "cascade" }),
+  /** trial | solo | firm */
+  edition: text("edition").notNull().default("trial"),
+  seats: integer("seats").notNull().default(3),
+  featuresJson: jsonb("features_json")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  /** active | expired | revoked */
+  status: text("status").notNull().default("active"),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
+  /** null = no expiry (rare; prefer dated pilots) */
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  notes: text("notes"),
+  /** bootstrap | platform | cli | system */
+  issuedBy: text("issued_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Firm LexZim AI proxy credentials (token hash only; master keys stay in proxy/env). */
+export const firmAiProxy = pgTable("firm_ai_proxy", {
+  firmId: uuid("firm_id")
+    .primaryKey()
+    .references(() => firms.id, { onDelete: "cascade" }),
+  /** sha256 hex of raw token + vault pepper */
+  tokenHash: text("token_hash").notNull(),
+  /** First chars of token for UI (e.g. lzp_ab12…) */
+  tokenPrefix: text("token_prefix").notNull(),
+  monthlyQuota: integer("monthly_quota").notNull().default(500),
+  callsThisMonth: integer("calls_this_month").notNull().default(0),
+  /** UTC period key YYYY-MM */
+  periodYm: text("period_ym").notNull(),
+  /** active | revoked */
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Phase 5: invited client portal accounts (separate from staff users). */
+export const portalUsers = pgTable(
+  "portal_users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull(),
+    /** scrypt hash; null until password set or magic-link-only invite */
+    passwordHash: text("password_hash"),
+    isActive: boolean("is_active").notNull().default(true),
+    invitedAt: timestamp("invited_at", { withTimezone: true }).defaultNow().notNull(),
+    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("portal_users_firm_email_uq").on(t.firmId, t.email),
+    index("portal_users_firm_id_idx").on(t.firmId),
+    index("portal_users_firm_client_idx").on(t.firmId, t.clientId),
+  ],
+);
+
+/** One-time portal magic-link tokens (hashed). */
+export const portalMagicLinks = pgTable(
+  "portal_magic_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    portalUserId: uuid("portal_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "cascade" }),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("portal_magic_links_user_idx").on(t.portalUserId),
+    index("portal_magic_links_firm_idx").on(t.firmId),
+  ],
+);
+
+/**
+ * Explicit matter shares for portal (share-nothing default).
+ * Portal visibility requires an active row (revoked_at IS NULL).
+ */
+export const matterPortalShares = pgTable(
+  "matter_portal_shares",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    matterId: uuid("matter_id")
+      .notNull()
+      .references(() => matters.id, { onDelete: "cascade" }),
+    /** read | read_upload */
+    permission: text("permission").notNull().default("read"),
+    sharedByUserId: uuid("shared_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("matter_portal_shares_firm_matter_client_uq").on(
+      t.firmId,
+      t.matterId,
+      t.clientId,
+    ),
+    index("matter_portal_shares_firm_client_idx").on(t.firmId, t.clientId),
+    index("matter_portal_shares_firm_matter_idx").on(t.firmId, t.matterId),
+  ],
+);
+
+/** Explicit document shares for portal (independent of matter share). */
+export const documentPortalShares = pgTable(
+  "document_portal_shares",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    matterId: uuid("matter_id")
+      .notNull()
+      .references(() => matters.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    /** read | read_upload (upload reserved for inbox; read is MVP) */
+    permission: text("permission").notNull().default("read"),
+    sharedByUserId: uuid("shared_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("document_portal_shares_firm_doc_client_uq").on(
+      t.firmId,
+      t.documentId,
+      t.clientId,
+    ),
+    index("document_portal_shares_firm_client_idx").on(t.firmId, t.clientId),
+    index("document_portal_shares_firm_matter_idx").on(t.firmId, t.matterId),
+  ],
+);
+
+/**
+ * Client portal uploads land here first (quarantine). Staff must accept
+ * before a normal matter document record is created.
+ */
+export const portalInboxUploads = pgTable(
+  "portal_inbox_uploads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    matterId: uuid("matter_id")
+      .notNull()
+      .references(() => matters.id, { onDelete: "cascade" }),
+    portalUserId: uuid("portal_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    storagePath: text("storage_path").notNull(),
+    sizeBytes: integer("size_bytes"),
+    /** pending | accepted | dismissed */
+    status: text("status").notNull().default("pending"),
+    acceptedDocumentId: uuid("accepted_document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("portal_inbox_firm_matter_idx").on(t.firmId, t.matterId),
+    index("portal_inbox_firm_status_idx").on(t.firmId, t.status),
+  ],
+);
+
+/** Lightweight in-app alerts for staff (portal inbox, etc.). */
+export const staffNotifications = pgTable(
+  "staff_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    /** Null = visible to all staff in the firm with access. */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("staff_notifications_firm_created_idx").on(t.firmId, t.createdAt),
+    index("staff_notifications_firm_user_idx").on(t.firmId, t.userId),
+  ],
+);
+
+/**
+ * Web session registry for firm admin (replaces desktop device pairing).
+ * sessionId matches Supabase Auth JWT `session_id` claim when available.
+ */
+export const staffSessions = pgTable(
+  "staff_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Supabase auth.sessions.id when known */
+    sessionId: uuid("session_id"),
+    userAgent: text("user_agent"),
+    ipOrUserAgent: text("ip_or_user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    index("staff_sessions_firm_user_idx").on(t.firmId, t.userId),
+    index("staff_sessions_session_id_idx").on(t.sessionId),
+    index("staff_sessions_firm_active_idx").on(t.firmId, t.revokedAt),
+  ],
+);
+
+/**
+ * Background AI jobs (KB reindex / firm memory). Processed by
+ * `npm run jobs:ai` or inline after enqueue on the web dyno.
+ */
+export const aiJobs = pgTable(
+  "ai_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id").references(() => firms.id, { onDelete: "cascade" }),
+    /** kb_reingest_all | kb_embed | firm_memory_reindex_all | firm_memory_reindex_matter */
+    jobType: text("job_type").notNull(),
+    /** pending | running | completed | failed */
+    status: text("status").notNull().default("pending"),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    resultJson: jsonb("result_json").$type<Record<string, unknown>>(),
+    errorMessage: text("error_message"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("ai_jobs_status_created_idx").on(t.status, t.createdAt),
+    index("ai_jobs_firm_idx").on(t.firmId),
+  ],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -943,4 +1263,14 @@ export const schema = {
   trustLedgerEntries,
   intakes,
   conflictChecks,
+  firmLicences,
+  firmAiProxy,
+  portalUsers,
+  portalMagicLinks,
+  matterPortalShares,
+  documentPortalShares,
+  portalInboxUploads,
+  staffNotifications,
+  staffSessions,
+  aiJobs,
 };

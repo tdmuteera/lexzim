@@ -179,7 +179,8 @@ export function MatterDocumentsPanel({ matterId }: MatterDocumentsPanelProps) {
         <div>
           <h4 style={{ margin: 0 }}>Documents</h4>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-            PDF, DOCX, and images up to 25 MB. Stored under your firm path.
+            PDF, DOCX, and images up to 25 MB. Stored under your firm path. Share
+            selected files with clients from the Portal tab (explicit per document).
           </p>
         </div>
       </div>

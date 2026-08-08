@@ -44,6 +44,10 @@ export type AiSettings = {
   modelDefault: string;
   embeddingsModel: string;
   webLookupEnabled: boolean;
+  routingMode: "auto" | "manual" | string;
+  monthlySoftBudget: number | null;
+  maxOutputTokens: number;
+  matterContextEnabled: boolean;
   updatedAt: Date;
 };
 

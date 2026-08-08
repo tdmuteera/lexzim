@@ -50,3 +50,6 @@ cookies.txt
 *.dump
 *.bak
 !drizzle/migrations/*.sql
+
+# Local DB diagnostics (may contain secrets)
+scripts/find-pooler.ts

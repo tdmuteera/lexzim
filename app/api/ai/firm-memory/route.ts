@@ -2,10 +2,11 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import {
-  firmMemoryReindexAll,
   firmMemoryReindexMatter,
   getFirmMemoryStats,
 } from "@/lib/ai/firm-memory";
+import { enqueueAiJob, serializeAiJob } from "@/lib/ai/jobs/enqueue";
+import { kickAiJobInBackground } from "@/lib/ai/jobs/process";
 import { canViewAllMatters, hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { userCanAccessMatter } from "@/lib/repos/matters";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -25,8 +26,8 @@ export async function GET() {
 /**
  * Re-index firm memory.
  * body.action:
- * - "reindex_matter" (requires matterId; ai.use + matter access)
- * - "reindex_all" (requires ai.manage_settings)
+ * - "reindex_matter" (requires matterId; sync by default)
+ * - "reindex_all" (requires ai.manage_settings; queued by default)
  */
 export async function POST(request: Request) {
   try {
@@ -35,13 +36,41 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       action?: string;
       matterId?: string;
+      async?: boolean;
     };
     const action = (body.action ?? "").trim().toLowerCase();
+    const preferAsync = body.async !== false;
 
     if (action === "reindex_all") {
       if (!hasPermission(session, "ai.manage_settings")) {
         throw new AuthError("forbidden", "Permission required: ai.manage_settings");
       }
+      if (preferAsync) {
+        const job = await enqueueAiJob({
+          firmId,
+          jobType: "firm_memory_reindex_all",
+          createdByUserId: session.id,
+        });
+        await writeAuditLog({
+          action: "ai.firm_memory_reindex_all_queued",
+          firmId,
+          userId: session.id,
+          entityType: "ai_job",
+          entityId: job.id,
+          ipOrUserAgent: clientInfo(request),
+        });
+        kickAiJobInBackground(job.id);
+        return jsonOk(
+          {
+            action,
+            async: true,
+            job: serializeAiJob(job),
+            message: "Firm memory reindex queued. Poll GET /api/ai/jobs/{id}.",
+          },
+          { status: 202 },
+        );
+      }
+      const { firmMemoryReindexAll } = await import("@/lib/ai/firm-memory");
       const result = await firmMemoryReindexAll({ firmId });
       await writeAuditLog({
         action: "ai.firm_memory_reindex_all",
@@ -55,11 +84,12 @@ export async function POST(request: Request) {
           embedded: result.embedded,
           failed: result.failed,
           errorCode: result.errorCode ?? null,
+          async: false,
         },
         ipOrUserAgent: clientInfo(request),
       });
       const stats = await getFirmMemoryStats(firmId);
-      return jsonOk({ action, result, stats });
+      return jsonOk({ action, result, stats, async: false });
     }
 
     if (action === "reindex_matter") {

@@ -27,12 +27,6 @@ function mapHttpError(status: number, fallback: string): never {
   throw new ProviderError(fallback, status);
 }
 
-function requireKey(): string {
-  const key = getGeminiApiKey();
-  if (!key) throw new MissingKeyError("GEMINI_API_KEY is not set on the server.");
-  return key;
-}
-
 function toGeminiContents(messages: ChatMessage[]) {
   const systemParts = messages
     .filter((m) => m.role === "system")
@@ -54,12 +48,19 @@ function toGeminiContents(messages: ChatMessage[]) {
 }
 
 export function createGeminiProvider(opts?: {
+  apiKey?: string | null;
   chatModel?: string;
   embeddingsModel?: string;
 }): LlmProvider {
   const defaultChatModel = opts?.chatModel?.trim() || GEMINI_CHAT_MODEL_ID;
   const defaultEmbeddingsModel =
     opts?.embeddingsModel?.trim() || GEMINI_EMBEDDINGS_MODEL_ID;
+
+  function requireKey(): string {
+    const key = opts?.apiKey?.trim() || getGeminiApiKey();
+    if (!key) throw new MissingKeyError("GEMINI_API_KEY is not set on the server.");
+    return key;
+  }
 
   return {
     id: "gemini",

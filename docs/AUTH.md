@@ -41,6 +41,7 @@ Requires RBAC seed (`npm run db:seed:rbac`) so `managing_partner` exists.
 
 - Next.js 16 **`proxy.ts`** refreshes Supabase cookies via `lib/supabase/proxy.ts`
 - `authCurrentUser()` / `requireSession()` for Server Components, Route Handlers, Server Actions
+- Firm admin list/revoke of web sessions: see `docs/cloud/SESSION_ADMIN.md` (P5-08)
 
 ### 4. Logout
 

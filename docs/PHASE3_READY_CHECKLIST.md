@@ -18,8 +18,8 @@ Phase 2 (AI Legal Assistant) must be complete before Calendar / Billing / Intake
 
 - [ ] Railway production URL confirmed in `docs/HOSTING.md` / README (if not already)
 - [x] Supabase Postgres + Storage healthy for pilot firm
-- [x] RBAC matrix includes calendar / billing / trust / intake / reports permission codes (stubs may remain)
-- [x] Billing / trust account model decisions recorded before P3 billing prompts (`docs/PRACTICE_OPS.md`: cents + currency; trust ≠ fees)
+- [x] RBAC matrix includes calendar / billing / trust / intake / reports permission codes
+- [x] Billing / trust account model decisions recorded (`docs/PRACTICE_OPS.md`: cents + currency; trust ≠ fees)
 
 ## Product boundaries for Phase 3
 
@@ -37,17 +37,25 @@ Phase 3 **must not**:
 - Replace Phase 2 AI grounding rules (no invented authorities)
 - Add payment gateways or bank feeds (out of scope)
 
-## Suggested first Phase 3 session
-
-1. Re-run `npm run smoke:phase1`, `npm run smoke:phase1-rbac`, `npm run smoke:phase2`
-2. Confirm migration `0005_phase3_practice_ops` applied
-3. Continue `PHASE 3 - Practice Ops Prompts.md` from **P3-02** (calendar UI)
-
-## Final Phase 2 statement
-
-**PHASE 2 COMPLETE — ready for Phase 3 prompts (Calendar, Billing & Trust, Intake & Conflicts, Reporting)**
-
 ## Phase 3 progress
 
 - [x] P3-01 Practice-ops schema
-- [ ] P3-02 … P3-14
+- [x] P3-02 Calendar UI
+- [x] P3-03 Deadline templates
+- [x] P3-04 Reminders
+- [x] P3-05 Time tracking
+- [x] P3-06 Disbursements
+- [x] P3-07 Invoices / fee payments
+- [x] P3-08 Trust
+- [x] P3-09 Intake forms
+- [x] P3-10 Conflict search
+- [x] P3-11 Conversion
+- [x] P3-12 Reports
+- [x] P3-13 Dashboard + money RBAC
+- [x] P3-14 Seeds, smoke, Phase 4 handoff
+
+## Final Phase 3 statement
+
+**PHASE 3 COMPLETE — ready for Phase 4 prompts (Sell & Ship: production AI, licensing, onboarding, pilots on Railway)**
+
+Continue with `docs/PHASE4_READY_CHECKLIST.md` and `PHASE 4 - Sell & Ship Prompts.md`.

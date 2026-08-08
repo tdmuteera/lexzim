@@ -2,7 +2,7 @@
  * Calendar / deadline repository (P3-01 stubs + P3-02 event CRUD + P3-03 deadlines).
  * EVERY firm-scoped query MUST filter firmId.
  */
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import type { CalendarEventInput } from "@/lib/calendar/validation";
 import {
   addCalendarDays,
@@ -12,13 +12,22 @@ import {
   type MatterDeadlineStatusUpdate,
 } from "@/lib/deadlines/validation";
 import { getDb } from "@/lib/db";
-import { calendarEvents, deadlineTemplates, matterDeadlines, matters } from "@/lib/db/schema";
+import {
+  calendarEvents,
+  deadlineTemplates,
+  matterDeadlines,
+  matterTeam,
+  matters,
+} from "@/lib/db/schema";
 
 export type ListCalendarEventsOpts = {
   from?: Date;
   to?: Date;
   eventType?: string;
   matterId?: string;
+  /** When false, only firm events with no matter, or matters the user can access. */
+  viewAll?: boolean;
+  userId?: string;
 };
 
 export async function listCalendarEvents(firmId: string, opts?: ListCalendarEventsOpts) {
@@ -28,6 +37,33 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
   if (opts?.to) conditions.push(lte(calendarEvents.startsAt, opts.to));
   if (opts?.eventType) conditions.push(eq(calendarEvents.eventType, opts.eventType));
   if (opts?.matterId) conditions.push(eq(calendarEvents.matterId, opts.matterId));
+
+  if (opts?.viewAll === false && opts.userId) {
+    const teamMatterIds = db
+      .select({ matterId: matterTeam.matterId })
+      .from(matterTeam)
+      .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, opts.userId)));
+    conditions.push(
+      or(
+        isNull(calendarEvents.matterId),
+        inArray(
+          calendarEvents.matterId,
+          db
+            .select({ id: matters.id })
+            .from(matters)
+            .where(
+              and(
+                eq(matters.firmId, firmId),
+                or(
+                  eq(matters.responsibleLawyerId, opts.userId),
+                  inArray(matters.id, teamMatterIds),
+                ),
+              ),
+            ),
+        ),
+      )!,
+    );
+  }
 
   return db
     .select({

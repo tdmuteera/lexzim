@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { withProductionCookieOptions } from "@/lib/env";
 
 /**
  * Refresh Supabase auth cookies on each matched request (Next.js 16 Proxy).
@@ -26,7 +27,11 @@ export async function updateSession(request: NextRequest) {
         });
         supabaseResponse = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) => {
-          supabaseResponse.cookies.set(name, value, options);
+          supabaseResponse.cookies.set(
+            name,
+            value,
+            withProductionCookieOptions(options),
+          );
         });
         Object.entries(headers).forEach(([key, value]) => {
           supabaseResponse.headers.set(key, value);

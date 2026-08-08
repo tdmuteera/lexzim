@@ -19,7 +19,8 @@ export type TrustLedgerEntryType =
   | "transfer"
   | "adjustment";
 
-export type IntakeStatus = "draft" | "submitted" | "converted" | "declined";
+export type IntakeStatus = "draft" | "open" | "submitted" | "converted" | "declined" | "archived";
+
 
 export type ConflictCheckResult = "clear" | "conflict" | "possible" | "not_done";
 
@@ -29,6 +30,7 @@ export const FIRM_SETTING_KEYS = {
   invoicePrefix: "invoice_prefix",
   nextInvoiceNumber: "next_invoice_number",
   invoiceDueDays: "invoice_due_days",
+  browserNotificationsEnabled: "browser_notifications_enabled",
 } as const;
 
 export type FirmSettingKey =

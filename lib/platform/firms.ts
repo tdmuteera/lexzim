@@ -8,6 +8,9 @@ import { firms, roles, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requirePlatformAdmin } from "@/lib/platform/admin";
 import { writeAuditLog } from "@/lib/auth/audit";
+import { ensureTrialLicence } from "@/lib/repos/licences";
+
+export type FirmOpsStatus = "active" | "trial" | "demo" | "suspended" | "archived";
 
 export type CreateFirmTenantInput = {
   firmName: string;
@@ -113,6 +116,11 @@ export async function platformCreateFirm(
       ipOrUserAgent: opts?.ipOrUserAgent ?? null,
     });
 
+    await ensureTrialLicence(firm.id, {
+      issuedBy: `platform:${admin.email}`,
+      notes: isDemo ? "Demo firm trial" : "New firm trial",
+    });
+
     return { firmId: firm.id, userId: authUserId, slug };
   } catch (err) {
     await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => undefined);
@@ -120,4 +128,63 @@ export async function platformCreateFirm(
       ? err
       : new AuthError("setup_failed", "Could not create firm tenant.");
   }
+}
+
+const OPS_STATUSES: FirmOpsStatus[] = [
+  "active",
+  "trial",
+  "demo",
+  "suspended",
+  "archived",
+];
+
+export function parseFirmOpsStatus(raw: string): FirmOpsStatus {
+  const s = raw.trim().toLowerCase();
+  if (!(OPS_STATUSES as string[]).includes(s)) {
+    throw new AuthError(
+      "validation",
+      `status must be one of: ${OPS_STATUSES.join(", ")}.`,
+    );
+  }
+  return s as FirmOpsStatus;
+}
+
+/**
+ * Soft-disable / restore a firm (no matter wipe). Suspended firms cannot sign in.
+ */
+export async function platformSetFirmStatus(
+  firmId: string,
+  status: FirmOpsStatus,
+  opts?: { ipOrUserAgent?: string | null; notes?: string | null },
+) {
+  const admin = await requirePlatformAdmin();
+  const db = getDb();
+  const rows = await db
+    .update(firms)
+    .set({
+      status,
+      archivedAt: status === "archived" ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(firms.id, firmId))
+    .returning();
+  const firm = rows[0];
+  if (!firm) throw new AuthError("not_found", "Firm not found.");
+
+  await writeAuditLog({
+    action:
+      status === "suspended"
+        ? "platform.firm_suspended"
+        : status === "archived"
+          ? "platform.firm_archived"
+          : "platform.firm_status",
+    firmId: firm.id,
+    userId: admin.id,
+    entityType: "firm",
+    entityId: firm.id,
+    metadata: { status, notes: opts?.notes ?? null, slug: firm.slug },
+    ipOrUserAgent: opts?.ipOrUserAgent ?? null,
+  });
+
+  return firm;
 }

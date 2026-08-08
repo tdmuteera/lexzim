@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const settings = await getAiSettings(firmId);
     const model = settings?.modelDefault;
 
-    const result = await aiTestProvider({ model });
+    const result = await aiTestProvider({ firmId, model });
 
     await recordAiUsageEvent({
       firmId,
