@@ -14,7 +14,7 @@ Opposing parties, witnesses, and other linked people on matters and clients.
 | `GET`/`POST` | `/api/matters/[id]/parties` | `matters.view` / `matters.edit` |
 | `GET`/`POST` | `/api/clients/[id]/parties` | `clients.view` / `clients.edit` |
 | `PATCH`/`DELETE` | `/api/parties/[id]` | `matters.edit` or `clients.edit` |
-| `GET` | `/api/parties?q=` | `matters.view` (name search for Phase 3 conflicts) |
+| `GET` | `/api/parties?q=` | `matters.view` (firm-wide name search) |
 
 ## Roles
 

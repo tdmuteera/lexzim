@@ -38,6 +38,7 @@ function matterAccessCondition(firmId: string, userId: string, viewAll: boolean)
 export type ReminderBuckets = {
   generatedAt: string;
   dueSoonDays: number;
+  hearingHorizonDays: number;
   counts: {
     overdue: number;
     dueSoon: number;
@@ -66,23 +67,46 @@ export async function getReminders(input: {
   userId: string;
   viewAll: boolean;
   dueSoonDays?: number;
+  hearingHorizonDays?: number;
   limitPerBucket?: number;
 }): Promise<ReminderBuckets> {
   const dueSoonDays = input.dueSoonDays ?? 7;
+  const hearingHorizonDays = input.hearingHorizonDays ?? 60;
   const limit = input.limitPerBucket ?? 25;
   const now = new Date();
   const soonEnd = new Date(now.getTime() + dueSoonDays * DAY_MS);
+  const hearingStart = new Date(now);
+  hearingStart.setHours(0, 0, 0, 0);
+  const hearingEnd = new Date(hearingStart.getTime() + hearingHorizonDays * DAY_MS);
 
-  const [overdueProcedures, dueSoonProcedures, overdueDeadlines, dueSoonDeadlines, hearings] =
-    await Promise.all([
-      listProcedureReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
-      listProcedureReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
-      listDeadlineReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
-      listDeadlineReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
-      listHearingReminders({ ...input, now, soonEnd, limit }),
-    ]);
+  const [
+    overdueProcedures,
+    dueSoonProcedures,
+    overdueDeadlines,
+    dueSoonDeadlines,
+    overdueHearings,
+    hearings,
+  ] = await Promise.all([
+    listProcedureReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
+    listProcedureReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
+    listDeadlineReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
+    listDeadlineReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
+    listHearingReminders({
+      ...input,
+      now: hearingStart,
+      soonEnd: hearingEnd,
+      limit,
+      overdueOnly: true,
+    }),
+    listHearingReminders({
+      ...input,
+      now: hearingStart,
+      soonEnd: hearingEnd,
+      limit,
+    }),
+  ]);
 
-  const overdue = [...overdueProcedures, ...overdueDeadlines].sort((a, b) =>
+  const overdue = [...overdueProcedures, ...overdueDeadlines, ...overdueHearings].sort((a, b) =>
     a.dueAt.localeCompare(b.dueAt),
   );
   const dueSoon = [...dueSoonProcedures, ...dueSoonDeadlines].sort((a, b) =>
@@ -99,6 +123,7 @@ export async function getReminders(input: {
   return {
     generatedAt: now.toISOString(),
     dueSoonDays,
+    hearingHorizonDays,
     counts,
     overdue: overdue.slice(0, limit),
     dueSoon: dueSoon.slice(0, limit),
@@ -220,9 +245,16 @@ async function listHearingReminders(input: {
   now: Date;
   soonEnd: Date;
   limit: number;
+  overdueOnly?: boolean;
 }): Promise<ReminderItem[]> {
   const db = getDb();
   const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+  const hearingTime = input.overdueOnly
+    ? lt(matters.nextHearingAt, input.now)
+    : and(gte(matters.nextHearingAt, input.now), lte(matters.nextHearingAt, input.soonEnd));
+  const calendarTime = input.overdueOnly
+    ? lt(calendarEvents.startsAt, input.now)
+    : and(gte(calendarEvents.startsAt, input.now), lte(calendarEvents.startsAt, input.soonEnd));
 
   const matterHearings = await db
     .select({
@@ -236,8 +268,7 @@ async function listHearingReminders(input: {
       and(
         matterAccess,
         isNotNull(matters.nextHearingAt),
-        gte(matters.nextHearingAt, input.now),
-        lte(matters.nextHearingAt, input.soonEnd),
+        hearingTime,
       ),
     )
     .orderBy(asc(matters.nextHearingAt))
@@ -257,8 +288,7 @@ async function listHearingReminders(input: {
       and(
         eq(calendarEvents.firmId, input.firmId),
         eq(calendarEvents.eventType, "hearing"),
-        gte(calendarEvents.startsAt, input.now),
-        lte(calendarEvents.startsAt, input.soonEnd),
+        calendarTime,
       ),
     )
     .orderBy(asc(calendarEvents.startsAt))
@@ -289,7 +319,7 @@ async function listHearingReminders(input: {
     matterId: row.id,
     matterTitle: row.title,
     href: `/matters/${row.id}`,
-    isOverdue: false,
+    isOverdue: Boolean(input.overdueOnly),
     meta: row.courtName ?? "Matter hearing",
   }));
 
@@ -307,7 +337,7 @@ async function listHearingReminders(input: {
       matterId: row.event.matterId,
       matterTitle: row.matterTitle,
       href: row.event.matterId ? `/matters/${row.event.matterId}` : "/calendar",
-      isOverdue: false,
+      isOverdue: Boolean(input.overdueOnly),
       meta: row.event.location ?? "Calendar hearing",
     }));
 

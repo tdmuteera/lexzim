@@ -85,108 +85,94 @@ export function LicencePanel() {
 
   return (
     <Can permission="settings.manage">
-      <div style={{ display: "grid", gap: "1rem", maxWidth: "42rem" }}>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Licence</h2>
-          {licence ? (
-            <Badge tone={statusTone(licence.status)}>{licence.status}</Badge>
+      <div className="settings-form">
+        <div className="settings-form-head">
+          {licence ? <Badge tone={statusTone(licence.status)}>{licence.status}</Badge> : null}
+          {loading ? <span className="muted">Loading…</span> : null}
+          <p className="settings-lede">
+            SaaS activation for this firm. Edition flags and seats are described in
+            docs/EDITIONS.md. Export is never disabled by licence status.
+          </p>
+          {error ? (
+            <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
           ) : null}
         </div>
 
-        <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-          SaaS activation for this firm. Edition flags and seats are described in docs/EDITIONS.md.
-          Export is never disabled by licence status.
-        </p>
-
-        {error ? (
-          <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
-        ) : null}
-
-        {loading ? <p className="muted">Loading…</p> : null}
-
         {licence && !loading ? (
-          <div
-            style={{
-              display: "grid",
-              gap: "0.65rem",
-              padding: "0.85rem 1rem",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--bg-1)",
-              fontSize: "0.9rem",
-            }}
-          >
-            <div>
-              <span className="muted">Edition: </span>
-              <strong style={{ textTransform: "capitalize" }}>{licence.edition}</strong>
-            </div>
-            <div>
-              <span className="muted">Seats: </span>
-              {usage
-                ? `${usage.seatsUsed} used / ${usage.seats} (${usage.seatsRemaining} remaining)`
-                : licence.seats}
-            </div>
-            <div>
-              <span className="muted">Matters: </span>
-              {usage
-                ? usage.maxMatters === null
-                  ? `${usage.mattersUsed} (unlimited)`
-                  : `${usage.mattersUsed} / ${usage.maxMatters} cap`
-                : licence.maxMatters === null
-                  ? "Unlimited"
-                  : `Cap ${licence.maxMatters}`}
-            </div>
-            <div>
-              <span className="muted">Issued: </span>
-              {formatDateTime(licence.issuedAt)}
-            </div>
-            <div>
-              <span className="muted">Expires: </span>
-              {licence.expiresAt ? formatDateTime(licence.expiresAt) : "No expiry"}
-            </div>
-            {licence.notes ? (
-              <div>
-                <span className="muted">Notes: </span>
-                {licence.notes}
+          <>
+            <section className="settings-section">
+              <h3 className="settings-section-title">Activation</h3>
+              <div className="settings-summary">
+                <div className="settings-summary-row">
+                  <span className="settings-label">Edition</span>
+                  <span className="settings-value" style={{ textTransform: "capitalize" }}>
+                    {licence.edition}
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Seats</span>
+                  <span className="settings-value">
+                    {usage
+                      ? `${usage.seatsUsed} used / ${usage.seats} (${usage.seatsRemaining} remaining)`
+                      : licence.seats}
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Matters</span>
+                  <span className="settings-value">
+                    {usage
+                      ? usage.maxMatters === null
+                        ? `${usage.mattersUsed} (unlimited)`
+                        : `${usage.mattersUsed} / ${usage.maxMatters} cap`
+                      : licence.maxMatters === null
+                        ? "Unlimited"
+                        : `Cap ${licence.maxMatters}`}
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Issued</span>
+                  <span className="settings-value">{formatDateTime(licence.issuedAt)}</span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Expires</span>
+                  <span className="settings-value">
+                    {licence.expiresAt ? formatDateTime(licence.expiresAt) : "No expiry"}
+                  </span>
+                </div>
               </div>
-            ) : null}
-            {licence.reason ? (
-              <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>
-                {licence.reason}
+
+              {licence.notes ? <p className="settings-hint">Notes: {licence.notes}</p> : null}
+              {licence.reason ? (
+                <p style={{ margin: 0, color: "var(--danger)", fontSize: "0.85rem" }}>
+                  {licence.reason}
+                </p>
+              ) : null}
+              <p className="settings-hint">
+                New matters blocked: {licence.blocksNewMatters ? "yes" : "no"}. Export allowed:{" "}
+                {licence.exportAllowed ? "yes (always)" : "no"}.
+                {usage?.aiProxyEligible ? " AI proxy eligible." : " AI proxy not on this edition."}
               </p>
+            </section>
+
+            {featureEntries.length > 0 ? (
+              <section className="settings-section">
+                <h3 className="settings-section-title">Features</h3>
+                <div className="settings-chip-grid">
+                  {featureEntries.map(([key, on]) => (
+                    <div key={key} className={`settings-chip ${on ? "on" : ""}`}>
+                      <span>{key}</span>
+                      <strong>{on ? "On" : "Off"}</strong>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ) : null}
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              New matters blocked: {licence.blocksNewMatters ? "yes" : "no"}. Export allowed:{" "}
-              {licence.exportAllowed ? "yes (always)" : "no"}.
-              {usage?.aiProxyEligible ? " AI proxy eligible." : " AI proxy not on this edition."}
-            </p>
-          </div>
+
+            {policy ? <p className="settings-hint">Policy: {policy}</p> : null}
+          </>
         ) : null}
 
-        {featureEntries.length > 0 ? (
-          <div
-            style={{
-              display: "grid",
-              gap: "0.35rem",
-              fontSize: "0.85rem",
-            }}
-          >
-            <strong>Features</strong>
-            {featureEntries.map(([key, on]) => (
-              <div key={key} className="muted">
-                {key}: {on ? "on" : "off"}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {policy ? (
-          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Policy: {policy}
-          </p>
-        ) : null}
-
-        <div>
+        <div className="settings-actions">
           <Button variant="ghost" onClick={() => void load()} disabled={loading}>
             Refresh
           </Button>

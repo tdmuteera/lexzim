@@ -13,6 +13,7 @@ export function serializeTrustAccount(
     name: row.name,
     currency: row.currency,
     accountRef: row.accountRef,
+    accountKind: row.accountKind,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

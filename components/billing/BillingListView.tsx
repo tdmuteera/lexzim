@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
+import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
+import { INVOICING_LIST_PATH, invoiceDetailPath } from "@/lib/billing/paths";
 import { INVOICE_STATUSES } from "@/lib/billing/validation";
 
 type InvoiceItem = {
@@ -21,6 +24,7 @@ type InvoiceItem = {
   issueDate: string | null;
   dueDate: string | null;
   matterId: string;
+  clientId: string | null;
   matterTitle: string | null;
   matterNumber: string | null;
   clientDisplayName: string | null;
@@ -36,6 +40,15 @@ function statusTone(status: string, overdue: boolean) {
   return "default" as const;
 }
 
+function formatShortDate(value: string | null) {
+  if (!value) return "n/a";
+  return new Date(value).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export function BillingListView() {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [matters, setMatters] = useState<MatterOption[]>([]);
@@ -47,6 +60,28 @@ export function BillingListView() {
   const [createMatterId, setCreateMatterId] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const inv of items) {
+      const key =
+        inv.displayOverdue && inv.status === "sent" ? "overdue" : inv.status;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [items]);
+
+  const overdueBalanceCents = useMemo(
+    () =>
+      items.reduce(
+        (sum, inv) =>
+          inv.displayOverdue || inv.status === "overdue"
+            ? sum + inv.balanceCents
+            : sum,
+        0,
+      ),
+    [items],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,7 +164,7 @@ export function BillingListView() {
         return;
       }
       setCreating(false);
-      window.location.href = `/billing/invoices/${body.data.invoice.id}`;
+      window.location.href = invoiceDetailPath(body.data.invoice.id);
     } catch {
       setCreateError("Could not create invoice.");
     } finally {
@@ -138,10 +173,13 @@ export function BillingListView() {
   }
 
   return (
-    <section className="view active scrollable" aria-label="Billing">
+    <section className="view active scrollable finance-desk-view" aria-label="Invoicing">
       <div className="panel">
         <div className="panel-head">
-          <h3>Fee notes</h3>
+          <div>
+            <h3>Invoicing</h3>
+            <p className="panel-subtitle muted">Fee notes · firm revenue · not trust</p>
+          </div>
           <Can permission="billing.manage">
             <Button size="sm" onClick={() => setCreating(true)}>
               New from unbilled
@@ -149,10 +187,38 @@ export function BillingListView() {
           </Can>
         </div>
         <div className="panel-body">
-          <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Fee invoices from unbilled time and disbursements. Fee payments are not trust
-            receipts. Use the Trust module for client money held in trust.
-          </p>
+          <FeeMoneyCallout variant="list" />
+
+          {!loading && items.length > 0 ? (
+            <div className="finance-status-summary" aria-label="Invoice status summary">
+              {INVOICE_STATUSES.map((s) =>
+                statusCounts[s] ? (
+                  <button
+                    key={s}
+                    type="button"
+                    className={["finance-status-chip", status === s ? "active" : ""]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => setStatus(status === s ? "" : s)}
+                  >
+                    <span>{s}</span>
+                    <strong>{statusCounts[s]}</strong>
+                  </button>
+                ) : null,
+              )}
+              {statusCounts.overdue ? (
+                <div className="finance-overdue-hint">
+                  Overdue balance:{" "}
+                  <strong>
+                    {centsToDisplay(
+                      overdueBalanceCents,
+                      items.find((i) => i.balanceCents > 0)?.currency ?? "USD",
+                    )}
+                  </strong>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="toolbar">
             <select
@@ -173,7 +239,7 @@ export function BillingListView() {
               value={matterId}
               onChange={(e) => setMatterId(e.target.value)}
               aria-label="Filter by matter"
-              style={{ minWidth: "180px" }}
+              style={{ minWidth: "200px" }}
             >
               <option value="">All matters</option>
               {matters.map((m) => (
@@ -195,7 +261,7 @@ export function BillingListView() {
           ) : null}
 
           {creating ? (
-            <div className="panel" style={{ padding: "1rem", marginBottom: "1rem" }}>
+            <div className="panel finance-create-panel" style={{ padding: "1rem", marginBottom: "1rem" }}>
               <h4 style={{ marginTop: 0 }}>Create fee note from unbilled</h4>
               {createError ? (
                 <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
@@ -217,11 +283,15 @@ export function BillingListView() {
                 </select>
               </div>
               <p className="muted" style={{ fontSize: "0.8rem" }}>
-                Pulls all billable unbilled time (with rates) and disbursements, then locks those
-                lines on the draft invoice.
+                Pulls billable unbilled time (with rates) and disbursements, then locks those
+                lines on the draft fee note.
               </p>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <Button size="sm" onClick={() => void createInvoice()} disabled={saving || !createMatterId}>
+                <Button
+                  size="sm"
+                  onClick={() => void createInvoice()}
+                  disabled={saving || !createMatterId}
+                >
                   {saving ? "Creating…" : "Create draft"}
                 </Button>
                 <Button
@@ -238,7 +308,7 @@ export function BillingListView() {
 
           {loading && !items.length ? (
             <p className="muted" style={{ fontSize: "0.85rem" }}>
-              Loading…
+              Loading fee notes…
             </p>
           ) : null}
 
@@ -248,49 +318,94 @@ export function BillingListView() {
               detail="Create one from unbilled time and costs on a matter."
             />
           ) : (
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Number</th>
-                  <th>Client / matter</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th>Balance</th>
-                  <th>Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((inv) => (
-                  <tr key={inv.id}>
-                    <td>
-                      <Link href={`/billing/invoices/${inv.id}`}>{inv.invoiceNumber}</Link>
-                    </td>
-                    <td>
-                      <div>{inv.clientDisplayName ?? "Client"}</div>
-                      <div className="muted" style={{ fontSize: "0.75rem" }}>
-                        {inv.matterNumber
-                          ? `${inv.matterNumber} · ${inv.matterTitle ?? ""}`
-                          : inv.matterTitle}
-                      </div>
-                    </td>
-                    <td>
-                      <Badge tone={statusTone(inv.status, inv.displayOverdue)}>
-                        {inv.displayOverdue && inv.status === "sent"
-                          ? "overdue"
-                          : inv.status}
-                      </Badge>
-                    </td>
-                    <td>{centsToDisplay(inv.totalCents, inv.currency)}</td>
-                    <td>{centsToDisplay(inv.balanceCents, inv.currency)}</td>
-                    <td>
-                      {inv.dueDate
-                        ? new Date(inv.dueDate).toLocaleDateString()
-                        : "n/a"}
-                    </td>
+            <div className="table-wrap">
+              <table className="data data-dense finance-invoice-table">
+                <thead>
+                  <tr>
+                    <th>Number</th>
+                    <th>Client</th>
+                    <th>Matter</th>
+                    <th>Status</th>
+                    <th>Issued</th>
+                    <th>Due</th>
+                    <th>Ageing</th>
+                    <th>Total</th>
+                    <th>Balance</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((inv) => {
+                    const overdue =
+                      inv.displayOverdue || inv.status === "overdue";
+                    const statusKey =
+                      inv.displayOverdue && inv.status === "sent"
+                        ? "overdue"
+                        : inv.status;
+                    const pastDue = overdue ? daysPastDue(inv.dueDate) : null;
+                    const bucket =
+                      overdue && inv.balanceCents > 0
+                        ? ageingBucketLabel(inv.dueDate)
+                        : null;
+
+                    return (
+                      <tr
+                        key={inv.id}
+                        className={overdue && inv.balanceCents > 0 ? "row-overdue" : ""}
+                      >
+                        <td>
+                          <Link
+                            href={invoiceDetailPath(inv.id)}
+                            className="finance-invoice-link"
+                          >
+                            {inv.invoiceNumber}
+                          </Link>
+                        </td>
+                        <td>
+                          {inv.clientId ? (
+                            <Link href={`/clients/${inv.clientId}`}>
+                              {inv.clientDisplayName ?? "Client"}
+                            </Link>
+                          ) : (
+                            inv.clientDisplayName ?? "Client"
+                          )}
+                        </td>
+                        <td>
+                          <Link href={`/matters/${inv.matterId}`}>
+                            {inv.matterNumber ?? inv.matterTitle ?? inv.matterId}
+                          </Link>
+                          {inv.matterNumber && inv.matterTitle ? (
+                            <div className="muted finance-cell-sub">
+                              {inv.matterTitle}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <Badge tone={statusTone(inv.status, inv.displayOverdue)}>
+                            {statusKey}
+                          </Badge>
+                        </td>
+                        <td>{formatShortDate(inv.issueDate)}</td>
+                        <td>{formatShortDate(inv.dueDate)}</td>
+                        <td>
+                          {pastDue !== null ? (
+                            <span className="finance-ageing-hint">
+                              {pastDue}d
+                              {bucket ? ` · ${bucket}` : ""}
+                            </span>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                        <td>{centsToDisplay(inv.totalCents, inv.currency)}</td>
+                        <td className={inv.balanceCents > 0 ? "finance-balance-outstanding" : ""}>
+                          {centsToDisplay(inv.balanceCents, inv.currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

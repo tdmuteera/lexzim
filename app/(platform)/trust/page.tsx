@@ -1,10 +1,12 @@
-import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+import { FinanceModuleNav } from "@/components/finance/FinanceModuleNav";
 import { TrustView } from "@/components/trust/TrustView";
 
+/** Legacy alias for /finance/trust (bookmarks preserved). */
 export default function TrustPage() {
   return (
-    <ProtectedModulePage path="/trust">
+    <div className="module-with-tabs">
+      <FinanceModuleNav />
       <TrustView />
-    </ProtectedModulePage>
+    </div>
   );
 }

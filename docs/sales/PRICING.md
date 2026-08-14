@@ -10,7 +10,6 @@ Included in a normal subscription conversation:
 
 - Multi-user firm workspace with roles
 - Clients, matters, documents, calendar, reminders
-- Intake and conflict checks
 - Fee billing and **trust accounting** (kept separate)
 - Zimbabwe-oriented AI assistant (needs internet and configured provider keys)
 - Firm export / backup snapshot
@@ -50,7 +49,7 @@ Optional LexZim **AI proxy** (Firm edition): **[TBD]** add-on or included tier.
 When a paid or trial licence **expires**:
 
 - The firm can still sign in and work existing files
-- **New matters** (and intake conversion to a matter) may be blocked until renewal
+- **New matters** may be blocked until renewal
 - **Export always remains available** (no data hostage)
 
 ## Honesty notes for sellers

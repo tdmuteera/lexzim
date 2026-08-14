@@ -4,7 +4,7 @@
 
 ## The offer
 
-LexZim helps small and mid-size Zimbabwe practices run files in one shared web workspace: clients and matters, documents, diary and deadlines, intake with conflict checks, fee notes, and trust accounting. An optional AI assistant is grounded for Zimbabwe work and needs internet access.
+LexZim helps small and mid-size Zimbabwe practices run files in one shared web workspace: clients and matters, documents, diary and deadlines, fee notes, and trust accounting. An optional AI assistant is grounded for Zimbabwe work and needs internet access.
 
 ## Who it is for
 
@@ -20,7 +20,6 @@ LexZim helps small and mid-size Zimbabwe practices run files in one shared web w
 | Clients and matters | Yes |
 | Documents and templates | Yes |
 | Calendar, deadlines, reminders | Yes |
-| Intake and conflicts | Yes |
 | Fee billing | Yes |
 | Trust ledger (separate from fees) | Yes |
 | Reports / CSV | Yes |
@@ -45,7 +44,6 @@ LexZim helps small and mid-size Zimbabwe practices run files in one shared web w
 ## Why firms switch
 
 - One place for the file instead of email folders alone
-- Conflict habit built into intake
 - Trust and fees cannot be casually mixed in the product design
 - Licence expiry does not lock your export
 

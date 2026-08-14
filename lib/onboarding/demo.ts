@@ -59,7 +59,6 @@ export async function loadOnboardingDemoData(
     areaOfLaw: "Civil",
     status: "prospective",
     priority: "normal",
-    conflictCheckStatus: "not_done",
     responsibleLawyerId: userId,
   });
 

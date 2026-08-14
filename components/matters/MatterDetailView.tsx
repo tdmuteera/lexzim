@@ -14,9 +14,11 @@ import { MatterTimelinePanel } from "@/components/matters/MatterTimelinePanel";
 import { MatterDocumentsPanel } from "@/components/matters/MatterDocumentsPanel";
 import { MatterPortalPanel } from "@/components/matters/MatterPortalPanel";
 import { RelatedPartiesPanel } from "@/components/parties/RelatedPartiesPanel";
-import type { MatterFormValues } from "@/components/matters/MatterForm";
 import { MATTER_STATUSES, statusLabel } from "@/lib/matters/validation";
+import { toMatterFormValues } from "@/lib/matters/form-values";
 import type { MatterStatus } from "@/lib/db/mvp-types";
+
+export { toMatterFormValues };
 
 type MatterDetail = {
   id: string;
@@ -37,7 +39,6 @@ type MatterDetail = {
   closedAt: string | null;
   nextHearingAt: string | null;
   priority: string | null;
-  conflictCheckStatus: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -191,7 +192,6 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
                 <DetailField label="Area of law" value={matter.areaOfLaw} />
                 <DetailField label="Priority" value={matter.priority} />
                 <DetailField label="File reference" value={matter.fileRef} />
-                <DetailField label="Conflict check" value={matter.conflictCheckStatus} />
                 <DetailField label="Court" value={matter.courtName} />
                 <DetailField label="Case number" value={matter.caseNumber} />
                 <DetailField label="Responsible lawyer" value={matter.responsibleLawyerName} />
@@ -268,29 +268,3 @@ function DetailField({
   );
 }
 
-export function toMatterFormValues(matter: MatterDetail): MatterFormValues {
-  return {
-    clientId: matter.clientId,
-    title: matter.title,
-    description: matter.description ?? "",
-    areaOfLaw: matter.areaOfLaw,
-    status: matter.status as MatterStatus,
-    matterNumber: matter.matterNumber ?? "",
-    fileRef: matter.fileRef ?? "",
-    courtName: matter.courtName ?? "",
-    caseNumber: matter.caseNumber ?? "",
-    responsibleLawyerId: matter.responsibleLawyerId ?? "",
-    nextHearingAt: matter.nextHearingAt
-      ? toDatetimeLocal(matter.nextHearingAt)
-      : "",
-    priority: matter.priority ?? "normal",
-    conflictCheckStatus: matter.conflictCheckStatus,
-  };
-}
-
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}

@@ -33,6 +33,14 @@ export async function getPermissionsForRole(roleId: string) {
 }
 
 export async function getPermissionCodesForRole(roleId: string): Promise<string[]> {
+  const {
+    getCachedRolePermissionCodes,
+    setCachedRolePermissionCodes,
+  } = await import("@/lib/auth/hot-cache");
+  const cached = getCachedRolePermissionCodes(roleId);
+  if (cached) return cached;
   const rows = await getPermissionsForRole(roleId);
-  return rows.map((r) => r.code);
+  const codes = rows.map((r) => r.code);
+  setCachedRolePermissionCodes(roleId, codes);
+  return codes;
 }

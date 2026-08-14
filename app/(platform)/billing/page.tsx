@@ -1,10 +1,12 @@
-﻿import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+﻿import { FinanceModuleNav } from "@/components/finance/FinanceModuleNav";
 import { BillingListView } from "@/components/billing/BillingListView";
 
+/** Legacy alias for /finance/invoicing (bookmarks preserved). */
 export default function BillingPage() {
   return (
-    <ProtectedModulePage path="/billing">
+    <div className="module-with-tabs">
+      <FinanceModuleNav />
       <BillingListView />
-    </ProtectedModulePage>
+    </div>
   );
 }

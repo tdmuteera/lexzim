@@ -31,7 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setLoading = useAuthStore((s) => s.setLoading);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    const hadSession = useAuthStore.getState().session != null;
+    // Keep chrome interactive while refreshing an existing session.
+    if (!hadSession) setLoading(true);
     try {
       const user = await fetchSession();
       setSession(user);
@@ -43,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setSession, setLoading]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const can = useCallback((code: string) => hasPermission(session, code), [session]);

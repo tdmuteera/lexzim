@@ -6,7 +6,6 @@ import { getDb } from "@/lib/db";
 import {
   calendarEvents,
   clients,
-  conflictChecks,
   deadlineTemplates,
   disbursements,
   documentPortalShares,
@@ -14,7 +13,6 @@ import {
   feePayments,
   firms,
   firmLicences,
-  intakes,
   invoiceLines,
   invoices,
   matterDeadlines,
@@ -62,7 +60,7 @@ function collectStorageKeys(
 /**
  * Build a firm data archive (ZIP): manifest + JSON entity dumps + storage key list.
  * Does not embed binary files (paths only). Omits API keys / secrets from firm_settings.
- * Includes Phase 3 practice-ops tables (billing, trust, calendar, intake).
+ * Includes Phase 3 practice-ops tables (billing, trust, calendar).
  */
 export async function buildFirmArchive(firmId: string): Promise<FirmArchiveResult> {
   const db = getDb();
@@ -95,8 +93,6 @@ export async function buildFirmArchive(firmId: string): Promise<FirmArchiveResul
     feePaymentRows,
     trustAccountRows,
     trustLedgerRows,
-    intakeRows,
-    conflictRows,
   ] = await Promise.all([
     db.select().from(clients).where(eq(clients.firmId, firmId)),
     db.select().from(matters).where(eq(matters.firmId, firmId)),
@@ -132,8 +128,6 @@ export async function buildFirmArchive(firmId: string): Promise<FirmArchiveResul
     db.select().from(feePayments).where(eq(feePayments.firmId, firmId)),
     db.select().from(trustAccounts).where(eq(trustAccounts.firmId, firmId)),
     db.select().from(trustLedgerEntries).where(eq(trustLedgerEntries.firmId, firmId)),
-    db.select().from(intakes).where(eq(intakes.firmId, firmId)),
-    db.select().from(conflictChecks).where(eq(conflictChecks.firmId, firmId)),
   ]);
 
   const licenceRows = await db
@@ -213,8 +207,6 @@ export async function buildFirmArchive(firmId: string): Promise<FirmArchiveResul
     fee_payments: feePaymentRows.length,
     trust_accounts: trustAccountRows.length,
     trust_ledger_entries: trustLedgerRows.length,
-    intakes: intakeRows.length,
-    conflict_checks: conflictRows.length,
     firm_licences: licenceRows.length,
     portal_users: portalUserRows.length,
     matter_portal_shares: matterShareRows.length,
@@ -292,8 +284,6 @@ export async function buildFirmArchive(firmId: string): Promise<FirmArchiveResul
   zip.file("data/fee_payments.json", jsonBytes(feePaymentRows));
   zip.file("data/trust_accounts.json", jsonBytes(trustAccountRows));
   zip.file("data/trust_ledger_entries.json", jsonBytes(trustLedgerRows));
-  zip.file("data/intakes.json", jsonBytes(intakeRows));
-  zip.file("data/conflict_checks.json", jsonBytes(conflictRows));
   zip.file("data/firm_licences.json", jsonBytes(licenceRows));
   zip.file("data/portal_users.json", jsonBytes(portalUserRows));
   zip.file("data/matter_portal_shares.json", jsonBytes(matterShareRows));

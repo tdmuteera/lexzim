@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { Icon } from "@/components/ui/Icon";
 import { GlobalSearch } from "@/components/shell/GlobalSearch";
 import type { ReminderItem, RemindersPayload } from "@/components/reminders/RemindersCenter";
-import { getRouteMeta } from "@/lib/nav";
+import { getPageSubtitle, getRouteMeta } from "@/lib/nav";
 import { toTopbarUser, useUiStore } from "@/lib/store";
 
 function formatShort(iso: string) {
@@ -26,6 +26,7 @@ export function AppTopbar() {
   const meta = getRouteMeta(pathname);
   const { user: session, isLoading, refresh, can } = useAuth();
   const user = session ? toTopbarUser(session) : null;
+  const pageSubtitle = getPageSubtitle(pathname, user?.firmName);
   const { sidebarCollapsed, toggleSidebarCollapsed, toggleMobileNav, setMobileNavOpen } =
     useUiStore();
 
@@ -103,13 +104,14 @@ export function AppTopbar() {
   }, [isLoading, loadPreview]);
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function onDocPointerDown(e: PointerEvent) {
       const target = e.target as Node;
       if (notifRef.current && !notifRef.current.contains(target)) setNotifOpen(false);
       if (profileRef.current && !profileRef.current.contains(target)) setProfileOpen(false);
     }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    // pointerdown (not mousedown) so menu item clicks are not raced away
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, []);
 
   function onMenuToggle() {
@@ -121,15 +123,33 @@ export function AppTopbar() {
     }
   }
 
+  function goProfileLink(href: string) {
+    setProfileOpen(false);
+    router.push(href);
+  }
+
   async function onLogout() {
     setProfileOpen(false);
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 5000);
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        signal: ctrl.signal,
+      });
+    } catch {
+      /* timeout / network: still clear client session and leave */
     } finally {
-      await refresh();
-      router.replace("/login");
-      router.refresh();
+      window.clearTimeout(timer);
     }
+    try {
+      await refresh();
+    } catch {
+      /* ignore */
+    }
+    router.replace("/login");
+    router.refresh();
   }
 
   return (
@@ -145,7 +165,7 @@ export function AppTopbar() {
         </button>
         <div className="page-title-wrap">
           <div className="page-title">{meta.title}</div>
-          <div className="page-subtitle">{meta.subtitle}</div>
+          <div className="page-subtitle">{pageSubtitle}</div>
         </div>
       </div>
 
@@ -279,17 +299,30 @@ export function AppTopbar() {
             className={["dropdown", "profile-menu", profileOpen ? "open" : ""]
               .filter(Boolean)
               .join(" ")}
+            onPointerDown={(e) => e.stopPropagation()}
           >
-            <button type="button" disabled title="Account settings in a later phase">
+            <button
+              type="button"
+              onClick={() => goProfileLink("/settings")}
+              title="Firm profile, AI, backup, and about"
+            >
               <Icon name="user" /> Account &amp; profile
             </button>
-            <button type="button" disabled title="Security settings in a later phase">
+            <button
+              type="button"
+              onClick={() => goProfileLink(can("users.manage") ? "/staff" : "/settings")}
+              title="Staff seats, roles, and sessions"
+            >
               <Icon name="shield" /> Security &amp; roles
             </button>
-            <button type="button" disabled title="Activity log in app sidebar">
+            <button
+              type="button"
+              onClick={() => goProfileLink(can("audit.view") ? "/audit" : "/help")}
+              title="Audit activity"
+            >
               <Icon name="list" /> Activity log
             </button>
-            <button type="button" className="danger" onClick={onLogout}>
+            <button type="button" className="danger" onClick={() => void onLogout()}>
               <Icon name="logout" /> Sign out
             </button>
           </div>

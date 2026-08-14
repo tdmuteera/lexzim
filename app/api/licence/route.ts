@@ -21,7 +21,7 @@ export async function GET() {
       usage,
       policy: {
         onExpiry:
-          "Block new matters and intake conversion. Export always remains available.",
+          "Block new matters. Export always remains available.",
         editions: ["trial", "solo", "firm"],
         trialMatterCap: 25,
       },

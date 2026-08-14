@@ -50,7 +50,6 @@ Do not invent a purple/navy/teal AI theme. The locked look is cream parchment + 
 | `/matters` | Matters |
 | `/documents` | Documents & Templates |
 | `/calendar` | Calendar & Deadlines |
-| `/intake` | Intake & Conflicts |
 | `/billing` | Billing (fees) |
 | `/trust` | Trust (client money) |
 | `/staff` | Lawyers & Staff |

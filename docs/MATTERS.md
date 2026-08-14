@@ -31,7 +31,6 @@ List query params: `q`, `bucket` (`open`\|`closed`\|`all`), `status`, `areaOfLaw
 ## Defaults on create
 
 - `status`: `prospective` (unless set)
-- `conflict_check_status`: `not_done`
 - System timeline event: "Matter created"
 - Responsible lawyer added to `matter_team` when set
 

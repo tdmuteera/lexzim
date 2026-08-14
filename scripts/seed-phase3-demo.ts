@@ -12,14 +12,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
   calendarEvents,
-  clients,
-  conflictChecks,
   deadlineTemplates,
   disbursements,
   feePayments,
   firmSettings,
   firms,
-  intakes,
   invoiceLines,
   invoices,
   matterDeadlines,
@@ -274,40 +271,6 @@ async function main() {
     createdBy: mp.id,
   });
 
-  // Open intake + clear conflict check (ready for conversion demos)
-  const [intake] = await db
-    .insert(intakes)
-    .values({
-      firmId: pilotFirm.id,
-      status: "open",
-      prospectName: "Rutendo Chikwanda",
-      contactEmail: "rutendo.demo@example.zw",
-      contactPhone: "+263 71 555 0101",
-      areaOfLaw: "Civil",
-      matterSummary: "Demand letter dispute (Phase 3 demo intake)",
-      opposingParty: "Sunrise Hardware (Pvt) Ltd",
-      assignedTo: mp.id,
-      createdBy: mp.id,
-    })
-    .returning();
-
-  await db.insert(conflictChecks).values({
-    firmId: pilotFirm.id,
-    intakeId: intake.id,
-    query: "Rutendo Chikwanda; Sunrise Hardware (Pvt) Ltd",
-    result: "clear",
-    notes: JSON.stringify({
-      v: 1,
-      hitCount: 0,
-      hits: [],
-      disclaimer:
-        "Conflict search is an operational helper within this firm only. It is not legal advice.",
-    }),
-    checkedBy: mp.id,
-    checkedAt: new Date(),
-  });
-
-  // Second matter: opposing party already on file helps conflict demos if names collide
   if (firmMatters[1]) {
     await db.insert(relatedParties).values({
       firmId: pilotFirm.id,
@@ -315,7 +278,7 @@ async function main() {
       clientId: firmMatters[1].clientId,
       partyRole: "opposing_party",
       name: "Demo Opposing Party Seed",
-      notes: "Phase 3 conflict search fixture",
+      notes: "Phase 3 demo fixture",
     });
   }
 
@@ -329,7 +292,6 @@ async function main() {
   console.log(`  matter=${matter.id}`);
   console.log(`  invoice=${invoice.invoiceNumber}`);
   console.log(`  trust=${trustAcct.name}`);
-  console.log(`  intake=${intake.prospectName}`);
 
   try {
     await sql.end({ timeout: 2 });

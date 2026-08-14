@@ -99,6 +99,27 @@
       "when": 1786204000000,
       "tag": "0013_phase5_ai_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786300000000,
+      "tag": "0014_phase6_finance_hr",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786301000000,
+      "tag": "0015_phase6_firm_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786302000000,
+      "tag": "0016_phase6_hr_leave_entitlement",
+      "breakpoints": true
     }
   ]
 }

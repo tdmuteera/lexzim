@@ -24,7 +24,7 @@ Practical day-to-day use for associates and partners working files in LexZim.
 - Set area of law, status, responsible lawyer, court and case number when known.
 - Use the matter timeline, procedures, documents, time, and costs panels as your firm practices.
 
-Statuses typically move from prospective or open through on hold to closed or archived. Follow your firm’s file-opening rules (including conflicts). Prefer **Intake** for new prospects when that workflow is in use.
+Statuses typically move from prospective or open through on hold to closed or archived. Follow your firm’s file-opening rules.
 
 ## Documents and templates
 

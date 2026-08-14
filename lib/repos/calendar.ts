@@ -2,7 +2,7 @@
  * Calendar / deadline repository (P3-01 stubs + P3-02 event CRUD + P3-03 deadlines).
  * EVERY firm-scoped query MUST filter firmId.
  */
-import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { CalendarEventInput } from "@/lib/calendar/validation";
 import {
   addCalendarDays,
@@ -19,6 +19,9 @@ import {
   matterTeam,
   matters,
 } from "@/lib/db/schema";
+
+/** Marker so matter Next hearing rows can be updated without touching manual diary events. */
+export const MATTER_HEARING_SYNC_NOTE = "Synced from matter Next hearing";
 
 export type ListCalendarEventsOpts = {
   from?: Date;
@@ -65,7 +68,7 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
     );
   }
 
-  return db
+  const rows = await db
     .select({
       event: calendarEvents,
       matterNumber: matters.matterNumber,
@@ -78,6 +81,152 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
     )
     .where(and(...conditions))
     .orderBy(asc(calendarEvents.startsAt));
+
+  if (opts?.eventType && opts.eventType !== "hearing") {
+    return rows;
+  }
+
+  const matterHearings = await listMatterHearingsForCalendar(firmId, opts);
+  if (matterHearings.length === 0) return rows;
+
+  const covered = new Set(
+    rows
+      .filter((r) => r.event.eventType === "hearing" && r.event.matterId)
+      .map((r) => `${r.event.matterId}:${r.event.startsAt.toISOString().slice(0, 10)}`),
+  );
+
+  const merged = [...rows];
+  for (const extra of matterHearings) {
+    const key = `${extra.event.matterId}:${extra.event.startsAt.toISOString().slice(0, 10)}`;
+    if (covered.has(key)) continue;
+    merged.push(extra);
+  }
+  merged.sort((a, b) => a.event.startsAt.getTime() - b.event.startsAt.getTime());
+  return merged;
+}
+
+async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendarEventsOpts) {
+  const db = getDb();
+  const conditions = [eq(matters.firmId, firmId), isNotNull(matters.nextHearingAt)];
+  if (opts?.from) conditions.push(gte(matters.nextHearingAt, opts.from));
+  if (opts?.to) conditions.push(lte(matters.nextHearingAt, opts.to));
+  if (opts?.matterId) conditions.push(eq(matters.id, opts.matterId));
+
+  if (opts?.viewAll === false && opts.userId) {
+    const teamMatterIds = db
+      .select({ matterId: matterTeam.matterId })
+      .from(matterTeam)
+      .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, opts.userId)));
+    conditions.push(
+      or(
+        eq(matters.responsibleLawyerId, opts.userId),
+        inArray(matters.id, teamMatterIds),
+      )!,
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: matters.id,
+      title: matters.title,
+      matterNumber: matters.matterNumber,
+      courtName: matters.courtName,
+      nextHearingAt: matters.nextHearingAt,
+      createdBy: matters.createdBy,
+      createdAt: matters.createdAt,
+      updatedAt: matters.updatedAt,
+    })
+    .from(matters)
+    .where(and(...conditions))
+    .orderBy(asc(matters.nextHearingAt));
+
+  return rows
+    .filter((row) => row.nextHearingAt)
+    .map((row) => {
+      const startsAt = row.nextHearingAt!;
+      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+      return {
+        event: {
+          id: `matter-hearing:${row.id}`,
+          firmId,
+          matterId: row.id,
+          eventType: "hearing",
+          title: `Hearing: ${row.title}`,
+          description: MATTER_HEARING_SYNC_NOTE,
+          location: row.courtName,
+          startsAt,
+          endsAt,
+          allDay: false,
+          createdBy: row.createdBy,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        },
+        matterNumber: row.matterNumber,
+        matterTitle: row.title,
+      };
+    });
+}
+
+/** Keep a diary hearing in step with the matter Next hearing field. */
+export async function syncMatterHearingEvent(input: {
+  firmId: string;
+  userId: string | null;
+  matterId: string;
+  matterTitle: string;
+  courtName: string | null;
+  nextHearingAt: Date | null;
+}) {
+  const db = getDb();
+  const existing = await db
+    .select({ id: calendarEvents.id })
+    .from(calendarEvents)
+    .where(
+      and(
+        eq(calendarEvents.firmId, input.firmId),
+        eq(calendarEvents.matterId, input.matterId),
+        eq(calendarEvents.eventType, "hearing"),
+        eq(calendarEvents.description, MATTER_HEARING_SYNC_NOTE),
+      ),
+    )
+    .limit(1);
+
+  if (!input.nextHearingAt) {
+    if (existing[0]) {
+      await db
+        .delete(calendarEvents)
+        .where(
+          and(eq(calendarEvents.firmId, input.firmId), eq(calendarEvents.id, existing[0].id)),
+        );
+    }
+    return;
+  }
+
+  const endsAt = new Date(input.nextHearingAt.getTime() + 60 * 60 * 1000);
+  const values = {
+    title: `Hearing: ${input.matterTitle}`,
+    location: input.courtName,
+    startsAt: input.nextHearingAt,
+    endsAt,
+    allDay: false,
+    description: MATTER_HEARING_SYNC_NOTE,
+    updatedAt: new Date(),
+  };
+
+  if (existing[0]) {
+    await db
+      .update(calendarEvents)
+      .set(values)
+      .where(and(eq(calendarEvents.firmId, input.firmId), eq(calendarEvents.id, existing[0].id)));
+    return;
+  }
+
+  await db.insert(calendarEvents).values({
+    firmId: input.firmId,
+    matterId: input.matterId,
+    eventType: "hearing",
+    createdBy: input.userId,
+    ...values,
+  });
 }
 
 export async function listDeadlineTemplates(firmId: string, activeOnly = true) {

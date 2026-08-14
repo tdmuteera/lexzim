@@ -3,6 +3,9 @@ import "server-only";
 import { getProvider } from "@/lib/ai/providers";
 import { assertAiSoftBudget } from "@/lib/ai/budget";
 import { AiProviderError } from "@/lib/ai/errors";
+import { loadChatHistory } from "@/lib/ai/chat-history";
+import { maybePackChatDocument } from "@/lib/ai/drafting/maybe-pack";
+import { classifyChatIntent } from "@/lib/ai/intent";
 import { retrieveFirmContext } from "@/lib/ai/firm-memory/retrieve";
 import { retrieveLegalContext } from "@/lib/ai/rag/retrieve";
 import type { ConfidenceLabel } from "@/lib/ai/rag/answer";
@@ -23,16 +26,17 @@ import { userCanAccessMatter } from "@/lib/repos/matters";
 export const MATTER_ASSIST_DISCLAIMER =
   "Disclaimer: LexZim Matter Assist is a read-only research aid for this matter file. It is not final legal advice and does not change the matter record. Verify facts and authorities before relying on this answer in practice or court.";
 
-const SYSTEM_PROMPT = `You are LexZim Matter Assist for Zimbabwe legal practitioners.
+const SYSTEM_PROMPT = `You are LexZim Matter Assist. Talk like a capable modern chat AI, using only this matter's live facts plus any snippets provided.
 
-STRICT RULES:
-1. You may only use the matter facts and retrieved snippets provided below for THIS matter.
-2. Never invent timeline notes, procedures, documents, statutes, section numbers, or case names.
-3. If matter facts are insufficient, say what is missing. Do not guess.
-4. When citing Zimbabwe law, only use the optional legal knowledge snippets; if none are provided, do not invent authorities.
-5. Read-only: do not claim you filed, emailed, updated, or saved anything.
-6. Prefer concise practitioner language.
-7. End with the mandatory disclaimer exactly as provided.`;
+Voice
+- Natural, clear Markdown. Short paragraphs. No heading dumps. No boilerplate disclaimer paragraph.
+- Greetings and ordinary chat are fine, then offer to help with this file.
+
+Rules
+- Do not invent timeline notes, procedures, documents, statute numbers, or case names.
+- If facts are missing, say what is missing. Do not guess the file.
+- When citing Zimbabwe law, use only the optional legal snippets. Do not dump excerpts or a disclaimer.
+- Read-only: do not claim you filed, emailed, or saved anything unless the user asked you to draft a Word file for download.`;
 
 export type MatterAskResult = {
   conversationId: string;
@@ -61,6 +65,12 @@ export type MatterAskResult = {
   };
   notFound: boolean;
   disclaimer: string;
+  document?: {
+    id: string;
+    fileName: string;
+    font: string;
+    lineSpacing: number;
+  } | null;
 };
 
 function confidenceLabel(
@@ -89,7 +99,7 @@ function deterministicAnswer(
   } else {
     body = `Matter overview:\n${snapshot.summaryText}\n\nPending procedures:\n${snapshot.pendingProceduresText}\n\nRecent notes:\n${snapshot.recentNotesText}`;
   }
-  return `${body}\n\n${MATTER_ASSIST_DISCLAIMER}`;
+  return body;
 }
 
 /**
@@ -104,12 +114,16 @@ export async function aiMatterAsk(input: {
   question: string;
   conversationId?: string | null;
   includeLegal?: boolean;
+  attachmentContext?: string | null;
 }): Promise<MatterAskResult> {
   const started = Date.now();
   const question = input.question.trim();
   const matterId = input.matterId.trim();
+  const attachmentContext = input.attachmentContext?.trim() || "";
   if (!question) throw new Error("question is required");
   if (!matterId) throw new Error("matter_id_required");
+
+  const intent = classifyChatIntent(question);
 
   const allowed = await userCanAccessMatter(
     input.firmId,
@@ -154,46 +168,51 @@ export async function aiMatterAsk(input: {
     conversationId = created.id;
   }
 
+  const storedUser = attachmentContext
+    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
+    : question;
+
   const userMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "user",
-    content: question,
+    content: storedUser,
   });
 
-  const firm = await retrieveFirmContext({
-    firmId: input.firmId,
-    userId: input.userId,
-    viewAllMatters: input.viewAllMatters,
-    matterId,
-    query: question,
-  });
+  const firm =
+    intent === "chat"
+      ? { hits: [] as Awaited<ReturnType<typeof retrieveFirmContext>>["hits"] }
+      : await retrieveFirmContext({
+          firmId: input.firmId,
+          userId: input.userId,
+          viewAllMatters: input.viewAllMatters,
+          matterId,
+          query: question,
+        });
 
   let legalHits: Awaited<ReturnType<typeof retrieveLegalContext>>["hits"] = [];
   let legalCitations: AiCitation[] = [];
   let legalError: string | undefined;
-  if (input.includeLegal !== false) {
-    const legal = await retrieveLegalContext({
-      firmIdForProvider: input.firmId,
-      query: question,
-      topK: 3,
-    });
-    legalHits = legal.hits;
-    legalCitations = legal.citations;
-    legalError = legal.retrievalMeta.errorCode;
+  if (intent === "legal" && input.includeLegal !== false) {
+    try {
+      const legal = await retrieveLegalContext({
+        firmIdForProvider: input.firmId,
+        query: question,
+        topK: 3,
+      });
+      legalHits = legal.hits;
+      legalCitations = legal.citations.map((c) => ({
+        citationLabel: c.citationLabel,
+        title: c.title,
+        sourceUrl: c.sourceUrl ?? null,
+      }));
+      legalError = legal.retrievalMeta.errorCode;
+    } catch {
+      /* matter chat still proceeds */
+    }
   }
 
-  const citations: AiCitation[] = [
-    {
-      citationLabel: `Matter: ${snapshot.header.matterNumber ?? snapshot.header.title}`,
-      title: snapshot.header.title,
-      excerpt: snapshot.summaryText.slice(0, 160),
-      verified: true,
-      sourceId: matterId,
-    },
-    ...firm.citations,
-    ...legalCitations,
-  ];
+  const citations: AiCitation[] = intent === "legal" ? legalCitations.slice(0, 6) : [];
 
   const conf = confidenceLabel(
     firm.hits.length,
@@ -286,21 +305,31 @@ export async function aiMatterAsk(input: {
   let chatLatency = 0;
   let usedLlm = true;
   try {
+    const history = await loadChatHistory({
+      firmId: input.firmId,
+      conversationId,
+      limit: 12,
+    });
+    const attachmentBlock = attachmentContext
+      ? `\n\nUser attached file text (OCR or extracted):\n${attachmentContext.slice(0, 24_000)}`
+      : "";
+    const grounding =
+      intent === "chat"
+        ? "This turn is ordinary conversation. Reply naturally. You may offer to help with this matter file."
+        : `Live matter facts:\n${snapshot.combinedText}\n\nFirm-memory snippets:\n${firmBlock}\n\nOptional Zimbabwe legal snippets (do not invent authorities beyond these):\n${legalBlock}`;
     const chat = await provider.chat(
       [
         { role: "system", content: SYSTEM_PROMPT },
+        ...history.slice(0, -1),
         {
           role: "user",
-          content: `Matter question:\n${question}\n\nLive matter facts (source of truth for this file):\n${snapshot.combinedText}\n\nRetrieved firm-memory snippets:\n${firmBlock}\n\nOptional Zimbabwe legal snippets:\n${legalBlock}\n\nEnd with this exact disclaimer:\n${MATTER_ASSIST_DISCLAIMER}`,
+          content: `${question}${attachmentBlock}\n\n${grounding}`,
         },
       ],
-      { temperature: 0.2, maxOutputTokens },
+      { temperature: intent === "chat" ? 0.55 : 0.35, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
-    if (!answerText.includes("Disclaimer:")) {
-      answerText = `${answerText}\n\n${MATTER_ASSIST_DISCLAIMER}`;
-    }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     usedLlm = false;
@@ -357,6 +386,14 @@ export async function aiMatterAsk(input: {
     };
   }
 
+  const document = await maybePackChatDocument({
+    firmId: input.firmId,
+    userId: input.userId,
+    question,
+    answerText,
+    attachmentContext,
+  });
+
   const notFound = !snapshot.hasContent && firm.hits.length === 0 && legalHits.length === 0;
   const assistantMessage = await createMessage({
     firmId: input.firmId,
@@ -374,6 +411,7 @@ export async function aiMatterAsk(input: {
       usedLlm,
       chatLatencyMs: chatLatency,
       legalError: legalError ?? null,
+      document,
     },
   });
 
@@ -407,5 +445,6 @@ export async function aiMatterAsk(input: {
     },
     notFound,
     disclaimer: MATTER_ASSIST_DISCLAIMER,
+    document,
   };
 }

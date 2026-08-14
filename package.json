@@ -18,6 +18,7 @@
     "db:seed:rbac": "tsx scripts/seed-rbac.ts",
     "db:seed:demo-firm": "tsx scripts/seed-demo-firm.ts",
     "db:seed:dev-users": "tsx scripts/seed-dev-users.ts",
+    "db:seed:firm-masters": "tsx scripts/seed-firm-masters.ts",
     "db:seed:phase1-demo": "tsx scripts/seed-phase1-demo.ts",
     "db:seed:phase3-demo": "tsx scripts/seed-phase3-demo.ts",
     "licence:issue": "tsx scripts/issue-licence.ts",
@@ -47,6 +48,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
+    "tesseract.js": "^7.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

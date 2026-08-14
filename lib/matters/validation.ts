@@ -2,7 +2,6 @@ import { AuthError } from "@/lib/auth/types";
 import {
   AREA_OF_LAW_OPTIONS,
   type AreaOfLaw,
-  type ConflictCheckStatus,
   type MatterStatus,
 } from "@/lib/db/mvp-types";
 
@@ -16,13 +15,6 @@ export const MATTER_STATUSES: MatterStatus[] = [
 
 export const OPEN_MATTER_STATUSES: MatterStatus[] = ["prospective", "open", "on_hold"];
 export const CLOSED_MATTER_STATUSES: MatterStatus[] = ["closed", "archived"];
-
-export const CONFLICT_STATUSES: ConflictCheckStatus[] = [
-  "pending",
-  "clear",
-  "flagged",
-  "not_done",
-];
 
 export const MATTER_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 
@@ -39,7 +31,6 @@ export type MatterInput = {
   responsibleLawyerId?: string | null;
   nextHearingAt?: string | null;
   priority?: string | null;
-  conflictCheckStatus?: ConflictCheckStatus;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -79,18 +70,6 @@ export function parseMatterInput(body: unknown, opts?: { requireClientId?: boole
     status = raw.status as MatterStatus;
   }
 
-  let conflictCheckStatus: ConflictCheckStatus | undefined;
-  if (
-    raw.conflictCheckStatus !== undefined &&
-    raw.conflictCheckStatus !== null &&
-    raw.conflictCheckStatus !== ""
-  ) {
-    if (!CONFLICT_STATUSES.includes(raw.conflictCheckStatus as ConflictCheckStatus)) {
-      throw new AuthError("validation", "Invalid conflict check status.");
-    }
-    conflictCheckStatus = raw.conflictCheckStatus as ConflictCheckStatus;
-  }
-
   const priority = trimOrNull(raw.priority) ?? "normal";
   if (!MATTER_PRIORITIES.includes(priority as (typeof MATTER_PRIORITIES)[number])) {
     throw new AuthError("validation", "Invalid priority.");
@@ -114,7 +93,6 @@ export function parseMatterInput(body: unknown, opts?: { requireClientId?: boole
     responsibleLawyerId: trimOrNull(raw.responsibleLawyerId),
     nextHearingAt: nextHearingRaw,
     priority,
-    conflictCheckStatus,
   };
 }
 

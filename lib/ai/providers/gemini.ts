@@ -103,11 +103,14 @@ export function createGeminiProvider(opts?: {
         }
 
         const body = (await res.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          }>;
         };
         const text =
           body.candidates?.[0]?.content?.parts
-            ?.map((p) => p.text ?? "")
+            ?.filter((p) => !p.thought)
+            .map((p) => p.text ?? "")
             .join("")
             .trim() ?? "";
 
@@ -144,6 +147,7 @@ export function createGeminiProvider(opts?: {
             body: JSON.stringify({
               model: `models/${model}`,
               content: { parts: [{ text: input }] },
+              outputDimensionality: AI_EMBEDDING_DIMENSIONS,
             }),
           });
         } catch {

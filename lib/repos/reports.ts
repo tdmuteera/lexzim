@@ -28,6 +28,11 @@ import {
   users,
 } from "@/lib/db/schema";
 import { clientDisplayName } from "@/lib/clients/display";
+import {
+  AR_AGING_BUCKETS,
+  agingBucketFromDueDate,
+  daysBetween,
+} from "@/lib/billing/aging";
 import { timeEntryAmountCents } from "@/lib/billing/money";
 import { OPEN_MATTER_STATUSES } from "@/lib/matters/validation";
 import { toCsv } from "@/lib/reports/csv";
@@ -45,19 +50,6 @@ export type ReportFilters = {
   trustAccountId?: string;
   groupBy?: "lawyer" | "matter";
 };
-
-function daysBetween(from: Date, to: Date): number {
-  return Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000));
-}
-
-function agingBucket(dueDate: Date | null, now: Date): string {
-  if (!dueDate || dueDate.getTime() >= now.getTime()) return "current";
-  const days = daysBetween(dueDate, now);
-  if (days <= 30) return "1-30";
-  if (days <= 60) return "31-60";
-  if (days <= 90) return "61-90";
-  return "90+";
-}
 
 export async function reportArAging(firmId: string, filters: ReportFilters) {
   const db = getDb();
@@ -106,12 +98,14 @@ export async function reportArAging(firmId: string, filters: ReportFilters) {
             tradingName: r.clientTradingName,
           })
         : "n/a";
-      const bucket = agingBucket(r.invoice.dueDate, now);
+      const bucket = agingBucketFromDueDate(r.invoice.dueDate, now);
       return {
         invoiceId: r.invoice.id,
         invoiceNumber: r.invoice.invoiceNumber,
         status: r.invoice.status,
+        clientId: r.invoice.clientId,
         clientName,
+        matterId: r.invoice.matterId,
         matterTitle: r.matterTitle,
         matterNumber: r.matterNumber,
         issueDate: r.invoice.issueDate?.toISOString().slice(0, 10) ?? null,
@@ -131,7 +125,9 @@ export async function reportArAging(firmId: string, filters: ReportFilters) {
     invoiceId: string;
     invoiceNumber: string;
     status: string;
+    clientId: string | null;
     clientName: string;
+    matterId: string;
     matterTitle: string;
     matterNumber: string | null;
     issueDate: string | null;
@@ -144,7 +140,7 @@ export async function reportArAging(firmId: string, filters: ReportFilters) {
     daysPastDue: number;
   }>;
 
-  const buckets = ["current", "1-30", "31-60", "61-90", "90+"] as const;
+  const buckets = AR_AGING_BUCKETS;
   const summary = buckets.map((bucket) => ({
     bucket,
     count: lines.filter((l) => l.bucket === bucket).length,

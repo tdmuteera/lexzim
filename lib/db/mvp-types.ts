@@ -4,8 +4,6 @@ export type ClientType = "individual" | "company";
 
 export type MatterStatus = "prospective" | "open" | "on_hold" | "closed" | "archived";
 
-export type ConflictCheckStatus = "pending" | "clear" | "flagged" | "not_done";
-
 export type ProcedureStatus = "todo" | "done" | "cancelled";
 
 export type DocumentType = "uploaded" | "generated_template" | "other";
@@ -73,7 +71,6 @@ export type Matter = {
   closedAt: Date | null;
   nextHearingAt: Date | null;
   priority: string | null;
-  conflictCheckStatus: ConflictCheckStatus | string;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;

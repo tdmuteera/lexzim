@@ -181,7 +181,6 @@ function sanitizeHref(href: string): string | null {
       "Daily_Lawyer_Guide.md": "/help/daily",
       "Billing_Trust_Quickstart.md": "/help/billing",
       "AI_Assistant_Guide.md": "/help/ai",
-      "Intake_Conflicts_Guide.md": "/help/intake",
       "FAQ.md": "/help/faq",
       "README.md": "/help",
     };

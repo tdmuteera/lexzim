@@ -21,6 +21,21 @@ LexZim is a **hosted Next.js web app**. Phase 0 uses:
    - Keep the **direct** URI handy for migrations (P0-05 may use `DIRECT_URL`)
 5. For Phase 2 AI testing, add **`GEMINI_API_KEY`** (Google AI Studio). Server only. Never commit it.
 
+### Database connectivity (permanent fixes)
+
+`CONNECT_TIMEOUT` / TLS reset to `*.pooler.supabase.com:6543` is a **network path** problem. The Supabase project can show Healthy while your PC cannot complete Postgres TLS.
+
+| Permanent approach | When to use |
+|--------------------|-------------|
+| **Deploy app near the DB** (Railway in EU West / same region as Supabase) | Production and stable pilots. Server-to-server usually works even when home ISP fails. |
+| **VPN with clean egress** (or hotspot that does not reset TLS on 5432/6543) | Local `npm run dev` from restricted networks. |
+| **Re-copy Connect strings** from Supabase → Connect → Transaction (`DATABASE_URL`, port **6543**) and Session (`DIRECT_URL`, port **5432**) | After password rotate or wrong host (`aws-0` vs `aws-1`). Encode `@` in passwords as `%40`. |
+| **Session pooler as `DATABASE_URL` for local Next** (port **5432**) | Long-lived `next dev` on one machine; keep Transaction 6543 for serverless if you use it. |
+| **IPv4 add-on** (paid) for `db.<ref>.supabase.co` | Only if you must use the direct host from IPv4-only environments. Pooler is already IPv4. |
+| **Local Postgres / Supabase CLI for development** | Fully offline local work; still point Auth/Storage at the cloud project if needed. |
+
+There is no app code change that creates a TCP path through a firewall that resets Postgres TLS. The app now shows a **Database unreachable** recovery page instead of a raw Next.js stack when the pooler times out.
+
 ### Free tier honesty (~2 months testing)
 
 Supabase Free is fine for a small pilot if you stay within limits (DB size, storage, egress, paused projects after inactivity). Expect to upgrade later for production. Pause/sleep on unused free projects can make the app look “down” until the project wakes.

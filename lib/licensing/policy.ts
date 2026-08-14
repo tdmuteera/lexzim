@@ -63,9 +63,8 @@ export async function assertCanUse(
 }
 
 /**
- * Soft commercial gate: expired/revoked licences cannot open new matters
- * (including intake conversion). Also enforces trial matter caps.
- * Export is never blocked here.
+ * Soft commercial gate: expired/revoked licences cannot open new matters.
+ * Also enforces trial matter caps. Export is never blocked here.
  */
 export async function assertCanCreateMatter(firmId: string): Promise<void> {
   const licence = await getEffectiveLicence(firmId);

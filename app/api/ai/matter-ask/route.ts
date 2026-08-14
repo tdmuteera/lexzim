@@ -15,10 +15,13 @@ export async function POST(request: Request) {
       matterId?: string;
       conversationId?: string | null;
       includeLegal?: boolean;
+      attachmentContext?: string | null;
     };
 
     const question = typeof body.question === "string" ? body.question.trim() : "";
     const matterId = typeof body.matterId === "string" ? body.matterId.trim() : "";
+    const attachment =
+      typeof body.attachmentContext === "string" ? body.attachmentContext.trim() : "";
     if (!question) throw new AuthError("validation", "question is required.");
     if (!matterId) throw new AuthError("validation", "matterId is required.");
 
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
         question,
         conversationId: body.conversationId ?? null,
         includeLegal: body.includeLegal !== false,
+        attachmentContext: attachment || null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "ask_failed";
@@ -92,6 +96,7 @@ export async function POST(request: Request) {
       retrievalMeta: result.retrievalMeta,
       notFound: result.notFound,
       disclaimer: result.disclaimer,
+      document: result.document ?? null,
     });
   } catch (err) {
     return jsonError(err);

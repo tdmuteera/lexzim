@@ -20,7 +20,7 @@ Default seats: trial 3, solo 2, firm 15. Default trial length: **30 days**.
 
 When a licence is **expired** or **revoked**:
 
-- **Blocked:** creating new matters; converting intakes to matters
+- **Blocked:** creating new matters
 - **Allowed:** viewing/editing existing data, billing/trust, AI (subject to keys), and **export**
 
 Export is never disabled by licence status.

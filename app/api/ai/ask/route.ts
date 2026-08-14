@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       question?: string;
       conversationId?: string | null;
+      attachmentContext?: string | null;
     };
 
     const question = typeof body.question === "string" ? body.question.trim() : "";
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
         userId: session.id,
         question,
         conversationId: body.conversationId ?? null,
+        attachmentContext: body.attachmentContext ?? null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "ask_failed";
@@ -69,6 +71,7 @@ export async function POST(request: Request) {
       webLookup: result.webLookup,
       notFound: result.notFound,
       disclaimer: result.disclaimer,
+      document: result.document ?? null,
     });
   } catch (err) {
     return jsonError(err);

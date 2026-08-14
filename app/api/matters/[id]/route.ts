@@ -80,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const previousStatus = existing.status;
-    const row = await updateMatter(firmId, id, input);
+    const row = await updateMatter(firmId, id, input, session.id);
     if (!row) {
       throw new AuthError("not_found", "Matter not found.");
     }

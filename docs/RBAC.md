@@ -38,8 +38,6 @@ Email is **unique globally** for MVP. Users belong to one `firm_id`.
 | billing.manage | ✓ | ✓ | | | ✓ |
 | trust.view | ✓ | ✓ | | | ✓ |
 | trust.manage | ✓ | | | | ✓ |
-| intake.view | ✓ | ✓ | ✓ | ✓ | |
-| intake.manage | ✓ | ✓ | | ✓ | |
 | ai.use | ✓ | ✓ | ✓ | ✓ | |
 | ai.manage_settings | ✓ | | | | |
 | audit.view | ✓ | ✓ | | | |
@@ -80,7 +78,7 @@ Templates are firm-wide (permission-gated). Party search and client party lists 
 | Documents | `/api/documents*`, matter nested | `documents.*` | via matter |
 | Templates | `/api/templates*` | `templates.*` | `firm_id` |
 | Search | `/api/search` | `clients.view` and/or `matters.view` | matters assigned |
-| Dashboard | `/api/dashboard` | `dashboard.view` | assignment; money/intake slices permission-gated |
+| Dashboard | `/api/dashboard` | `dashboard.view` | assignment; money slices permission-gated |
 | Export | `/api/export` | `settings.manage` | whole firm (MP) |
 | Audit / staff | `/api/audit`, `/api/staff` | `audit.view` / `users.manage` | `firm_id` |
 
@@ -99,7 +97,6 @@ Templates are firm-wide (permission-gated). Party search and client party lists 
 | Trust statement | `/api/trust/clients/[id]/statement` | `trust.view` | client must belong to firm |
 | Reports | `/api/reports/[type]` | `reports.view` | `firm_id`; fee vs trust report types labeled |
 | Calendar / reminders | `/api/calendar*`, `/api/reminders` | `calendar.view` / `calendar.manage` | matter access when !view_all |
-| Intake / conflicts | `/api/intakes*` | `intake.view` / `intake.manage` | `firm_id`; MP override for conflicts |
 
 Dashboard money widgets never return invoice or trust payloads without `billing.view` / `trust.view`.
 

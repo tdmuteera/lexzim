@@ -4,7 +4,7 @@ import { searchParties } from "@/lib/repos/parties";
 import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-/** Firm party name search (conflict prep). Respects assigned-matter scoping. */
+/** Firm party name search. Respects assigned-matter scoping. */
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("matters.view");

@@ -183,36 +183,6 @@ async function main() {
   const secBilling = await fetchJson("/api/invoices", { cookieJar: secretary });
   check("Secretary blocked from billing", secBilling.status === 403);
 
-  // Accounts cannot open intake
-  const accIntake = await fetchJson("/api/intakes", { cookieJar: accounts });
-  check("Accounts blocked from intake", accIntake.status === 403);
-
-  // Intake → conflict
-  const intakes = await fetchJson("/api/intakes", { cookieJar: mp });
-  check("Intake list (MP)", intakes.status === 200 && intakes.body.ok === true);
-  const intakeItems =
-    (dataOf(intakes.body).items as Array<{ id: string; statusNormalized?: string }>) ??
-    (dataOf(intakes.body).intakes as Array<{ id: string }>) ??
-    [];
-  const openIntake = intakeItems.find((i) => (i as { statusNormalized?: string }).statusNormalized === "open") ??
-    intakeItems[0];
-
-  if (openIntake?.id) {
-    const conflict = await fetchJson(`/api/intakes/${openIntake.id}/conflicts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-      cookieJar: mp,
-    });
-    check(
-      "Conflict check run",
-      conflict.status === 200 && conflict.body.ok === true,
-      String(dataOf(conflict.body).search ? (dataOf(conflict.body).search as Json).result : dataOf(conflict.body).check),
-    );
-  } else {
-    check("Conflict check run", false, "no intake; seed phase3 demo");
-  }
-
   // Reports CSV
   const arCsv = await fetchJson("/api/reports/ar-aging?format=csv", { cookieJar: accounts });
   check(
@@ -230,18 +200,15 @@ async function main() {
   const dashData = dataOf(dashMp.body);
   const perms = (dashData.permissions as Json) ?? {};
   check(
-    "Dashboard MP has billing+trust+intake",
-    dashMp.status === 200 &&
-      perms.billing === true &&
-      perms.trust === true &&
-      perms.intake === true,
+    "Dashboard MP has billing+trust",
+    dashMp.status === 200 && perms.billing === true && perms.trust === true,
   );
 
   const dashAcc = await fetchJson("/api/dashboard", { cookieJar: accounts });
   const accPerms = (dataOf(dashAcc.body).permissions as Json) ?? {};
   check(
-    "Dashboard Accounts: billing yes, intake no",
-    dashAcc.status === 200 && accPerms.billing === true && accPerms.intake === false,
+    "Dashboard Accounts: billing yes, trust yes",
+    dashAcc.status === 200 && accPerms.billing === true && accPerms.trust === true,
   );
 
   // firm_id isolation: isolation user must not see pilot invoices

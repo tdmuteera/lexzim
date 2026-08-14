@@ -171,7 +171,6 @@ async function main() {
       openedAt: new Date(),
       nextHearingAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       priority: "high",
-      conflictCheckStatus: "clear",
       createdBy: mp.id,
     })
     .returning();
@@ -192,7 +191,6 @@ async function main() {
       responsibleLawyerId: junior?.id ?? mp.id,
       openedAt: new Date(),
       priority: "normal",
-      conflictCheckStatus: "clear",
       createdBy: mp.id,
     })
     .returning();
@@ -211,7 +209,6 @@ async function main() {
       courtName: "Labour Court / Ministry of Labour",
       responsibleLawyerId: mp.id,
       priority: "normal",
-      conflictCheckStatus: "pending",
       createdBy: mp.id,
     })
     .returning();

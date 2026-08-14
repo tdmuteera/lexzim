@@ -171,73 +171,79 @@ export function DeadlineTemplatesPanel() {
   }
 
   return (
-    <>
-      <div className="panel-head">
-        <h3>Deadline templates</h3>
-        <Can permission="calendar.manage">
-          <Button size="sm" onClick={openCreate}>
-            New template
-          </Button>
-        </Can>
-      </div>
-      <div className="panel-body">
-        <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
+    <div className="settings-form">
+      <div className="settings-form-head">
+        <p className="settings-lede">
           Operational helper for filing offsets (calendar days). Not legal advice. Apply templates
           from a matter Deadlines tab.
         </p>
-
-        <div className="toolbar" style={{ marginBottom: "0.75rem" }}>
-          <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.8rem" }}>
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-            />
-            Show inactive
-          </label>
-          <span className="toolbar-spacer" />
-          <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
-            Refresh
-          </Button>
-        </div>
-
         {error ? (
           <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}
           </p>
         ) : null}
+      </div>
+
+      <section className="settings-section">
+        <div className="settings-subhead">
+          <h3>Templates</h3>
+          <Can permission="calendar.manage">
+            <Button size="sm" onClick={openCreate}>
+              New template
+            </Button>
+          </Can>
+        </div>
+
+        <div className="settings-inline-form" style={{ justifyContent: "space-between" }}>
+          <label className="settings-check" style={{ margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            <span>Show inactive</span>
+          </label>
+          <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
+            Refresh
+          </Button>
+        </div>
 
         {formOpen ? (
-          <div className="panel" style={{ marginBottom: "1rem", padding: "1rem" }}>
-            <h4 style={{ marginTop: 0 }}>{editingId ? "Edit template" : "New template"}</h4>
+          <div className="settings-section" style={{ background: "var(--bg-2)" }}>
+            <h3 className="settings-section-title">
+              {editingId ? "Edit template" : "New template"}
+            </h3>
             {formError ? (
               <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
                 {formError}
               </p>
             ) : null}
-            <div className="form-group">
-              <label htmlFor="dt-name">Name</label>
+            <label className="settings-field" htmlFor="dt-name">
+              <span>Name</span>
               <input
                 id="dt-name"
+                className="input"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Notice of appearance (+10 days)"
               />
-            </div>
-            <div className="grid-2">
-              <div className="form-group">
-                <label htmlFor="dt-offset">Offset days</label>
+            </label>
+            <div className="settings-fields cols-2">
+              <label className="settings-field" htmlFor="dt-offset">
+                <span>Offset days</span>
                 <input
                   id="dt-offset"
+                  className="input"
                   type="number"
                   value={form.offsetDays}
                   onChange={(e) => setForm((f) => ({ ...f, offsetDays: e.target.value }))}
                 />
-              </div>
-              <div className="form-group">
-                <label htmlFor="dt-type">Calendar event type</label>
+              </label>
+              <label className="settings-field" htmlFor="dt-type">
+                <span>Calendar event type</span>
                 <select
                   id="dt-type"
+                  className="input"
                   value={form.defaultEventType}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -252,36 +258,36 @@ export function DeadlineTemplatesPanel() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </label>
             </div>
-            <div className="form-group">
-              <label htmlFor="dt-area">Area of law (optional)</label>
+            <label className="settings-field" htmlFor="dt-area">
+              <span>Area of law (optional)</span>
               <input
                 id="dt-area"
+                className="input"
                 value={form.areaOfLaw}
                 onChange={(e) => setForm((f) => ({ ...f, areaOfLaw: e.target.value }))}
               />
-            </div>
-            <div className="form-group">
-              <label htmlFor="dt-desc">Description</label>
+            </label>
+            <label className="settings-field" htmlFor="dt-desc">
+              <span>Description</span>
               <textarea
                 id="dt-desc"
+                className="input"
                 rows={2}
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
-            </div>
-            <div className="form-group">
-              <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                />
-                Active
-              </label>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            </label>
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+              />
+              <span>Active</span>
+            </label>
+            <div className="settings-actions">
               <Button size="sm" onClick={save} disabled={saving || !form.name.trim()}>
                 {saving ? "Saving…" : "Save"}
               </Button>
@@ -321,52 +327,52 @@ export function DeadlineTemplatesPanel() {
             title="No deadline templates"
             detail="Create offsets such as +14 days from a trigger date."
           />
-        ) : (
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Offset</th>
-                <th>Type</th>
-                <th>Area</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <div>{t.name}</div>
-                    {t.description ? (
-                      <div className="muted" style={{ fontSize: "0.75rem" }}>
-                        {t.description}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>
-                    {t.offsetDays >= 0 ? `+${t.offsetDays}` : t.offsetDays} days
-                  </td>
-                  <td>{t.defaultEventType}</td>
-                  <td>{t.areaOfLaw ?? "Any"}</td>
-                  <td>
-                    <Badge tone={t.isActive ? "open" : "closed"}>
-                      {t.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Can permission="calendar.manage">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
-                        Edit
-                      </Button>
-                    </Can>
-                  </td>
+        ) : items.length > 0 ? (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Offset</th>
+                  <th>Type</th>
+                  <th>Area</th>
+                  <th>Status</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
+              </thead>
+              <tbody>
+                {items.map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <div>{t.name}</div>
+                      {t.description ? (
+                        <div className="muted" style={{ fontSize: "0.75rem" }}>
+                          {t.description}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>{t.offsetDays >= 0 ? `+${t.offsetDays}` : t.offsetDays} days</td>
+                    <td>{t.defaultEventType}</td>
+                    <td>{t.areaOfLaw ?? "Any"}</td>
+                    <td>
+                      <Badge tone={t.isActive ? "open" : "closed"}>
+                        {t.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                    <td>
+                      <Can permission="calendar.manage">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
+                          Edit
+                        </Button>
+                      </Can>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }

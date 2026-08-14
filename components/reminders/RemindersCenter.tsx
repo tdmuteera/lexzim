@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { getModuleCache, setModuleCache } from "@/lib/client/module-cache";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+
+const REMINDERS_CACHE_KEY = "module:/api/reminders";
 
 export type ReminderItem = {
   id: string;
@@ -21,6 +24,7 @@ export type ReminderItem = {
 export type RemindersPayload = {
   generatedAt: string;
   dueSoonDays: number;
+  hearingHorizonDays?: number;
   counts: {
     overdue: number;
     dueSoon: number;
@@ -46,13 +50,16 @@ function formatWhen(iso: string) {
 }
 
 export function RemindersCenter() {
-  const [data, setData] = useState<RemindersPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<RemindersPayload | null>(() =>
+    getModuleCache<RemindersPayload>(REMINDERS_CACHE_KEY),
+  );
+  const [loading, setLoading] = useState(() => !getModuleCache(REMINDERS_CACHE_KEY));
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overdue");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    const background = Boolean(opts?.background);
+    if (!background) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/reminders", { credentials: "include" });
@@ -62,10 +69,13 @@ export function RemindersCenter() {
         error?: { message: string };
       };
       if (!res.ok || !body.ok || !body.data) {
-        setError(body.error?.message ?? "Could not load reminders.");
-        setData(null);
+        if (!background) {
+          setError(body.error?.message ?? "Could not load reminders.");
+          setData(null);
+        }
         return;
       }
+      setModuleCache(REMINDERS_CACHE_KEY, body.data);
       setData(body.data);
       setTab((current) => {
         if (body.data!.counts.overdue > 0) return "overdue";
@@ -74,15 +84,18 @@ export function RemindersCenter() {
         return "hearings";
       });
     } catch {
-      setError("Could not load reminders.");
-      setData(null);
+      if (!background) {
+        setError("Could not load reminders.");
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    const cached = getModuleCache<RemindersPayload>(REMINDERS_CACHE_KEY);
+    void load({ background: Boolean(cached) });
   }, [load]);
 
   const items =
@@ -97,15 +110,15 @@ export function RemindersCenter() {
       <div className="panel">
         <div className="panel-head">
           <h3>Reminders</h3>
-          <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
             Refresh
           </Button>
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Overdue work, items due in the next {data?.dueSoonDays ?? 7} days, and upcoming
-            hearings. In-app only (no email). Optional browser alerts while LexZim is open: Settings
-            → Reminders.
+            Overdue work, items due in the next {data?.dueSoonDays ?? 7} days, and hearings in the
+            next {data?.hearingHorizonDays ?? 60} days. In-app only (no email). Optional browser
+            alerts while LexZim is open: Settings → Reminders.
           </p>
 
           {error ? (

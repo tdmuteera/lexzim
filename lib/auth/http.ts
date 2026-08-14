@@ -1,6 +1,7 @@
 import { AuthError } from "@/lib/auth/types";
 import { AiBudgetExceededError } from "@/lib/ai/budget";
 import type { AuthSessionUser } from "@/lib/auth/types";
+import { DatabaseUnavailableError } from "@/lib/db/connectivity";
 import { logError } from "@/lib/ops/log";
 
 export function clientInfo(request: Request): string {
@@ -22,6 +23,20 @@ export function jsonError(err: unknown, fallbackStatus = 500) {
         },
       },
       { status: err.httpStatus },
+    );
+  }
+
+  if (err instanceof DatabaseUnavailableError) {
+    return Response.json(
+      {
+        ok: false,
+        error: {
+          code: err.code,
+          message:
+            "Cannot reach the database right now. Wait a moment and try again, or open /login?db_retry=1.",
+        },
+      },
+      { status: 503 },
     );
   }
 

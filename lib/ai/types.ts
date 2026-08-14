@@ -1,8 +1,8 @@
 import "server-only";
 
 /** Exact Gemini model IDs used in Phase 2 (P2-03). */
-export const GEMINI_CHAT_MODEL_ID = "gemini-2.0-flash";
-export const GEMINI_EMBEDDINGS_MODEL_ID = "text-embedding-004";
+export const GEMINI_CHAT_MODEL_ID = "gemini-3.6-flash";
+export const GEMINI_EMBEDDINGS_MODEL_ID = "gemini-embedding-001";
 
 export const CLAUDE_CHAT_MODEL_ID = "claude-sonnet-4-5";
 export const OPENAI_CHAT_MODEL_ID = "gpt-4.1";

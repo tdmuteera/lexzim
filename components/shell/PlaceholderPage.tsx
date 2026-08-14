@@ -15,7 +15,7 @@ export function PlaceholderPage({ meta }: { meta: RouteMeta }) {
           </p>
           <p className="muted">
             This is a Phase 0 placeholder route. Real module behaviour is built in later
-            phases. Navigation and shell chrome match the T Pfigu Attorneys demo.
+            phases. Navigation and shell chrome follow your firm's branding.
           </p>
         </div>
       </div>

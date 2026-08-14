@@ -2,6 +2,9 @@ import "server-only";
 
 import { getProvider } from "@/lib/ai/providers";
 import { assertAiSoftBudget } from "@/lib/ai/budget";
+import { loadChatHistory } from "@/lib/ai/chat-history";
+import { maybePackChatDocument } from "@/lib/ai/drafting/maybe-pack";
+import { classifyChatIntent } from "@/lib/ai/intent";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
@@ -27,23 +30,29 @@ import {
 export const LEGAL_DISCLAIMER =
   "Disclaimer: LexZim AI is a research aid for Zimbabwe legal practitioners. It is not final legal advice. Verify all authorities against primary sources (ZimLII, Veritas, official gazettes) before relying on this answer in practice or court.";
 
-export const NOT_FOUND_ANSWER =
-  "I could not find sufficiently relevant material in the LexZim Zimbabwe knowledge base for this question.\n\nI will not invent statutes, section numbers, or case names. Please rephrase the question, re-ingest/embed the knowledge pack if embeddings are missing, or consult primary sources directly.\n\n" +
-  LEGAL_DISCLAIMER;
+const SYSTEM_PROMPT = `You are LexZim, a Zimbabwe-focused assistant for legal practitioners. Talk like a capable modern chat AI: natural, clear, and useful.
 
-const SYSTEM_PROMPT = `You are LexZim's Zimbabwe Legal Intelligence Assistant for licensed practitioners.
+Voice
+- Answer greetings and ordinary conversation normally (weather, how you are, general knowledge, brainstorming).
+- Write in clean Markdown: short paragraphs, bullets when they help, bold for key terms. Do not stack many headings. Never output a wall of # hashes.
+- Do not lecture about being an AI, about "verification", or about disclaimers on casual chat.
 
-STRICT RULES:
-1. Jurisdiction: Zimbabwe only. Do not apply foreign law as authority.
-2. Prefer LOCAL knowledge-base context as the source of truth for authorities.
-3. NEVER invent statutes, section numbers, case names, SI numbers, or court holdings.
-4. When you rely on a context block, cite it using its citation label.
-5. Any WEB excerpts are labelled [UNVERIFIED]. Treat them as unverified leads only. Never present them as confirmed authority, and never let them override or replace local grounding silently.
-6. Prefer cautious language ("the retrieved excerpt indicates…") over definitive claims.
-7. End with the mandatory disclaimer exactly as provided in the user message footer instructions.
-8. Do not provide matter-specific advice beyond the legal research question asked.`;
+Legal caution (quiet)
+- When the user asks about law, procedure, rights, a case, or a filing: stay careful. Prefer Zimbabwe law. Never invent statute numbers, SI numbers, case names, or holdings.
+- If you are unsure, say so in one short sentence and give practical next steps. Do not refuse ordinary chat because the knowledge pack had no hit.
+- After a legal or case-specific answer, do not dump excerpts or a Disclaimer paragraph. The app may attach a short source list separately.
+
+Documents
+- If asked to draft a letter, notice, affidavit, or Word document, write the full document body. Follow font and spacing requests.`;
 
 export type ConfidenceLabel = "high" | "medium" | "low";
+
+export type LegalAskDocument = {
+  id: string;
+  fileName: string;
+  font: string;
+  lineSpacing: number;
+};
 
 export type LegalAskResult = {
   conversationId: string;
@@ -57,9 +66,12 @@ export type LegalAskResult = {
     webLookupEnabled?: boolean;
     webHitCount?: number;
     webErrorCode?: string | null;
+    intent?: string;
+    showCitations?: boolean;
   };
   notFound: boolean;
   disclaimer: string;
+  document?: LegalAskDocument | null;
   webLookup: Pick<
     WebLookupResult,
     "enabled" | "attempted" | "errorCode" | "message" | "latencyMs"
@@ -80,7 +92,7 @@ function buildContextBlock(retrieval: RetrieveLegalContextResult): string {
   return retrieval.hits
     .map(
       (h, i) =>
-        `[${i + 1}] citation: ${h.citationLabel}\nheading: ${h.headingPath ?? "—"}\nscore: ${h.score.toFixed(3)}\n${h.text}`,
+        `[${i + 1}] ${h.citationLabel}\n${h.text}`,
     )
     .join("\n\n---\n\n");
 }
@@ -96,20 +108,44 @@ function webMeta(web: WebLookupResult) {
   };
 }
 
+function isAuthorityCitation(c: AiCitation): boolean {
+  const label = `${c.citationLabel} ${c.title ?? ""}`;
+  if (c.sourceUrl) return true;
+  return /\b(act|si\b|constitution|court|v\.|versus|cap\.|chapter|zimlii|veritas)\b/i.test(
+    label,
+  );
+}
+
+function slimCitation(c: AiCitation): AiCitation {
+  return {
+    citationLabel: c.citationLabel,
+    title: c.title,
+    sourceUrl: c.sourceUrl ?? null,
+  };
+}
+
+function citationsForUi(intent: string, citations: AiCitation[]): AiCitation[] {
+  if (intent !== "legal") return [];
+  return citations.filter(isAuthorityCitation).slice(0, 6).map(slimCitation);
+}
+
 /**
- * Legal research ask: local RAG first → optional UNVERIFIED web → answer.
- * Never invents authorities; web never silently overrides local grounding.
+ * Conversational ask with optional Zimbabwe grounding. Greetings never 404.
  */
 export async function aiLegalAsk(input: {
   firmId: string;
   userId: string;
   question: string;
   conversationId?: string | null;
+  attachmentContext?: string | null;
 }): Promise<LegalAskResult> {
   const question = input.question.trim();
   if (!question) {
     throw new Error("question is required");
   }
+
+  const intent = classifyChatIntent(question);
+  const attachmentContext = input.attachmentContext?.trim() || "";
 
   let conversationId = input.conversationId?.trim() || null;
   if (conversationId) {
@@ -130,92 +166,82 @@ export async function aiLegalAsk(input: {
     conversationId = created.id;
   }
 
+  const storedUser = attachmentContext
+    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
+    : question;
+
   const userMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "user",
-    content: question,
+    content: storedUser,
   });
 
   const settings = await getAiSettings(input.firmId);
-  const webEnabled = Boolean(settings?.webLookupEnabled);
+  const webEnabled = Boolean(settings?.webLookupEnabled) && intent === "legal";
   const maxOutputTokens = Math.min(
     4096,
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
 
-  const retrieval = await retrieveLegalContext({
-    firmIdForProvider: input.firmId,
-    query: question,
-  });
+  let retrieval: RetrieveLegalContextResult = {
+    hits: [],
+    citations: [],
+    retrievalMeta: {
+      query: question,
+      embeddingsModel: "",
+      topK: 6,
+      candidateK: 12,
+      minSimilarity: 0.42,
+      candidateCount: 0,
+      hitCount: 0,
+      empty: true,
+      emptyReason: intent === "chat" ? "skipped_for_chat" : "not_attempted",
+      latencyMs: 0,
+    },
+  };
 
-  const web = await lookupTrustedWeb({ query: question, enabled: webEnabled });
+  if (intent !== "chat") {
+    try {
+      retrieval = await retrieveLegalContext({
+        firmIdForProvider: input.firmId,
+        query: question,
+      });
+    } catch {
+      /* chat still proceeds without RAG */
+    }
+  }
+
+  const web = await lookupTrustedWeb({
+    query: question,
+    enabled: webEnabled,
+  });
 
   const mergeMeta = {
     ...retrieval.retrievalMeta,
     webLookupEnabled: web.enabled,
     webHitCount: web.hits.length,
     webErrorCode: web.errorCode ?? null,
+    intent,
   };
-
-  // Local empty + no usable web → classic not-found (no invented authorities).
-  if (retrieval.hits.length === 0 && web.hits.length === 0) {
-    const assistantMessage = await createMessage({
-      firmId: input.firmId,
-      conversationId,
-      role: "assistant",
-      content: NOT_FOUND_ANSWER,
-      confidence: 0.2,
-      citationsJson: [],
-      retrievalMetaJson: {
-        ...mergeMeta,
-        notFound: true,
-        confidenceLabel: "low",
-        webLookup: webMeta(web),
-      },
-    });
-
-    await recordAiUsageEvent({
-      firmId: input.firmId,
-      userId: input.userId,
-      provider: settings?.providerDefault ?? "gemini",
-      model: retrieval.retrievalMeta.embeddingsModel,
-      mode: "legal_research",
-      success: true,
-      errorCode: retrieval.retrievalMeta.errorCode ?? "not_found",
-      latencyMs: retrieval.retrievalMeta.latencyMs + web.latencyMs,
-    });
-
-    return {
-      conversationId,
-      userMessageId: userMessage.id,
-      assistantMessageId: assistantMessage.id,
-      answer: NOT_FOUND_ANSWER,
-      confidence: "low",
-      confidenceScore: 0.2,
-      citations: [],
-      retrievalMeta: mergeMeta,
-      notFound: true,
-      disclaimer: LEGAL_DISCLAIMER,
-      webLookup: webMeta(web),
-    };
-  }
 
   const localConf = confidenceFromHits(
     retrieval.hits.length,
     retrieval.hits[0]?.score ?? null,
   );
-  // Web-only answers stay low confidence and UNVERIFIED.
   const conf =
-    retrieval.hits.length === 0
-      ? { label: "low" as const, score: 0.25 }
-      : localConf;
+    intent === "chat"
+      ? { label: "high" as const, score: 0.9 }
+      : retrieval.hits.length === 0
+        ? { label: "medium" as const, score: 0.5 }
+        : localConf;
 
-  const citations: AiCitation[] = [...retrieval.citations, ...web.citations];
+  const rawCitations: AiCitation[] = [...retrieval.citations, ...web.citations];
+  const citations = citationsForUi(intent, rawCitations);
   const contextBlock =
     retrieval.hits.length > 0
       ? buildContextBlock(retrieval)
-      : "(No local knowledge-base hits above threshold.)";
+      : "(No matching pack excerpt. Answer from general knowledge; do not invent Zimbabwe authorities.)";
   const webBlock = formatWebLookupBlock(web.hits);
 
   let provider;
@@ -228,22 +254,20 @@ export async function aiLegalAsk(input: {
     }
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     const fallback =
-      retrieval.hits.length > 0
-        ? "I retrieved local knowledge-base material, but the answer generator could not complete (provider error). Please try again.\n\n" +
-          LEGAL_DISCLAIMER
-        : NOT_FOUND_ANSWER;
+      "I cannot reach the language model right now. Check the API key under Settings → AI, then try again.";
     const assistantMessage = await createMessage({
       firmId: input.firmId,
       conversationId,
       role: "assistant",
       content: fallback,
       confidence: 0.2,
-      citationsJson: citations,
+      citationsJson: [],
       retrievalMetaJson: {
         ...mergeMeta,
-        notFound: retrieval.hits.length === 0,
+        notFound: false,
         generatorError: errorCode,
         confidenceLabel: "low",
+        showCitations: false,
         webLookup: webMeta(web),
       },
     });
@@ -264,13 +288,28 @@ export async function aiLegalAsk(input: {
       answer: fallback,
       confidence: "low",
       confidenceScore: 0.2,
-      citations,
-      retrievalMeta: mergeMeta,
-      notFound: retrieval.hits.length === 0,
+      citations: [],
+      retrievalMeta: { ...mergeMeta, showCitations: false },
+      notFound: false,
       disclaimer: LEGAL_DISCLAIMER,
       webLookup: webMeta(web),
     };
   }
+
+  const history = await loadChatHistory({
+    firmId: input.firmId,
+    conversationId,
+    limit: 12,
+  });
+
+  const grounding =
+    intent === "chat"
+      ? "This turn is ordinary conversation. Reply naturally. Do not add citations or a disclaimer."
+      : `Optional Zimbabwe pack excerpts (use if relevant; do not invent citations):\n${contextBlock}\n\nOptional web excerpts (unverified):\n${webBlock || "(none)"}`;
+
+  const attachmentBlock = attachmentContext
+    ? `\n\nUser attached file text (OCR or extracted). Use it when answering or converting to Word:\n${attachmentContext.slice(0, 24_000)}`
+    : "";
 
   let answerText: string;
   let chatLatency = 0;
@@ -278,35 +317,32 @@ export async function aiLegalAsk(input: {
     const chat = await provider.chat(
       [
         { role: "system", content: SYSTEM_PROMPT },
+        ...history.slice(0, -1),
         {
           role: "user",
-          content: `Question:\n${question}\n\nLOCAL Zimbabwe knowledge-base context (primary grounding):\n${contextBlock}\n\nOPTIONAL allowlisted WEB excerpts (all UNVERIFIED; never treat as confirmed authority):\n${webBlock || "(none)"}\n\nInstructions:\n- Ground authorities in LOCAL context when present.\n- If only UNVERIFIED web excerpts exist, say the local KB had no match and list them as unverified leads only.\n- Cite labels exactly, including [UNVERIFIED] where applicable.\n- End with this exact disclaimer paragraph:\n${LEGAL_DISCLAIMER}`,
+          content: `${question}${attachmentBlock}\n\n${grounding}`,
         },
       ],
-      { temperature: 0.2, maxOutputTokens },
+      { temperature: intent === "chat" ? 0.6 : 0.3, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
-    if (!answerText.includes("Disclaimer:")) {
-      answerText = `${answerText}\n\n${LEGAL_DISCLAIMER}`;
-    }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
-    const fallback =
-      "I retrieved relevant material, but the answer generator could not complete (provider error). Please try again.\n\n" +
-      LEGAL_DISCLAIMER;
+    const fallback = "The model did not finish that reply. Please try again in a moment.";
     const assistantMessage = await createMessage({
       firmId: input.firmId,
       conversationId,
       role: "assistant",
       content: fallback,
       confidence: 0.2,
-      citationsJson: citations,
+      citationsJson: [],
       retrievalMetaJson: {
         ...mergeMeta,
         notFound: false,
         generatorError: errorCode,
         confidenceLabel: "low",
+        showCitations: false,
         webLookup: webMeta(web),
       },
     });
@@ -327,28 +363,38 @@ export async function aiLegalAsk(input: {
       answer: fallback,
       confidence: "low",
       confidenceScore: 0.2,
-      citations,
-      retrievalMeta: mergeMeta,
+      citations: [],
+      retrievalMeta: { ...mergeMeta, showCitations: false },
       notFound: false,
       disclaimer: LEGAL_DISCLAIMER,
       webLookup: webMeta(web),
     };
   }
 
-  const notFound = retrieval.hits.length === 0;
+  const document = await maybePackChatDocument({
+    firmId: input.firmId,
+    userId: input.userId,
+    question,
+    answerText,
+    attachmentContext,
+  });
+
+  const showCitations = citations.length > 0 && intent === "legal";
   const assistantMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "assistant",
     content: answerText,
     confidence: conf.score,
-    citationsJson: citations,
+    citationsJson: showCitations ? citations : [],
     retrievalMetaJson: {
       ...mergeMeta,
-      notFound,
+      notFound: false,
       confidenceLabel: conf.label,
       chatLatencyMs: chatLatency,
+      showCitations,
       webLookup: webMeta(web),
+      document,
     },
   });
 
@@ -369,10 +415,11 @@ export async function aiLegalAsk(input: {
     answer: answerText,
     confidence: conf.label,
     confidenceScore: conf.score,
-    citations,
-    retrievalMeta: mergeMeta,
-    notFound,
+    citations: showCitations ? citations : [],
+    retrievalMeta: { ...mergeMeta, showCitations },
+    notFound: false,
     disclaimer: LEGAL_DISCLAIMER,
+    document,
     webLookup: webMeta(web),
   };
 }

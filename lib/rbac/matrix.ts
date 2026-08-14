@@ -27,7 +27,7 @@ export const ROLE_DEFS: {
   {
     code: "secretary",
     name: "Secretary / Paralegal",
-    description: "Clients, documents, calendar, and intake support.",
+    description: "Clients, documents, and calendar support.",
   },
   {
     code: "accounts",
@@ -62,8 +62,37 @@ export const PERMISSION_DEFS: {
   { code: "billing.manage", name: "Manage billing", description: "Create invoices and payments", module: "billing" },
   { code: "trust.view", name: "View trust", description: "See trust balances", module: "trust" },
   { code: "trust.manage", name: "Manage trust", description: "Post trust ledger entries", module: "trust" },
-  { code: "intake.view", name: "View intake", description: "See prospects", module: "intake" },
-  { code: "intake.manage", name: "Manage intake", description: "Create/convert intakes", module: "intake" },
+  {
+    code: "finance.view",
+    name: "View finance desk",
+    description: "Debtors, expenses, cashbook, and finance reports",
+    module: "finance",
+  },
+  {
+    code: "finance.post",
+    name: "Post firm finance",
+    description: "Record expenses and business cashbook entries",
+    module: "finance",
+  },
+  {
+    code: "finance.reconcile",
+    name: "Run reconciliations",
+    description: "Trust and business bank reconciliation workflows",
+    module: "finance",
+  },
+  {
+    code: "finance.close_month",
+    name: "Close finance period",
+    description: "Lock accounting periods at month end",
+    module: "finance",
+  },
+  { code: "hr.view", name: "View HR", description: "Staff directory, contracts, and leave", module: "hr" },
+  {
+    code: "hr.manage",
+    name: "Manage HR",
+    description: "Staff records, contracts, and leave approvals",
+    module: "hr",
+  },
   { code: "ai.use", name: "Use AI", description: "Open AI assistant", module: "ai" },
   { code: "ai.manage_settings", name: "Manage AI settings", description: "Change AI keys/settings", module: "ai" },
   { code: "audit.view", name: "View audit log", description: "Read audit events", module: "audit" },
@@ -99,7 +128,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "templates.view",
     "calendar.view",
     "calendar.manage",
-    "intake.view",
     "ai.use",
   ],
   secretary: [
@@ -113,8 +141,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "templates.view",
     "calendar.view",
     "calendar.manage",
-    "intake.view",
-    "intake.manage",
     "ai.use",
   ],
   accounts: [
@@ -126,6 +152,12 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "billing.manage",
     "trust.view",
     "trust.manage",
+    "finance.view",
+    "finance.post",
+    "finance.reconcile",
+    "finance.close_month",
+    "hr.view",
+    "hr.manage",
     "reports.view",
   ],
 };

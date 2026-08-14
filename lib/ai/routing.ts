@@ -4,6 +4,8 @@ import { resolveProviderApiKey } from "@/lib/ai/secrets";
 import {
   CLAUDE_CHAT_MODEL_ID,
   GEMINI_CHAT_MODEL_ID,
+  GEMINI_EMBEDDINGS_MODEL_ID,
+  OPENAI_EMBEDDINGS_MODEL_ID,
   type LlmProviderId,
 } from "@/lib/ai/types";
 import type { AiConversationMode } from "@/lib/db/ai-types";
@@ -42,7 +44,7 @@ export async function resolveAiRoute(
   const providerDefault = normalizeProviderId(settings?.providerDefault);
   const embeddingsModel =
     settings?.embeddingsModel?.trim() ||
-    (providerDefault === "openai" ? "text-embedding-3-small" : "text-embedding-004");
+    (providerDefault === "openai" ? OPENAI_EMBEDDINGS_MODEL_ID : GEMINI_EMBEDDINGS_MODEL_ID);
 
   if (routingMode === "manual") {
     return {
@@ -68,7 +70,7 @@ export async function resolveAiRoute(
     return {
       providerId: "gemini",
       chatModel: GEMINI_CHAT_MODEL_ID,
-      embeddingsModel: settings?.embeddingsModel?.trim() || "text-embedding-004",
+      embeddingsModel: settings?.embeddingsModel?.trim() || GEMINI_EMBEDDINGS_MODEL_ID,
       routingMode,
       reason: "auto_legal_gemini_fallback",
     };

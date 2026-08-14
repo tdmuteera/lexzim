@@ -105,107 +105,122 @@ export function FirmProfilePanel() {
 
   return (
     <Can permission="settings.manage">
-      <div style={{ display: "grid", gap: "1rem", maxWidth: "36rem" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Firm profile</h2>
-          <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
-            Name, contact, currency, and invoice numbering. Does not enable web lookup or telemetry.
+      <div className="settings-form">
+        <div className="settings-form-head">
+          <p className="settings-lede">
+            Name, contact, currency, and invoice numbering. Does not enable web lookup or
+            telemetry.
           </p>
+          {loading ? <span className="muted">Loading…</span> : null}
+          {error ? (
+            <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
+          ) : null}
+          {okMsg ? (
+            <p style={{ color: "var(--success)", margin: 0, fontSize: "0.9rem" }}>{okMsg}</p>
+          ) : null}
         </div>
 
-        {loading ? <p className="muted">Loading…</p> : null}
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
-        {okMsg ? <p style={{ color: "var(--success, green)", margin: 0 }}>{okMsg}</p> : null}
-
         {form && !loading ? (
-          <div style={{ display: "grid", gap: "0.75rem" }}>
-            <label>
-              Firm name
-              <input className="input" value={form.name} onChange={set("name")} />
-            </label>
-            <label>
-              Default currency
-              <input
-                className="input"
-                value={form.defaultCurrency ?? ""}
-                onChange={set("defaultCurrency")}
-                placeholder="USD"
-              />
-            </label>
-            <label>
-              Invoice prefix
-              <input
-                className="input"
-                value={form.invoicePrefix}
-                onChange={set("invoicePrefix")}
-                placeholder="INV"
-              />
-            </label>
-            <label>
-              Invoice due days
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={365}
-                value={form.invoiceDueDays}
-                onChange={set("invoiceDueDays")}
-              />
-            </label>
-            <label>
-              Contact email
-              <input
-                className="input"
-                type="email"
-                value={form.contactEmail ?? ""}
-                onChange={set("contactEmail")}
-              />
-            </label>
-            <label>
-              Contact phone
-              <input
-                className="input"
-                value={form.contactPhone ?? ""}
-                onChange={set("contactPhone")}
-              />
-            </label>
-            <label>
-              Address line 1
-              <input
-                className="input"
-                value={form.addressLine1 ?? ""}
-                onChange={set("addressLine1")}
-              />
-            </label>
-            <label>
-              Address line 2
-              <input
-                className="input"
-                value={form.addressLine2 ?? ""}
-                onChange={set("addressLine2")}
-              />
-            </label>
-            <label>
-              City
-              <input className="input" value={form.city ?? ""} onChange={set("city")} />
-            </label>
-            <label>
-              Country
-              <input
-                className="input"
-                value={form.country ?? ""}
-                onChange={set("country")}
-              />
-            </label>
-            <div>
+          <>
+            <section className="settings-section">
+              <h3 className="settings-section-title">Firm identity</h3>
+              <div className="settings-fields cols-2">
+                <label className="settings-field">
+                  <span>Firm name</span>
+                  <input className="input" value={form.name} onChange={set("name")} />
+                </label>
+                <label className="settings-field">
+                  <span>Default currency</span>
+                  <input
+                    className="input"
+                    value={form.defaultCurrency ?? ""}
+                    onChange={set("defaultCurrency")}
+                    placeholder="USD"
+                  />
+                </label>
+              </div>
+              <p className="settings-hint">Slug: {form.slug} (fixed after setup)</p>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Invoicing</h3>
+              <div className="settings-fields cols-2">
+                <label className="settings-field">
+                  <span>Invoice prefix</span>
+                  <input
+                    className="input"
+                    value={form.invoicePrefix}
+                    onChange={set("invoicePrefix")}
+                    placeholder="INV"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Invoice due days</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={form.invoiceDueDays}
+                    onChange={set("invoiceDueDays")}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Contact & address</h3>
+              <div className="settings-fields cols-2">
+                <label className="settings-field">
+                  <span>Contact email</span>
+                  <input
+                    className="input"
+                    type="email"
+                    value={form.contactEmail ?? ""}
+                    onChange={set("contactEmail")}
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Contact phone</span>
+                  <input
+                    className="input"
+                    value={form.contactPhone ?? ""}
+                    onChange={set("contactPhone")}
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Address line 1</span>
+                  <input
+                    className="input"
+                    value={form.addressLine1 ?? ""}
+                    onChange={set("addressLine1")}
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Address line 2</span>
+                  <input
+                    className="input"
+                    value={form.addressLine2 ?? ""}
+                    onChange={set("addressLine2")}
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>City</span>
+                  <input className="input" value={form.city ?? ""} onChange={set("city")} />
+                </label>
+                <label className="settings-field">
+                  <span>Country</span>
+                  <input className="input" value={form.country ?? ""} onChange={set("country")} />
+                </label>
+              </div>
+            </section>
+
+            <div className="settings-actions">
               <Button disabled={saving} onClick={() => void save()}>
                 {saving ? "Saving…" : "Save firm profile"}
               </Button>
             </div>
-            <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
-              Slug: {form.slug} (fixed after setup)
-            </p>
-          </div>
+          </>
         ) : null}
       </div>
     </Can>

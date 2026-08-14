@@ -83,59 +83,52 @@ export function RetrievalDiagnosticPanel() {
   }
 
   return (
-    <>
-      <div className="panel-head">
-        <h3>RAG retrieval diagnostic</h3>
+    <div className="settings-form">
+      <div className="settings-form-head">
         <Badge tone={meta?.empty === false ? "open" : "pending"}>
           {meta ? (meta.empty ? "Empty" : "Hits") : "Preview"}
         </Badge>
-      </div>
-      <div className="panel-body" style={{ display: "grid", gap: "1rem" }}>
-        <p className="muted" style={{ margin: 0, fontSize: "0.85rem", lineHeight: 1.45 }}>
+        <p className="settings-lede">
           Embeds the query and searches pgvector. No LLM answer yet (P2-07). Requires embeddings
           from Knowledge pack re-ingest.
         </p>
-
         {error ? (
           <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
             {error}
           </p>
         ) : null}
+      </div>
 
-        <label style={{ display: "grid", gap: "0.35rem", fontSize: "0.85rem" }}>
-          <span className="muted">Test query</span>
+      <section className="settings-section">
+        <h3 className="settings-section-title">Test query</h3>
+        <label className="settings-field">
+          <span>Query</span>
           <textarea
+            className="input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             rows={3}
-            style={{
-              width: "100%",
-              padding: "0.55rem 0.7rem",
-              border: "1px solid var(--border-2)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--bg-1)",
-              color: "var(--text)",
-              resize: "vertical",
-            }}
+            style={{ resize: "vertical" }}
           />
         </label>
-
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="settings-actions">
           <Button variant="gold" onClick={() => void onRetrieve()} disabled={loading || !query.trim()}>
             {loading ? "Retrieving…" : "Retrieve context"}
           </Button>
         </div>
-
         {meta ? (
-          <div className="muted" style={{ fontSize: "0.8rem" }}>
+          <p className="settings-hint">
             hits={meta.hitCount} candidates={meta.candidateCount} minSimilarity={meta.minSimilarity}{" "}
             model={meta.embeddingsModel} latency={meta.latencyMs}ms
             {meta.emptyReason ? ` emptyReason=${meta.emptyReason}` : ""}
             {meta.errorCode ? ` error=${meta.errorCode}` : ""}
-          </div>
+          </p>
         ) : null}
+      </section>
 
-        {hits.length > 0 ? (
+      {hits.length > 0 ? (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Hits</h3>
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -164,24 +157,22 @@ export function RetrievalDiagnosticPanel() {
               </tbody>
             </table>
           </div>
-        ) : null}
+        </section>
+      ) : null}
 
-        {candidates.length > 0 ? (
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: "0.35rem", fontSize: "0.85rem" }}>
-              Diagnostic candidates
-            </div>
-            <ul className="muted" style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.8rem" }}>
-              {candidates.map((c) => (
-                <li key={c.chunkId}>
-                  {c.score.toFixed(3)} {c.aboveThreshold ? "[pass]" : "[below]"} {c.title}
-                  {c.headingPath ? ` / ${c.headingPath}` : ""}: {c.excerpt}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-    </>
+      {candidates.length > 0 ? (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Diagnostic candidates</h3>
+          <ul className="muted" style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.8rem" }}>
+            {candidates.map((c) => (
+              <li key={c.chunkId}>
+                {c.score.toFixed(3)} {c.aboveThreshold ? "[pass]" : "[below]"} {c.title}
+                {c.headingPath ? ` / ${c.headingPath}` : ""}: {c.excerpt}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
   );
 }

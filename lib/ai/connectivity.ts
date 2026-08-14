@@ -97,7 +97,14 @@ export async function getAiConnectivityReport(input: {
 
   try {
     const provider = await getProvider(input.firmId);
-    await withAiRetry(() => provider.embed("lexzim connectivity probe", {}));
+    try {
+      await withAiRetry(() => provider.embed("lexzim connectivity probe", {}));
+    } catch (embedErr) {
+      if (provider.id !== "claude") throw embedErr;
+      await withAiRetry(() =>
+        provider.chat([{ role: "user", content: "ok" }], { maxOutputTokens: 16, temperature: 0 }),
+      );
+    }
     return {
       ...base,
       connectivity: "ready",

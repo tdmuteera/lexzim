@@ -47,7 +47,3 @@ Route: `/trust` (separate from `/billing`)
 - Repo: `lib/repos/trust.ts`
 - Validation: `lib/trust/validation.ts`
 - UI: `components/trust/TrustView.tsx`
-
-## Next
-
-**P3-10:** Conflict-of-interest search.

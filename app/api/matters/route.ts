@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       matterId: row.id,
       eventType: "system",
       title: "Matter created",
-      body: `Status: ${row.status}. Conflict check: ${row.conflictCheckStatus}.`,
+      body: `Status: ${row.status}.`,
       createdBy: session.id,
     });
 

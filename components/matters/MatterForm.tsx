@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { AREA_OF_LAW_OPTIONS, type MatterStatus } from "@/lib/db/mvp-types";
 import {
-  CONFLICT_STATUSES,
   MATTER_PRIORITIES,
   MATTER_STATUSES,
   statusLabel,
@@ -24,7 +23,6 @@ export type MatterFormValues = {
   responsibleLawyerId: string;
   nextHearingAt: string;
   priority: string;
-  conflictCheckStatus: string;
 };
 
 type ClientOption = { id: string; displayName: string };
@@ -50,7 +48,6 @@ const emptyValues: MatterFormValues = {
   responsibleLawyerId: "",
   nextHearingAt: "",
   priority: "normal",
-  conflictCheckStatus: "not_done",
 };
 
 export function MatterForm({
@@ -124,7 +121,6 @@ export function MatterForm({
       responsibleLawyerId: values.responsibleLawyerId || null,
       nextHearingAt: values.nextHearingAt || null,
       priority: values.priority,
-      conflictCheckStatus: values.conflictCheckStatus,
     };
 
     try {
@@ -293,6 +289,9 @@ export function MatterForm({
             value={values.nextHearingAt}
             onChange={(e) => setField("nextHearingAt", e.target.value)}
           />
+          <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.78rem" }}>
+            Shown on Calendar and Reminders (Hearings).
+          </p>
         </div>
       </div>
 
@@ -307,20 +306,6 @@ export function MatterForm({
             {MATTER_PRIORITIES.map((p) => (
               <option key={p} value={p}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-group">
-          <label htmlFor="conflictCheckStatus">Conflict check</label>
-          <select
-            id="conflictCheckStatus"
-            value={values.conflictCheckStatus}
-            onChange={(e) => setField("conflictCheckStatus", e.target.value)}
-          >
-            {CONFLICT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replaceAll("_", " ")}
               </option>
             ))}
           </select>

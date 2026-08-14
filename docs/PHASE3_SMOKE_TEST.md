@@ -40,18 +40,17 @@ npm run db:seed:rbac
 | 3 | Time → invoice → payment | Matter Time + Costs → Billing create fee note → fee payment (not trust) | |
 | 4 | Trust receipt / statement | `/trust` receipt + client statement | |
 | 5 | Trust no overdraw | Disbursement that would go negative blocked unless audited override | |
-| 6 | Intake → conflict → convert | `/intake` run check → convert wizard → matter | |
-| 7 | Reports CSV | `/reports` Download CSV (AR + trust) | |
-| 8 | RBAC | Secretary blocked from billing; Accounts blocked from intake | |
-| 9 | Dashboard | Role-aware widgets (billing/trust vs intake/calendar) | |
-| 10 | firm_id isolation | Isolation user does not see pilot invoices | |
-| 11 | Railway / health | `GET /api/health`; production URL when set in `docs/HOSTING.md` | |
+| 6 | Reports CSV | `/reports` Download CSV (AR + trust) | |
+| 7 | RBAC | Secretary blocked from billing | |
+| 8 | Dashboard | Role-aware widgets (billing/trust vs calendar) | |
+| 9 | firm_id isolation | Isolation user does not see pilot invoices | |
+| 10 | Railway / health | `GET /api/health`; production URL when set in `docs/HOSTING.md` | |
 
 ## Automated coverage
 
-`npm run smoke:phase3` covers calendar, deadline templates, time/invoices, trust accounts/ledger, overdraw block, intake conflict run, reports CSV, dashboard permissions, secretary/accounts RBAC, isolation invoices, reminders, health.
+`npm run smoke:phase3` covers calendar, deadline templates, time/invoices, trust accounts/ledger, overdraw block, reports CSV, dashboard permissions, secretary/accounts RBAC, isolation invoices, reminders, health.
 
-Manual: full convert wizard click-through, print invoice, Railway URL confirmation, visual Billing vs Trust labels.
+Manual: print invoice, Railway URL confirmation, visual Billing vs Trust labels.
 
 ## Docs
 

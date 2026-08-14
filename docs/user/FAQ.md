@@ -26,7 +26,7 @@ Your role lacks that permission. Ask the Managing Partner to change your role or
 ## Licence expired
 
 - You can still sign in and export.
-- Opening **new matters** (including intake conversion) may be blocked until renewal.
+- Opening **new matters** may be blocked until renewal.
 - Existing matters and documents remain available for work and review subject to your permissions.
 
 ## AI says not found / no grounding

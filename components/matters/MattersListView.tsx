@@ -98,10 +98,15 @@ export function MattersListView({
     }
   }, [q, bucket, status, areaOfLaw, lawyerId, clientId]);
 
+  // Filters load immediately; only debounce free-text search typing.
   useEffect(() => {
-    const timer = window.setTimeout(() => load(), 200);
+    if (!q) {
+      void load();
+      return;
+    }
+    const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, q]);
 
   const newHref = clientId
     ? `/matters/new?clientId=${encodeURIComponent(clientId)}`

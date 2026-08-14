@@ -65,6 +65,4 @@ See `docs/TIME.md`.
 
 Integer cents (`*_cents`) plus currency. Helpers: `lib/billing/money.ts`.
 
-## Next
-
-**P3-09:** Client intake forms. See also `docs/TRUST.md`.
+See also `docs/TRUST.md`.

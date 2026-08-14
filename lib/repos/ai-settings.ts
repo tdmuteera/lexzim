@@ -46,8 +46,8 @@ export async function upsertAiSettings(
       .values({
         firmId,
         providerDefault: input.providerDefault ?? "gemini",
-        modelDefault: input.modelDefault ?? "gemini-2.0-flash",
-        embeddingsModel: input.embeddingsModel ?? "text-embedding-004",
+        modelDefault: input.modelDefault ?? "gemini-3.6-flash",
+        embeddingsModel: input.embeddingsModel ?? "gemini-embedding-001",
         webLookupEnabled: input.webLookupEnabled ?? false,
         routingMode: input.routingMode ?? "auto",
         monthlySoftBudget:

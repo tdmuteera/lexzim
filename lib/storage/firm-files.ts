@@ -45,6 +45,14 @@ export function templateStoragePath(input: {
   return `${firmStoragePrefix(input.firmId)}/templates/${input.templateId}/v${input.version}/${sanitizeFileName(input.fileName)}`;
 }
 
+export function hrContractStoragePath(input: {
+  firmId: string;
+  contractId: string;
+  fileName: string;
+}): string {
+  return `${firmStoragePrefix(input.firmId)}/hr/contracts/${input.contractId}/${sanitizeFileName(input.fileName)}`;
+}
+
 export function assertPathBelongsToFirm(storagePath: string, firmId: string): void {
   const prefix = `${firmStoragePrefix(firmId)}/`;
   if (!storagePath.startsWith(prefix)) {

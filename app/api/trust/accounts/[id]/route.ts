@@ -2,7 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { serializeTrustAccount } from "@/lib/trust/serialize";
-import { parseTrustAccountInput } from "@/lib/trust/validation";
+import { parseTrustAccountInput, type TrustAccountKind } from "@/lib/trust/validation";
 import {
   getTrustAccount,
   getTrustAccountBalance,
@@ -36,7 +36,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!existing) throw new AuthError("not_found", "Trust account not found.");
 
     const body = await request.json();
-    const input = parseTrustAccountInput(body, { currency: existing.currency });
+    const input = parseTrustAccountInput(body, {
+      currency: existing.currency,
+      accountKind: existing.accountKind as TrustAccountKind,
+    });
     const row = await updateTrustAccount(firmId, id, input);
     if (!row) throw new AuthError("not_found", "Trust account not found.");
 

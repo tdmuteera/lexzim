@@ -49,7 +49,7 @@ export async function aiTestProvider(opts: {
   try {
     const result = await provider.chat(
       [{ role: "user", content: "Reply with the single word OK." }],
-      { model, maxOutputTokens: 8, temperature: 0 },
+        { model, maxOutputTokens: 64, temperature: 0 },
     );
     return {
       status: "connected",

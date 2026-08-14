@@ -297,6 +297,10 @@ export function CalendarView() {
   }
 
   function openEdit(ev: SerializedEvent) {
+    if (ev.id.startsWith("matter-hearing:") && ev.matterId) {
+      window.location.href = `/matters/${ev.matterId}`;
+      return;
+    }
     if (!canManage) {
       setSelectedId(ev.id);
       return;

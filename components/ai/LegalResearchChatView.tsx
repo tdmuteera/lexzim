@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge } from "@/components/ui/Badge";
+import { ChatMarkdown } from "@/components/ai/ChatMarkdown";
+import { MatterSearchPicker } from "@/components/ai/MatterSearchPicker";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -30,6 +31,7 @@ type ChatBubble = {
   confidence?: string | null;
   notFound?: boolean;
   citations?: Citation[];
+  document?: { id: string; fileName: string; font?: string; lineSpacing?: number } | null;
 };
 
 type ConversationItem = {
@@ -98,6 +100,8 @@ export function LegalResearchChatView() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [question, setQuestion] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [extracting, setExtracting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -146,7 +150,6 @@ export function LegalResearchChatView() {
       if (!res.ok || !body.ok || !body.data?.items) return;
       const items = body.data.items;
       setMatters(items);
-      setMatterId((prev) => prev || items[0]?.id || "");
     } catch {
       /* non-blocking */
     }
@@ -237,6 +240,13 @@ export function LegalResearchChatView() {
               confidence: conf.label,
               notFound: conf.notFound,
               citations: Array.isArray(m.citationsJson) ? m.citationsJson : [],
+              document:
+                m.retrievalMetaJson &&
+                typeof m.retrievalMetaJson === "object" &&
+                m.retrievalMetaJson.document &&
+                typeof m.retrievalMetaJson.document === "object"
+                  ? (m.retrievalMetaJson.document as ChatBubble["document"])
+                  : null,
             };
           }),
       );
@@ -282,11 +292,36 @@ export function LegalResearchChatView() {
     ]);
 
     try {
+      let attachmentContext: string | null = null;
+      if (pendingFiles.length) {
+        setExtracting(true);
+        const form = new FormData();
+        for (const file of pendingFiles) form.append("files", file);
+        const extracted = await fetch("/api/ai/extract", {
+          method: "POST",
+          credentials: "include",
+          body: form,
+        });
+        const extractedBody = (await extracted.json()) as {
+          ok?: boolean;
+          data?: { files?: Array<{ fileName: string; method: string; text: string }> };
+          error?: { message?: string };
+        };
+        setExtracting(false);
+        if (!extracted.ok || !extractedBody.ok) {
+          throw new Error(extractedBody.error?.message || "Could not read attached files.");
+        }
+        attachmentContext = (extractedBody.data?.files ?? [])
+          .map((f) => `--- ${f.fileName} (${f.method}) ---\n${f.text}`)
+          .join("\n\n");
+        setPendingFiles([]);
+      }
+
       const endpoint = mode === "matter_assist" ? "/api/ai/matter-ask" : "/api/ai/ask";
       const payload =
         mode === "matter_assist"
-          ? { question: q, conversationId, matterId }
-          : { question: q, conversationId };
+          ? { question: q, conversationId, matterId, attachmentContext }
+          : { question: q, conversationId, attachmentContext };
 
       const res = await fetchAiJsonWithRetry(endpoint, {
         method: "POST",
@@ -304,6 +339,7 @@ export function LegalResearchChatView() {
           citations: Citation[];
           notFound: boolean;
           matterHeader?: MatterHeader;
+          document?: { id: string; fileName: string; font?: string; lineSpacing?: number } | null;
           retrievalMeta?: { errorCode?: string; emptyReason?: string | null };
         };
         error?: { message: string };
@@ -328,10 +364,10 @@ export function LegalResearchChatView() {
           confidence: body.data!.confidence,
           notFound: body.data!.notFound,
           citations: body.data!.citations,
+          document: body.data!.document ?? null,
         },
       ]);
 
-      if (body.data.notFound) toast("No grounded sources found.");
       void loadConversations(mode);
       void loadStatus(false);
     } catch {
@@ -346,19 +382,17 @@ export function LegalResearchChatView() {
 
   const keyMissing = status?.keyStatus === "missing";
   const kbEmpty = status != null && status.systemChunkCount === 0;
-  const embeddingsMissing =
-    status != null && status.systemChunkCount > 0 && !status.embeddingsReady;
   const connBanner = connectivityBanner(status?.connectivity);
 
   return (
-    <div className="view ai-chat">
+    <div className="view active ai-chat" aria-label="AI Assistant">
       <div className="ai-chat-toolbar">
         <div>
           <h1>AI Legal Assistant</h1>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
             {mode === "legal_research"
-              ? "Zimbabwe legal research with citations. Not final legal advice."
-              : "Read-only help for a single matter you can access. Not final legal advice."}
+              ? "Talk naturally. Legal answers stay cautious and only show sources when they matter."
+              : "Search a matter, then ask about the file. Drafts and ordinary chat are fine."}
           </p>
           <div className="ai-chip-row" style={{ marginTop: "0.55rem" }}>
             <div className="ai-mode-tabs" role="tablist" aria-label="Assistant mode">
@@ -455,7 +489,7 @@ export function LegalResearchChatView() {
         <section className="ai-main">
           <div className="ai-main-head">
             <strong>
-              {mode === "legal_research" ? "Legal research transcript" : "Matter Assist transcript"}
+              {mode === "legal_research" ? "Conversation" : "Matter conversation"}
             </strong>
             {loadingThread ? (
               <span className="muted" style={{ fontSize: "0.8rem" }}>
@@ -467,27 +501,25 @@ export function LegalResearchChatView() {
           {mode === "matter_assist" ? (
             <>
               <div className="ai-matter-picker">
-                <span className="muted" style={{ fontSize: "0.8rem" }}>
-                  Matter
-                </span>
-                <select
+                <MatterSearchPicker
                   value={matterId}
-                  onChange={(e) => {
-                    setMatterId(e.target.value);
+                  disabled={loading}
+                  onChange={(id, option) => {
+                    setMatterId(id);
                     setConversationId(null);
                     setMessages([]);
                     setError(null);
+                    if (option) {
+                      setMatterHeader({
+                        title: option.title,
+                        matterNumber: option.matterNumber,
+                        status: option.status,
+                        areaOfLaw: option.areaOfLaw,
+                        clientDisplayName: option.clientDisplayName,
+                      });
+                    }
                   }}
-                  disabled={loading || matters.length === 0}
-                >
-                  {matters.length === 0 ? <option value="">No accessible matters</option> : null}
-                  {matters.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.matterNumber ? `${m.matterNumber} · ` : ""}
-                      {m.title}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               {matterHeader ? (
                 <div className="ai-matter-strip">
@@ -529,12 +561,8 @@ export function LegalResearchChatView() {
             ) : null}
             {mode === "legal_research" && kbEmpty ? (
               <div className="ai-banner warn" role="status">
-                The Zimbabwe knowledge pack is empty. Re-ingest under Settings → Knowledge pack.
-              </div>
-            ) : null}
-            {mode === "legal_research" && embeddingsMissing && !keyMissing ? (
-              <div className="ai-banner warn" role="status">
-                Embeddings are not ready. Use Settings → Knowledge pack after the API key is set.
+                The Zimbabwe knowledge pack is empty. Legal answers will still work from general
+                knowledge, with extra caution. Re-ingest under Settings → Knowledge pack when you can.
               </div>
             ) : null}
             {mode === "matter_assist" && keyMissing ? (
@@ -548,13 +576,13 @@ export function LegalResearchChatView() {
               <div className="ai-empty">
                 <h2>
                   {mode === "legal_research"
-                    ? "Ask Zimbabwe law, grounded in the pack"
+                    ? "Ask anything"
                     : "Ask about this matter file"}
                 </h2>
                 <p>
                   {mode === "legal_research"
-                    ? "Questions retrieve from the LexZim starter knowledge base. Authorities are never invented."
-                    : "Examples: summarise this matter; what procedures are pending; what was the last settlement note? Read-only; no other matters."}
+                    ? "Ask anything. For Zimbabwe law, I stay careful and only cite when it helps."
+                    : "Search for a matter, then ask about it, draft a document, or talk through the file."}
                 </p>
               </div>
             ) : null}
@@ -565,43 +593,38 @@ export function LegalResearchChatView() {
                 className={`ai-bubble ${m.role === "user" ? "user" : "assistant"}`}
               >
                 <div className="ai-bubble-head">
-                  <strong>{m.role === "user" ? "You" : "LexZim AI"}</strong>
-                  {m.role === "assistant" && m.confidence ? (
-                    <Badge
-                      tone={
-                        m.notFound
-                          ? "pending"
-                          : m.confidence === "high"
-                            ? "open"
-                            : "pending"
-                      }
-                    >
-                      {m.notFound ? "not found" : m.confidence}
-                    </Badge>
-                  ) : null}
+                  <strong>{m.role === "user" ? "You" : "LexZim"}</strong>
                 </div>
-                <div className="ai-bubble-body">{m.content}</div>
+                <div className="ai-bubble-body">
+                  {m.role === "assistant" ? <ChatMarkdown text={m.content} /> : m.content}
+                </div>
+                {m.document ? (
+                  <p className="ai-doc-link">
+                    <a href={`/api/ai/drafts/${m.document.id}`} download={m.document.fileName}>
+                      Download {m.document.fileName}
+                    </a>
+                    {m.document.font ? (
+                      <span className="muted">
+                        {" "}
+                        ({m.document.font}
+                        {m.document.lineSpacing ? `, ${m.document.lineSpacing} spacing` : ""})
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
                 {m.citations && m.citations.length > 0 ? (
                   <div className="ai-citations">
-                    <div className="label">Citations</div>
+                    <div className="label">Sources</div>
                     <ul>
                       {m.citations.map((c, i) => (
                         <li key={`${m.id}-c-${i}`}>
-                          <strong>{c.citationLabel}</strong>
-                          {c.verified === false ? (
-                            <Badge tone="pending" style={{ marginLeft: "0.35rem" }}>
-                              UNVERIFIED
-                            </Badge>
-                          ) : null}
-                          {c.excerpt ? `: ${c.excerpt}` : null}
                           {c.sourceUrl ? (
-                            <>
-                              {" "}
-                              <a href={c.sourceUrl} target="_blank" rel="noreferrer">
-                                open
-                              </a>
-                            </>
-                          ) : null}
+                            <a href={c.sourceUrl} target="_blank" rel="noreferrer">
+                              {c.citationLabel}
+                            </a>
+                          ) : (
+                            <span>{c.citationLabel}</span>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -613,8 +636,10 @@ export function LegalResearchChatView() {
             {loading ? (
               <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
                 {mode === "matter_assist"
-                  ? "Reading matter facts and drafting an answer…"
-                  : "Retrieving context and drafting an answer…"}
+                  ? "Reading the file…"
+                  : extracting
+                    ? "Reading attached files…"
+                    : "Thinking…"}
               </p>
             ) : null}
 
@@ -626,19 +651,33 @@ export function LegalResearchChatView() {
           </div>
 
           <form className="ai-composer" onSubmit={(e) => void onAsk(e)}>
-            <textarea
+            <div className="ai-composer-main">
+              {pendingFiles.length > 0 ? (
+                <div className="ai-attach-chips">
+                  {pendingFiles.map((f) => (
+                    <span key={`${f.name}-${f.size}`} className="ai-chip">
+                      {f.name}
+                    </span>
+                  ))}
+                  <button type="button" className="ai-attach-clear" onClick={() => setPendingFiles([])}>
+                    Clear
+                  </button>
+                </div>
+              ) : null}
+              <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder={
                 sendBlocked
                   ? "AI send is disabled until connectivity is restored…"
                   : mode === "matter_assist"
-                    ? "Ask about this matter (summary, procedures, notes)…"
-                    : "Ask a Zimbabwe legal research question…"
+                    ? "Ask about this matter, or talk normally…"
+                    : "Message LexZim…"
               }
               rows={2}
               disabled={
                 loading ||
+                extracting ||
                 sendBlocked ||
                 (mode === "matter_assist" && !matterId)
               }
@@ -649,18 +688,34 @@ export function LegalResearchChatView() {
                 }
               }}
             />
+            </div>
+            <label className="ai-attach-btn">
+              <input
+                type="file"
+                multiple
+                hidden
+                accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
+                onChange={(e) => {
+                  const next = Array.from(e.target.files ?? []);
+                  setPendingFiles((prev) => [...prev, ...next].slice(0, 8));
+                  e.target.value = "";
+                }}
+              />
+              Attach
+            </label>
             <Button
               type="submit"
               variant="gold"
               disabled={
                 loading ||
+                extracting ||
                 sendBlocked ||
                 !question.trim() ||
                 (mode === "matter_assist" && !matterId)
               }
               title={sendBlocked ? sendBlockedReason ?? "AI send disabled" : undefined}
             >
-              {loading ? "Thinking…" : sendBlocked ? "Unavailable" : "Ask"}
+              {loading || extracting ? "Thinking…" : sendBlocked ? "Unavailable" : "Send"}
             </Button>
           </form>
         </section>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSql } from "@/lib/db";
+import { getSql, noteDbConnectivitySuccess, prepareDbRetry } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,7 @@ export async function GET() {
   }
 
   try {
+    prepareDbRetry();
     const sql = getSql();
     await sql`select 1 as ok`;
 
@@ -36,6 +37,7 @@ export async function GET() {
       ) as present
     `;
 
+    noteDbConnectivitySuccess();
     return NextResponse.json({
       ok: true,
       service: "lexzim-db",

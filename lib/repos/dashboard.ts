@@ -14,11 +14,11 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { invoiceDetailPath } from "@/lib/billing/paths";
 import { getDb } from "@/lib/db";
 import {
   clients,
   feePayments,
-  intakes,
   invoices,
   matterEvents,
   matterTeam,
@@ -338,7 +338,7 @@ export async function listDashboardOverdueInvoices(
             ? r.clientTradingName || r.clientLegalName || "Unnamed company"
             : r.clientFullName || "Unnamed client"
           : "n/a",
-        href: `/billing/invoices/${r.invoice.id}`,
+        href: invoiceDetailPath(r.invoice.id),
       };
     })
     .filter(Boolean)
@@ -443,40 +443,3 @@ export async function listDashboardTrustAttention(firmId: string) {
       clientRows.filter((c) => c.flag === "negative").length,
   };
 }
-
-/** Open intakes for intake.view holders. */
-export async function listDashboardOpenIntakes(firmId: string, limit = 8) {
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: intakes.id,
-      prospectName: intakes.prospectName,
-      areaOfLaw: intakes.areaOfLaw,
-      opposingParty: intakes.opposingParty,
-      status: intakes.status,
-      updatedAt: intakes.updatedAt,
-      assigneeName: users.fullName,
-    })
-    .from(intakes)
-    .leftJoin(users, eq(users.id, intakes.assignedTo))
-    .where(
-      and(
-        eq(intakes.firmId, firmId),
-        inArray(intakes.status, ["open", "draft", "submitted"]),
-      ),
-    )
-    .orderBy(desc(intakes.updatedAt))
-    .limit(limit);
-
-  return rows.map((r) => ({
-    id: r.id,
-    prospectName: r.prospectName,
-    areaOfLaw: r.areaOfLaw,
-    opposingParty: r.opposingParty,
-    status: r.status,
-    assigneeName: r.assigneeName ?? null,
-    updatedAt: r.updatedAt.toISOString(),
-    href: `/intake/${r.id}`,
-  }));
-}
-

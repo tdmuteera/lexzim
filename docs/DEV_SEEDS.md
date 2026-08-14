@@ -82,8 +82,7 @@ Seeds into the pilot firm (idempotent via `firm_settings.phase3_demo_seeded_at`)
 - Deadline template + open matter deadline
 - Billable time + disbursement → fee invoice `P3-DEMO-001` + partial fee payment
 - Trust account + client trust receipt (separate from fees)
-- Open intake (Rutendo Chikwanda) with clear conflict check
-- Optional related-party fixture for conflict demos
+- Optional related-party fixture for demos
 
 Smoke: `npm run smoke:phase3` (see `docs/PHASE3_SMOKE_TEST.md`).
 

@@ -210,7 +210,7 @@ export function StaffView() {
 
   return (
     <Can permission="users.manage">
-      <div className="view">
+      <div className="view active scrollable" aria-label="Staff">
         <div className="toolbar">
           <div>
             <h1 style={{ margin: 0, fontSize: "1.15rem" }}>Lawyers &amp; Staff</h1>

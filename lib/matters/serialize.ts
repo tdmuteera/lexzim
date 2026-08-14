@@ -28,7 +28,6 @@ export function serializeMatter(
     closedAt: row.closedAt ? row.closedAt.toISOString() : null,
     nextHearingAt: row.nextHearingAt ? row.nextHearingAt.toISOString() : null,
     priority: row.priority,
-    conflictCheckStatus: row.conflictCheckStatus,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

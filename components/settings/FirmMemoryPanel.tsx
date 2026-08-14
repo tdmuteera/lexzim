@@ -190,116 +190,109 @@ export function FirmMemoryPanel() {
   }
 
   return (
-    <div className="panel-body" style={{ display: "grid", gap: "0.85rem" }}>
-      <div>
-        <h3 style={{ margin: 0 }}>Firm memory</h3>
-        <p className="muted" style={{ margin: "0.35rem 0 0" }}>
+    <div className="settings-form">
+      <div className="settings-form-head">
+        {stats ? (
+          <Badge tone={stats.embeddingsReady ? "open" : "pending"}>
+            {stats.embeddingsReady ? "Indexed" : "Empty"}
+          </Badge>
+        ) : null}
+        {loading ? <span className="muted">Loading…</span> : null}
+        <p className="settings-lede">
           Embed matter summaries, timeline notes, and document metadata for Matter Assist.
           Retrieval is always scoped to one matter (RBAC enforced). Full document text extraction
           is not included yet.
         </p>
+        {error ? (
+          <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
-
-      {loading ? <p className="muted">Loading…</p> : null}
-      {error ? (
-        <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
-          {error}
-        </p>
-      ) : null}
 
       {stats ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-          <Badge tone={stats.embeddingsReady ? "open" : "pending"}>
-            {stats.embeddingsReady ? "indexed" : "empty"}
-          </Badge>
-          <span className="muted" style={{ fontSize: "0.85rem" }}>
-            {stats.mattersIndexed}/{stats.matterCount} matters · {stats.embeddingCount} embeddings
-          </span>
+        <section className="settings-section">
+          <h3 className="settings-section-title">Index status</h3>
+          <div className="settings-stat-grid">
+            <div className="settings-stat">
+              <div className="settings-label">Matters indexed</div>
+              <div className="settings-stat-value">
+                {stats.mattersIndexed}/{stats.matterCount}
+              </div>
+            </div>
+            <div className="settings-stat">
+              <div className="settings-label">Embeddings</div>
+              <div className="settings-stat-value">{stats.embeddingCount}</div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">Re-index</h3>
+        <div className="settings-fields cols-2">
+          <label className="settings-field">
+            <span>Matter</span>
+            <select
+              className="input"
+              value={matterId}
+              onChange={(e) => setMatterId(e.target.value)}
+              disabled={busy || matters.length === 0}
+            >
+              {matters.length === 0 ? <option value="">No matters</option> : null}
+              {matters.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.matterNumber ? `${m.matterNumber} · ` : ""}
+                  {m.title}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      ) : null}
-
-      <label style={{ display: "grid", gap: "0.35rem", maxWidth: "28rem" }}>
-        <span className="muted" style={{ fontSize: "0.8rem" }}>
-          Matter
-        </span>
-        <select
-          value={matterId}
-          onChange={(e) => setMatterId(e.target.value)}
-          disabled={busy || matters.length === 0}
-          style={{
-            padding: "0.45rem 0.6rem",
-            border: "1px solid var(--border-2)",
-            borderRadius: "var(--radius-sm)",
-            background: "var(--bg-1)",
-            color: "var(--text)",
-          }}
-        >
-          {matters.length === 0 ? <option value="">No matters</option> : null}
-          {matters.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.matterNumber ? `${m.matterNumber} · ` : ""}
-              {m.title}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        <Button
-          variant="gold"
-          size="sm"
-          disabled={busy || !matterId}
-          onClick={() => void runReindex("reindex_matter")}
-        >
-          Re-index matter
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => void runReindex("reindex_all")}
-        >
-          Re-index all (MP)
-        </Button>
-      </div>
-
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "end" }}>
-        <label style={{ display: "grid", gap: "0.35rem", flex: 1, minWidth: "12rem" }}>
-          <span className="muted" style={{ fontSize: "0.8rem" }}>
-            Test retrieve query
-          </span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        <div className="settings-actions">
+          <Button
+            variant="gold"
+            size="sm"
+            disabled={busy || !matterId}
+            onClick={() => void runReindex("reindex_matter")}
+          >
+            Re-index matter
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             disabled={busy}
-            style={{
-              padding: "0.45rem 0.6rem",
-              border: "1px solid var(--border-2)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--bg-1)",
-              color: "var(--text)",
-            }}
-          />
-        </label>
-        <Button variant="outline" size="sm" disabled={busy || !matterId} onClick={() => void runRetrieve()}>
-          Retrieve
-        </Button>
-      </div>
+            onClick={() => void runReindex("reindex_all")}
+          >
+            Re-index all (MP)
+          </Button>
+        </div>
+      </section>
 
-      {retrieveOut ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: "0.75rem",
-            background: "var(--bg-3)",
-            borderRadius: "var(--radius-sm)",
-            fontSize: "0.78rem",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {retrieveOut}
-        </pre>
-      ) : null}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Test retrieval</h3>
+        <div className="settings-inline-form">
+          <label className="settings-field" style={{ flex: 1, minWidth: "12rem" }}>
+            <span>Test retrieve query</span>
+            <input
+              className="input"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || !matterId}
+            onClick={() => void runRetrieve()}
+          >
+            Retrieve
+          </Button>
+        </div>
+
+        {retrieveOut ? <pre className="settings-pre">{retrieveOut}</pre> : null}
+      </section>
     </div>
   );
 }

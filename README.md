@@ -21,7 +21,7 @@ LexZim is a hosted multi-tenant legal practice management web SaaS for Zimbabwe 
 | Data/Auth/Files | Supabase (Postgres, Auth, Storage, pgvector) |
 | ORM | Drizzle |
 | AI | Gemini / Claude / OpenAI (BYO or managed), RAG, firm memory, Matter Assist |
-| Practice ops | Calendar, deadlines, time/billing, trust, intake/conflicts, reports |
+| Practice ops | Calendar, deadlines, time/billing, trust, reports |
 | Sell & Ship | Licences, editions/seats, onboarding, Help, sales/ops docs |
 | Portal & Scale | Limited client portal, privacy tooling, ops/admin, embeddings jobs |
 | State/UI | Zustand + TPfigu CSS port |
@@ -74,7 +74,7 @@ npm run db:seed:phase3-demo
 | `npm run db:seed:rbac` | Seed roles/permissions/matrix |
 | `npm run db:seed:dev-users` | Dev seed users (`DEV_SEED_ENABLED=1`) |
 | `npm run db:seed:phase1-demo` | Zimbabwe demo clients/matters (`DEV_SEED_ENABLED=1`) |
-| `npm run db:seed:phase3-demo` | Practice-ops demo (calendar/billing/trust/intake) |
+| `npm run db:seed:phase3-demo` | Practice-ops demo (calendar/billing/trust) |
 | `npm run db:seed:demo-firm` | Demo tenant row (`DEMO_SEED_ENABLED=1`) |
 | `npm run licence:issue` | Issue / renew firm licence |
 | `npm run smoke:phase0` | Phase 0 smoke |

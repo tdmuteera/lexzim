@@ -404,10 +404,10 @@ export const aiSettings = pgTable("ai_settings", {
     .references(() => firms.id, { onDelete: "cascade" }),
   /** gemini | claude | openai */
   providerDefault: text("provider_default").notNull().default("gemini"),
-  /** e.g. gemini-2.0-flash */
-  modelDefault: text("model_default").notNull().default("gemini-2.0-flash"),
+    /** e.g. gemini-3.6-flash */
+    modelDefault: text("model_default").notNull().default("gemini-3.6-flash"),
   /** e.g. text-embedding-004 */
-  embeddingsModel: text("embeddings_model").notNull().default("text-embedding-004"),
+    embeddingsModel: text("embeddings_model").notNull().default("gemini-embedding-001"),
   /** Default OFF. Allowlisted web lookup only when enabled. */
   webLookupEnabled: boolean("web_lookup_enabled").notNull().default(false),
   /** auto = legal research prefers Claude when key present, else Gemini Flash. manual = always providerDefault. */
@@ -816,6 +816,8 @@ export const trustAccounts = pgTable(
     name: text("name").notNull(),
     currency: text("currency").notNull().default("USD"),
     accountRef: text("account_ref"),
+    /** bank = master trust bank; vault = master trust cash held physically */
+    accountKind: text("account_kind").notNull().default("bank"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -823,6 +825,7 @@ export const trustAccounts = pgTable(
   (t) => [
     index("trust_accounts_firm_id_idx").on(t.firmId),
     index("trust_accounts_firm_active_idx").on(t.firmId, t.isActive),
+    index("trust_accounts_firm_kind_idx").on(t.firmId, t.accountKind),
   ],
 );
 
@@ -860,6 +863,8 @@ export const trustLedgerEntries = pgTable(
   ],
 );
 
+// Retained so the schema still matches the live database. The Intake & Conflicts
+// module was removed; no application code reads or writes these two tables.
 export const intakes = pgTable(
   "intakes",
   {
@@ -1225,6 +1230,320 @@ export const aiJobs = pgTable(
   ],
 );
 
+// --- Phase 6 Finance desk & HR (additive; billing/trust rows preserved). ---
+
+/** Vault → bank trust movement audit (cash trust banked into master trust bank). */
+export const trustVaultBankIns = pgTable(
+  "trust_vault_bank_ins",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    vaultAccountId: uuid("vault_account_id")
+      .notNull()
+      .references(() => trustAccounts.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => trustAccounts.id, { onDelete: "restrict" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    reference: text("reference"),
+    narrative: text("narrative"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trust_vault_bank_ins_firm_idx").on(t.firmId),
+    index("trust_vault_bank_ins_vault_idx").on(t.vaultAccountId),
+    index("trust_vault_bank_ins_occurred_idx").on(t.firmId, t.occurredAt),
+  ],
+);
+
+/** Physical vault count worksheet (system vs counted cash). */
+export const trustVaultCounts = pgTable(
+  "trust_vault_counts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    vaultAccountId: uuid("vault_account_id")
+      .notNull()
+      .references(() => trustAccounts.id, { onDelete: "restrict" }),
+    countedAt: timestamp("counted_at", { withTimezone: true }).notNull(),
+    systemBalanceCents: integer("system_balance_cents").notNull(),
+    countedBalanceCents: integer("counted_balance_cents").notNull(),
+    varianceCents: integer("variance_cents").notNull(),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trust_vault_counts_firm_idx").on(t.firmId),
+    index("trust_vault_counts_vault_idx").on(t.vaultAccountId),
+  ],
+);
+
+/**
+ * Trust or business bank reconciliation run (three-way trust bank, vault count, business bank).
+ * statement_balance_cents = external statement or physical count; ledger_balance_cents = book.
+ */
+export const financeReconciliationRuns = pgTable(
+  "finance_reconciliation_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    /** trust_bank | trust_vault | business_bank */
+    reconType: text("recon_type").notNull(),
+    periodYear: integer("period_year").notNull(),
+    periodMonth: integer("period_month").notNull(),
+    trustAccountId: uuid("trust_account_id").references(() => trustAccounts.id, {
+      onDelete: "set null",
+    }),
+    bankAccountLabel: text("bank_account_label"),
+    statementBalanceCents: integer("statement_balance_cents").notNull(),
+    ledgerBalanceCents: integer("ledger_balance_cents").notNull(),
+    varianceCents: integer("variance_cents").notNull(),
+    /** draft | completed */
+    status: text("status").notNull().default("draft"),
+    notes: text("notes"),
+    overrideReason: text("override_reason"),
+    completedBy: uuid("completed_by").references(() => users.id, { onDelete: "set null" }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_recon_runs_firm_period_idx").on(
+      t.firmId,
+      t.reconType,
+      t.periodYear,
+      t.periodMonth,
+    ),
+    index("finance_recon_runs_firm_status_idx").on(t.firmId, t.status),
+  ],
+);
+
+/** Firm operating expenses (never trust). Categories validated in app layer. */
+export const firmExpenses = pgTable(
+  "firm_expenses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    expenseDate: timestamp("expense_date", { withTimezone: true }).notNull(),
+    category: text("category").notNull(),
+    payee: text("payee").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    paymentMethod: text("payment_method"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("firm_expenses_firm_date_idx").on(t.firmId, t.expenseDate),
+    index("firm_expenses_firm_category_idx").on(t.firmId, t.category),
+  ],
+);
+
+/** Business operating cashbook (firm money in/out; never trust). */
+export const businessCashbookEntries = pgTable(
+  "business_cashbook_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    entryDate: timestamp("entry_date", { withTimezone: true }).notNull(),
+    /** in | out */
+    entryType: text("entry_type").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    reference: text("reference"),
+    bankAccountLabel: text("bank_account_label"),
+    expenseId: uuid("expense_id").references(() => firmExpenses.id, { onDelete: "set null" }),
+    feePaymentId: uuid("fee_payment_id").references(() => feePayments.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("business_cashbook_firm_date_idx").on(t.firmId, t.entryDate),
+    index("business_cashbook_firm_type_idx").on(t.firmId, t.entryType),
+  ],
+);
+
+/** Month-end period lock for finance postings (UTC year-month). */
+export const financePeriodLocks = pgTable(
+  "finance_period_locks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    periodYear: integer("period_year").notNull(),
+    periodMonth: integer("period_month").notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }).defaultNow().notNull(),
+    lockedBy: uuid("locked_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    unique("finance_period_locks_firm_period_uid").on(
+      t.firmId,
+      t.periodYear,
+      t.periodMonth,
+    ),
+    index("finance_period_locks_firm_idx").on(t.firmId),
+  ],
+);
+
+/** Light firm asset register (no depreciation engine). */
+export const firmAssets = pgTable(
+  "firm_assets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    acquiredDate: timestamp("acquired_date", { withTimezone: true }).notNull(),
+    costCents: integer("cost_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("firm_assets_firm_idx").on(t.firmId)],
+);
+
+/** HR staff record (login user optional for non-system staff). */
+export const hrStaffProfiles = pgTable(
+  "hr_staff_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    fullName: text("full_name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    jobTitle: text("job_title"),
+    department: text("department"),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    endDate: timestamp("end_date", { withTimezone: true }),
+    emergencyContactName: text("emergency_contact_name"),
+    emergencyContactPhone: text("emergency_contact_phone"),
+    isActive: boolean("is_active").notNull().default(true),
+    /** Manual annual leave entitlement (days per year). No accrual engine. */
+    annualLeaveEntitlementDays: integer("annual_leave_entitlement_days"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("hr_staff_profiles_firm_idx").on(t.firmId),
+    index("hr_staff_profiles_firm_active_idx").on(t.firmId, t.isActive),
+    unique("hr_staff_profiles_firm_user_uid").on(t.firmId, t.userId),
+  ],
+);
+
+/** Employment contract metadata (file path optional until HR doc upload in P6-12). */
+export const hrContracts = pgTable(
+  "hr_contracts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    staffProfileId: uuid("staff_profile_id")
+      .notNull()
+      .references(() => hrStaffProfiles.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    startDate: timestamp("start_date", { withTimezone: true }).notNull(),
+    endDate: timestamp("end_date", { withTimezone: true }),
+    /** draft | active | expired | terminated */
+    status: text("status").notNull().default("active"),
+    contractDocumentName: text("contract_document_name"),
+    contractDocumentPath: text("contract_document_path"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("hr_contracts_firm_idx").on(t.firmId),
+    index("hr_contracts_staff_idx").on(t.staffProfileId),
+  ],
+);
+
+export const hrLeaveTypes = pgTable(
+  "hr_leave_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    isPaid: boolean("is_paid").notNull().default(true),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("hr_leave_types_firm_code_uid").on(t.firmId, t.code),
+    index("hr_leave_types_firm_idx").on(t.firmId),
+  ],
+);
+
+export const hrLeaveRequests = pgTable(
+  "hr_leave_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    staffProfileId: uuid("staff_profile_id")
+      .notNull()
+      .references(() => hrStaffProfiles.id, { onDelete: "cascade" }),
+    leaveTypeId: uuid("leave_type_id")
+      .notNull()
+      .references(() => hrLeaveTypes.id, { onDelete: "restrict" }),
+    fromDate: timestamp("from_date", { withTimezone: true }).notNull(),
+    toDate: timestamp("to_date", { withTimezone: true }).notNull(),
+    /** requested | approved | rejected | cancelled */
+    status: text("status").notNull().default("requested"),
+    approverUserId: uuid("approver_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    notes: text("notes"),
+    decisionNotes: text("decision_notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("hr_leave_requests_firm_idx").on(t.firmId),
+    index("hr_leave_requests_staff_idx").on(t.staffProfileId),
+    index("hr_leave_requests_firm_status_idx").on(t.firmId, t.status),
+    index("hr_leave_requests_dates_idx").on(t.firmId, t.fromDate, t.toDate),
+  ],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -1273,4 +1592,15 @@ export const schema = {
   staffNotifications,
   staffSessions,
   aiJobs,
+  trustVaultBankIns,
+  trustVaultCounts,
+  financeReconciliationRuns,
+  firmExpenses,
+  businessCashbookEntries,
+  financePeriodLocks,
+  firmAssets,
+  hrStaffProfiles,
+  hrContracts,
+  hrLeaveTypes,
+  hrLeaveRequests,
 };

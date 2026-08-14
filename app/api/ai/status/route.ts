@@ -21,16 +21,9 @@ export async function GET(request: Request) {
     const settings = await getAiSettings(firmId);
     const connectivity = await getAiConnectivityReport({ firmId, probe });
 
-    const canSendLegalResearch =
-      connectivity.canSendLegalResearch && pack.embeddingsReady;
+    const canSendLegalResearch = connectivity.canSendLegalResearch;
 
     let sendBlockedReason = connectivity.sendBlockedReason;
-    if (connectivity.canSendLegalResearch && !pack.embeddingsReady) {
-      sendBlockedReason =
-        pack.systemChunkCount === 0
-          ? "Knowledge pack is empty. Re-ingest under Settings → Knowledge pack before Legal Research."
-          : "Embeddings are not ready. Embed the knowledge pack after GEMINI_API_KEY is set.";
-    }
 
     return jsonOk({
       keyStatus: connectivity.keyStatus,

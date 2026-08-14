@@ -10,10 +10,18 @@ export const TRUST_ENTRY_TYPES = [
 
 export type TrustEntryType = (typeof TRUST_ENTRY_TYPES)[number];
 
+export const TRUST_ACCOUNT_KINDS = ["bank", "vault"] as const;
+export type TrustAccountKind = (typeof TRUST_ACCOUNT_KINDS)[number];
+
+export function isTrustAccountKind(value: unknown): value is TrustAccountKind {
+  return typeof value === "string" && (TRUST_ACCOUNT_KINDS as readonly string[]).includes(value);
+}
+
 export type TrustAccountInput = {
   name: string;
   currency: string;
   accountRef: string | null;
+  accountKind: TrustAccountKind;
   isActive: boolean;
 };
 
@@ -82,7 +90,7 @@ export function isTrustEntryType(value: unknown): value is TrustEntryType {
 
 export function parseTrustAccountInput(
   body: unknown,
-  defaults?: { currency?: string },
+  defaults?: { currency?: string; accountKind?: TrustAccountKind },
 ): TrustAccountInput {
   if (!body || typeof body !== "object") {
     throw new AuthError("validation", "Invalid trust account payload.");
@@ -97,6 +105,9 @@ export function parseTrustAccountInput(
       trimOrNull(raw.currency) ??
       (defaults?.currency ? defaults.currency : "USD"),
     accountRef: trimOrNull(raw.accountRef),
+    accountKind: isTrustAccountKind(raw.accountKind)
+      ? raw.accountKind
+      : (defaults?.accountKind ?? "bank"),
     isActive: raw.isActive === false ? false : true,
   };
 }

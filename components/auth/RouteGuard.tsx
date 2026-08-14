@@ -9,10 +9,11 @@ import { getRoutePermission } from "@/lib/nav";
 /** Client-side route guard (hydration + client navigations). */
 export function RouteGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { can, isLoading } = useAuth();
+  const { can, isLoading, user } = useAuth();
   const permission = getRoutePermission(pathname);
 
-  if (isLoading) {
+  // If we already have a session, do not block module paint on a background refresh.
+  if (isLoading && !user) {
     return (
       <div className="muted" style={{ padding: "1.5rem" }}>
         Loading permissions…

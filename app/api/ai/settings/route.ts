@@ -112,9 +112,9 @@ export async function GET() {
         embeddings:
           "Claude has no embeddings API: LexZim falls back to Gemini embeddings when a Gemini key is present. OpenAI embeddings use dimensions=768 to match the database.",
         routing:
-          "Auto (default): legal research uses Claude when a Claude key is present, otherwise Gemini Flash. Other modes use the provider selected below. Manual: all modes use the selected provider.",
+          "To drive chat with Claude: paste a Claude key (ANTHROPIC_API_KEY in .env.local, or Settings → Claude BYO), set Default provider to Claude, and set Routing to Manual. Auto still prefers Claude for legal questions when a Claude key exists.",
         safety:
-          "Web lookup stays off unless enabled. The AI disclaimer cannot be disabled. Matter context can be turned off firm-wide.",
+          "Web lookup stays off unless enabled. Matter context can be turned off firm-wide.",
         keyMode:
           "Direct: firm BYO or server managed keys. LexZim Proxy: Firm-edition licence token; master keys stay on the proxy (never in the browser).",
       },

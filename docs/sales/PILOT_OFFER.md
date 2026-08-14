@@ -4,7 +4,7 @@ Structured offer for evaluation firms (for example a first commercial pilot such
 
 ## Pilot goal
 
-Prove that the firm can run daily practice on hosted LexZim: matters, diary, intake/conflicts, billing, trust, and optional AI, with a clear exit path via export.
+Prove that the firm can run daily practice on hosted LexZim: matters, diary, billing, trust, and optional AI, with a clear exit path via export.
 
 ## What the pilot includes
 
@@ -44,10 +44,9 @@ Example checklist (edit per firm):
 1. Managing Partner and at least one other role signed in successfully
 2. Firm profile and currency set
 3. At least one real or anonymised matter opened end to end (documents or time as relevant)
-4. One conflict check run on intake (or documented reason if intake unused)
-5. Fee note **or** trust entry demonstrated without mixing the two
-6. One firm export downloaded and stored securely by the firm
-7. AI used once with a verified, non-filed research question (optional if AI declined)
+4. Fee note **or** trust entry demonstrated without mixing the two
+5. One firm export downloaded and stored securely by the firm
+6. AI used once with a verified, non-filed research question (optional if AI declined)
 
 ## Honesty commitments (LexZim)
 
@@ -61,7 +60,7 @@ Example checklist (edit per firm):
 
 1. Access URL, logins, roles
 2. Firm profile and licence screen
-3. Create client / matter or intake path
+3. Create client / matter path
 4. Calendar and reminders
 5. Billing vs trust (five-minute contrast)
 6. AI settings and safety defaults (web lookup off)

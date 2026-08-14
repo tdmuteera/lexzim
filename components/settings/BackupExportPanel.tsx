@@ -133,39 +133,27 @@ export function BackupExportPanel() {
   }
 
   return (
-    <>
-      <div className="panel-head">
-        <h3>Firm data export</h3>
-      </div>
-      <div className="panel-body" style={{ display: "grid", gap: "1rem" }}>
-        {loading ? <p className="muted">Loading…</p> : null}
+    <div className="settings-form">
+      <div className="settings-form-head">
+        {loading ? <span className="muted">Loading…</span> : null}
         {error ? (
           <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
             {error}
           </p>
         ) : null}
+      </div>
 
-        <div>
-          <div className="muted" style={{ fontSize: "0.8rem" }}>
-            Last export
+      <section className="settings-section">
+        <h3 className="settings-section-title">Firm data export</h3>
+        <div className="settings-summary">
+          <div className="settings-summary-row">
+            <span className="settings-label">Last export</span>
+            <span className="settings-value">{formatDateTime(lastExportAt)}</span>
           </div>
-          <div style={{ fontWeight: 600 }}>{formatDateTime(lastExportAt)}</div>
         </div>
 
-        <div
-          style={{
-            padding: "0.85rem 1rem",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid rgba(168,83,69,0.28)",
-            background: "var(--danger-bg)",
-            color: "var(--danger)",
-            fontSize: "0.85rem",
-            lineHeight: 1.45,
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.35rem" }}>
-            Confidential data warning
-          </strong>
+        <div className="settings-callout danger">
+          <strong>Confidential data warning</strong>
           This download includes client names, matter details, timeline notes, and storage paths.
           Keep the ZIP offline or in an encrypted store. Do not email it without encryption. LexZim
           does not put API keys into the archive.
@@ -179,27 +167,18 @@ export function BackupExportPanel() {
           </ul>
         ) : null}
 
-        <label
-          style={{
-            display: "flex",
-            gap: "0.55rem",
-            alignItems: "flex-start",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-          }}
-        >
+        <label className="settings-check">
           <input
             type="checkbox"
             checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)}
-            style={{ marginTop: "0.2rem" }}
           />
           <span>
             I understand this archive contains confidential firm data and I will store it securely.
           </span>
         </label>
 
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="settings-actions">
           <Button
             variant="gold"
             onClick={() => void onExport()}
@@ -212,41 +191,29 @@ export function BackupExportPanel() {
           </Button>
         </div>
 
-        <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+        <p className="settings-hint">
           Platform backups (Supabase PITR / daily backups and Railway redeploys) are separate from
           this firm export. See docs/BACKUP.md and docs/cloud/RETENTION.md. Desktop/local wipe is
           not applicable (hosted SaaS only).
         </p>
+      </section>
 
-        <div
-          style={{
-            marginTop: "0.5rem",
-            paddingTop: "1rem",
-            borderTop: "1px solid var(--border)",
-            display: "grid",
-            gap: "0.65rem",
-          }}
-        >
-          <strong style={{ fontSize: "0.9rem" }}>Deactivate firm (suspend)</strong>
-          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Soft-disable: blocks staff login. Export first. Permanent purge is LexZim ops only
-            (typed DELETE FIRM).
-          </p>
-          <label style={{ fontSize: "0.85rem" }}>
-            Type firm slug to confirm{firmSlug ? ` (${firmSlug})` : ""}
-            <input
-              value={confirmSlug}
-              onChange={(e) => setConfirmSlug(e.target.value)}
-              style={{
-                display: "block",
-                width: "100%",
-                maxWidth: "20rem",
-                marginTop: "0.35rem",
-                padding: "0.45rem 0.6rem",
-              }}
-              disabled={deactivating || !firmSlug}
-            />
-          </label>
+      <div className="settings-danger-zone">
+        <strong className="settings-section-title">Deactivate firm (suspend)</strong>
+        <p className="settings-hint">
+          Soft-disable: blocks staff login. Export first. Permanent purge is LexZim ops only
+          (typed DELETE FIRM).
+        </p>
+        <label className="settings-field">
+          <span>Type firm slug to confirm{firmSlug ? ` (${firmSlug})` : ""}</span>
+          <input
+            className="input"
+            value={confirmSlug}
+            onChange={(e) => setConfirmSlug(e.target.value)}
+            disabled={deactivating || !firmSlug}
+          />
+        </label>
+        <div className="settings-actions">
           <Button
             variant="outline"
             onClick={() => void onDeactivate()}
@@ -256,6 +223,6 @@ export function BackupExportPanel() {
           </Button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -3,7 +3,7 @@
  * EVERY firm-scoped query MUST filter firmId.
  * Fee payments are separate from trust ledger. Never auto-post to trust.
  */
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type {
   CreateInvoiceInput,
   DisbursementInput,
@@ -390,7 +390,6 @@ export async function sumFeePayments(firmId: string, invoiceId: string): Promise
   return rows[0]?.total ?? 0;
 }
 
-/** One query: invoice_id → paid cents for a firm (pilot-safe vs N+1). */
 export async function sumFeePaymentsByInvoice(
   firmId: string,
 ): Promise<Map<string, number>> {
@@ -408,6 +407,35 @@ export async function sumFeePaymentsByInvoice(
     map.set(r.invoiceId, Number(r.total) || 0);
   }
   return map;
+}
+
+/** Fee payments received in a date range (P&L income, cash basis). */
+export async function sumFeePaymentsInPeriod(
+  firmId: string,
+  from: Date,
+  to: Date,
+): Promise<Array<{ currency: string; totalCents: number; paymentCount: number }>> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      currency: feePayments.currency,
+      total: sql<number>`coalesce(sum(${feePayments.amountCents}), 0)::int`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(feePayments)
+    .where(
+      and(
+        eq(feePayments.firmId, firmId),
+        gte(feePayments.paidAt, from),
+        lte(feePayments.paidAt, to),
+      ),
+    )
+    .groupBy(feePayments.currency);
+  return rows.map((r) => ({
+    currency: r.currency,
+    totalCents: Number(r.total) || 0,
+    paymentCount: Number(r.count) || 0,
+  }));
 }
 
 export async function countUnbilledTimeEntries(firmId: string, matterId: string) {

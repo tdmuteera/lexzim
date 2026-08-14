@@ -7,7 +7,6 @@ export type UserDocSlug =
   | "daily"
   | "billing"
   | "ai"
-  | "intake"
   | "faq";
 
 export type UserDocMeta = {
@@ -58,13 +57,6 @@ export const USER_DOCS: UserDocMeta[] = [
       "Zimbabwe-grounded AI. Web lookup off by default. Verify before you rely on answers.",
     fileName: "AI_Assistant_Guide.md",
     appHref: "/settings?section=ai",
-  },
-  {
-    slug: "intake",
-    title: "Intake and conflicts",
-    summary: "Prospect capture, conflict search, override notes, and conversion.",
-    fileName: "Intake_Conflicts_Guide.md",
-    appHref: "/intake",
   },
   {
     slug: "faq",

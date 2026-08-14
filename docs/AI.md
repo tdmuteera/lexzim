@@ -278,7 +278,7 @@ Does not delete KB embeddings. Privacy template: `docs/cloud/PRIVACY.md`.
 
 ## Status
 
-**PHASE 2 COMPLETE — ready for Phase 3 prompts (Calendar, Billing & Trust, Intake & Conflicts, Reporting)**
+**PHASE 2 COMPLETE. Ready for Phase 3 prompts (Calendar, Billing & Trust, Reporting)**
 
 Smoke: `docs/PHASE2_SMOKE_TEST.md` / `npm run smoke:phase2`  
 Handoff: `docs/PHASE3_READY_CHECKLIST.md`

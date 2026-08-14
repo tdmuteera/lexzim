@@ -103,95 +103,116 @@ export function AboutPanel() {
 
   return (
     <Can permission="settings.manage">
-      <div style={{ display: "grid", gap: "1rem", maxWidth: "42rem" }}>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>About</h2>
+      <div className="settings-form">
+        <div className="settings-form-head">
           {data ? <Badge tone="open">v{data.app.version}</Badge> : null}
+          {loading ? <span className="muted">Loading…</span> : null}
+          <p className="settings-lede">
+            App version, firm licence, and knowledge pack for this deployment. LexZim is hosted
+            SaaS: there is no desktop updater.
+          </p>
+          {error ? (
+            <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem", width: "100%" }}>
+              {error}
+            </p>
+          ) : null}
         </div>
 
-        <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-          App version, firm licence, and knowledge pack for this deployment. LexZim is hosted SaaS:
-          there is no desktop updater.
-        </p>
-
-        {error ? (
-          <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
-        ) : null}
-
-        {loading ? <p className="muted">Loading…</p> : null}
-
         {data && !loading ? (
-          <div
-            style={{
-              display: "grid",
-              gap: "0.75rem",
-              padding: "0.85rem 1rem",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--bg-1)",
-              fontSize: "0.9rem",
-            }}
-          >
-            <div>
-              <span className="muted">Product: </span>
-              <strong>{data.app.name}</strong>
-            </div>
-            <div>
-              <span className="muted">App version: </span>
-              {data.app.version}
-              {data.app.channel ? (
-                <span className="muted"> ({data.app.channel})</span>
+          <>
+            <section className="settings-section">
+              <h3 className="settings-section-title">Deployment</h3>
+              <div className="settings-summary">
+                <div className="settings-summary-row">
+                  <span className="settings-label">Product</span>
+                  <span className="settings-value">{data.app.name}</span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">App version</span>
+                  <span className="settings-value">
+                    {data.app.version}
+                    {data.app.channel ? ` (${data.app.channel})` : ""}
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Firm</span>
+                  <span className="settings-value">
+                    {data.firm.name} ({data.firm.slug})
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Licence & usage</h3>
+              <div className="settings-summary">
+                <div className="settings-summary-row">
+                  <span className="settings-label">Edition</span>
+                  <span className="settings-value" style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                    <span style={{ textTransform: "capitalize" }}>{data.licence.edition}</span>
+                    <Badge tone={data.licence.isActive ? "open" : "pending"}>
+                      {data.licence.status}
+                    </Badge>
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Seats</span>
+                  <span className="settings-value">
+                    {data.usage.seatsUsed} / {data.usage.seats}
+                    {data.usage.aiProxyEligible ? " · AI proxy eligible" : ""}
+                  </span>
+                </div>
+                <div className="settings-summary-row">
+                  <span className="settings-label">Licence expires</span>
+                  <span className="settings-value">
+                    {data.licence.expiresAt ? formatDateTime(data.licence.expiresAt) : "No expiry"}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Knowledge pack</h3>
+              <div className="settings-stat-grid">
+                <div className="settings-stat">
+                  <div className="settings-label">Pack version</div>
+                  <div className="settings-stat-value">{data.knowledge.packVersion}</div>
+                </div>
+                <div className="settings-stat">
+                  <div className="settings-label">KB chunks</div>
+                  <div className="settings-stat-value">{data.knowledge.systemChunkCount}</div>
+                </div>
+                <div className="settings-stat">
+                  <div className="settings-label">Embeddings</div>
+                  <div className="settings-stat-value">{data.knowledge.embeddingCount}</div>
+                </div>
+                <div className="settings-stat">
+                  <div className="settings-label">Status</div>
+                  <div className="settings-stat-value">
+                    <Badge tone={data.knowledge.embeddingsReady ? "open" : "pending"}>
+                      {data.knowledge.embeddingsReady ? "Ready" : "Not ready"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              {data.knowledge.quality ? (
+                <p className="settings-hint">Quality: {data.knowledge.quality}</p>
               ) : null}
-            </div>
-            <div>
-              <span className="muted">Firm: </span>
-              {data.firm.name}{" "}
-              <span className="muted">({data.firm.slug})</span>
-            </div>
-            <div>
-              <span className="muted">Edition: </span>
-              <strong style={{ textTransform: "capitalize" }}>{data.licence.edition}</strong>
-              {" · "}
-              <Badge tone={data.licence.isActive ? "open" : "pending"}>
-                {data.licence.status}
-              </Badge>
-            </div>
-            <div>
-              <span className="muted">Seats: </span>
-              {data.usage.seatsUsed} / {data.usage.seats}
-              {data.usage.aiProxyEligible ? " · AI proxy eligible" : ""}
-            </div>
-            <div>
-              <span className="muted">Licence expires: </span>
-              {data.licence.expiresAt
-                ? formatDateTime(data.licence.expiresAt)
-                : "No expiry"}
-            </div>
-            <div>
-              <span className="muted">Knowledge pack: </span>
-              {data.knowledge.packVersion}
-              {data.knowledge.embeddingsReady ? " · embeddings ready" : " · embeddings not ready"}
-            </div>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              KB chunks: {data.knowledge.systemChunkCount} · embeddings:{" "}
-              {data.knowledge.embeddingCount}
-              {data.knowledge.quality ? ` · quality: ${data.knowledge.quality}` : ""}
-            </div>
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+            </section>
+
+            <p className="settings-hint">
               Release notes: repo file <code>{data.app.releaseNotes}</code>. Deploy checklist:{" "}
               <code>{data.app.releasingDoc}</code>.
             </p>
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              {data.note} Export remains available if a licence expires.
-            </p>
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+            <p className="settings-hint">{data.note} Export remains available if a licence expires.</p>
+            <p className="settings-hint">
               Diagnostics include version, firm id, and edition only. No matter contents. Nothing is
               uploaded automatically; you choose whether to attach the file to a support ticket.
             </p>
-          </div>
+          </>
         ) : null}
 
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="settings-actions">
           <Button variant="ghost" onClick={() => void load()} disabled={loading}>
             Refresh
           </Button>

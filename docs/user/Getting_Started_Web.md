@@ -28,7 +28,7 @@ Typical first steps:
 2. **Settings → Licence**: confirm trial or paid edition and seat count.
 3. **Lawyers & Staff**: invite colleagues within your seat limit.
 4. **Settings → AI**: choose a provider if your firm will use the assistant. Web lookup stays **off** unless you turn it on.
-5. Create a **client** and a **matter**, or complete an intake with a conflict check.
+5. Create a **client** and a **matter**.
 6. **Settings → Backup & Export**: run an export when you are ready, or acknowledge that you will schedule one.
 
 ## Roles you will see
@@ -55,7 +55,6 @@ Menus hide items you are not allowed to open. That is normal.
 - Day-to-day practice: `Daily_Lawyer_Guide.md`
 - Fees and trust: `Billing_Trust_Quickstart.md`
 - AI: `AI_Assistant_Guide.md`
-- New matters from prospects: `Intake_Conflicts_Guide.md`
 - Common questions: `FAQ.md`
 
 In the app, open **Help** from the sidebar for the same guides.

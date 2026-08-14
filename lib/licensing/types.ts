@@ -7,7 +7,6 @@ export type LicenceStatus = "active" | "expired" | "revoked";
 export type LicenceFeatureKey =
   | "trust"
   | "reports"
-  | "intake"
   | "billing"
   | "calendar"
   | "ai"
@@ -20,7 +19,6 @@ export const LICENCE_EDITIONS: LicenceEdition[] = ["trial", "solo", "firm"];
 export const LICENCE_FEATURE_KEYS: LicenceFeatureKey[] = [
   "trust",
   "reports",
-  "intake",
   "billing",
   "calendar",
   "ai",
@@ -62,7 +60,6 @@ export const EDITION_MATRIX: Record<LicenceEdition, EditionLimits> = {
     features: {
       trust: true,
       reports: true,
-      intake: true,
       billing: true,
       calendar: true,
       ai: true,
@@ -77,7 +74,6 @@ export const EDITION_MATRIX: Record<LicenceEdition, EditionLimits> = {
     features: {
       trust: true,
       reports: true,
-      intake: true,
       billing: true,
       calendar: true,
       ai: true,
@@ -92,7 +88,6 @@ export const EDITION_MATRIX: Record<LicenceEdition, EditionLimits> = {
     features: {
       trust: true,
       reports: true,
-      intake: true,
       billing: true,
       calendar: true,
       ai: true,

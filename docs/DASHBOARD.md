@@ -1,6 +1,6 @@
 # Dashboard (P3-13)
 
-Home after login. Firm-scoped; matter widgets respect `matters.view_all`. Money and intake widgets are **permission-gated on the server** (null when the session lacks the permission).
+Home after login. Firm-scoped; matter widgets respect `matters.view_all`. Money widgets are **permission-gated on the server** (null when the session lacks the permission).
 
 ## Core widgets (everyone with `dashboard.view`)
 
@@ -21,9 +21,8 @@ Home after login. Firm-scoped; matter widgets respect `matters.view_all`. Money 
 | Hearings & deadlines / reminders | `calendar.view` | From reminders engine (procedures + matter deadlines + calendar hearings) |
 | Overdue fee invoices | `billing.view` | Fee AR only. Label: Billing (fees) |
 | Trust attention | `trust.view` | Trust balances / flags only. Label: Trust (client money) |
-| Open intakes | `intake.view` | Prospects awaiting conversion |
 
-Accounts users see billing/trust widgets but not calendar or intake. Junior/secretary see calendar/intake but not money.
+Accounts users see billing/trust widgets but not calendar. Junior/secretary see calendar but not money.
 
 ## API
 

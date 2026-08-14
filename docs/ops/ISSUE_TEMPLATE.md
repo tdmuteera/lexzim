@@ -58,7 +58,6 @@ Actual:
 - [ ] Calendar / reminders
 - [ ] Billing (fees)
 - [ ] Trust
-- [ ] Intake / conflicts
 - [ ] AI / RAG
 - [ ] Export / backup
 - [ ] Other:

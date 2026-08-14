@@ -19,7 +19,7 @@ Operational steps to stand up and run a LexZim pilot on Railway. Web only. No de
 3. **Settings → Licence**: confirm edition and seats.
 4. **Lawyers & Staff**: invite users within seat limit.
 5. **Settings → AI**: keys and provider; leave web lookup **off** unless agreed.
-6. Walk one path: client + matter **or** intake → conflict → convert.
+6. Walk one path: create a client, then open a matter.
 7. Show Billing vs Trust (fee note ≠ trust receipt).
 8. **Settings → Backup & Export**: run one export into the firm’s custody.
 9. **Settings → About**: note version; optionally **Download diagnostics** (safe JSON, no matter contents).

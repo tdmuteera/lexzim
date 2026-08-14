@@ -19,11 +19,6 @@ export type TrustLedgerEntryType =
   | "transfer"
   | "adjustment";
 
-export type IntakeStatus = "draft" | "open" | "submitted" | "converted" | "declined" | "archived";
-
-
-export type ConflictCheckResult = "clear" | "conflict" | "possible" | "not_done";
-
 /** firm_settings keys for billing/ops (KV table already exists). */
 export const FIRM_SETTING_KEYS = {
   defaultCurrency: "default_currency",
@@ -181,36 +176,5 @@ export type TrustLedgerEntry = {
   reference: string | null;
   narrative: string | null;
   createdBy: string | null;
-  createdAt: Date;
-};
-
-export type Intake = {
-  id: string;
-  firmId: string;
-  status: IntakeStatus | string;
-  prospectName: string;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  areaOfLaw: string | null;
-  matterSummary: string | null;
-  opposingParty: string | null;
-  assignedTo: string | null;
-  convertedClientId: string | null;
-  convertedMatterId: string | null;
-  createdBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type ConflictCheck = {
-  id: string;
-  firmId: string;
-  intakeId: string | null;
-  matterId: string | null;
-  query: string;
-  result: ConflictCheckResult | string;
-  notes: string | null;
-  checkedBy: string | null;
-  checkedAt: Date | null;
   createdAt: Date;
 };

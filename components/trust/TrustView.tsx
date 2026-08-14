@@ -1,11 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Can } from "@/components/auth/Can";
+import { TrustMoneyCallout } from "@/components/trust/TrustMoneyCallout";
+import { TrustVaultPanel } from "@/components/trust/TrustVaultPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { centsToDisplay } from "@/lib/billing/money";
+import type { TrustOverview } from "@/lib/repos/trust";
 import { TRUST_ENTRY_TYPES, type TrustEntryType } from "@/lib/trust/validation";
 
 type Account = {
@@ -13,6 +17,7 @@ type Account = {
   name: string;
   currency: string;
   accountRef: string | null;
+  accountKind: string;
   isActive: boolean;
   balanceCents: number;
 };
@@ -35,7 +40,7 @@ type LedgerItem = {
 type ClientOption = { id: string; displayName: string };
 type MatterOption = { id: string; title: string; matterNumber: string | null };
 
-type Tab = "ledger" | "accounts" | "statement";
+type Tab = "overview" | "vault" | "ledger" | "accounts" | "statement";
 
 function todayInput() {
   const d = new Date();
@@ -43,10 +48,16 @@ function todayInput() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function accountKindLabel(kind: string) {
+  return kind === "vault" ? "Vault (cash)" : "Bank";
+}
+
 export function TrustView() {
-  const [tab, setTab] = useState<Tab>("ledger");
+  const [tab, setTab] = useState<Tab>("overview");
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [overview, setOverview] = useState<TrustOverview | null>(null);
   const [ledger, setLedger] = useState<LedgerItem[]>([]);
+  const [clientLedger, setClientLedger] = useState<LedgerItem[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [matters, setMatters] = useState<MatterOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +84,7 @@ export function TrustView() {
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [accountName, setAccountName] = useState("");
   const [accountRef, setAccountRef] = useState("");
+  const [accountKind, setAccountKind] = useState<"bank" | "vault">("bank");
 
   const [statementClientId, setStatementClientId] = useState("");
   const [statement, setStatement] = useState<{
@@ -96,6 +108,17 @@ export function TrustView() {
     }
   }, [trustAccountId]);
 
+  const loadOverview = useCallback(async () => {
+    const res = await fetch("/api/trust/overview", { credentials: "include" });
+    const body = (await res.json()) as {
+      ok: boolean;
+      data?: { overview: TrustOverview };
+      error?: { message: string };
+    };
+    if (!res.ok || !body.ok) throw new Error(body.error?.message ?? "Overview failed");
+    setOverview(body.data?.overview ?? null);
+  }, []);
+
   const loadLedger = useCallback(async () => {
     const params = new URLSearchParams();
     if (accountFilter) params.set("trustAccountId", accountFilter);
@@ -110,18 +133,35 @@ export function TrustView() {
     setLedger(body.data?.items ?? []);
   }, [accountFilter, clientFilter]);
 
+  const loadClientLedger = useCallback(async (id: string) => {
+    const res = await fetch(`/api/trust/clients/${id}/statement`, { credentials: "include" });
+    const body = (await res.json()) as {
+      ok: boolean;
+      data?: { lines: LedgerItem[] };
+      error?: { message: string };
+    };
+    if (!res.ok || !body.ok) throw new Error(body.error?.message ?? "Client ledger failed");
+    setClientLedger(body.data?.lines ?? []);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       await loadAccounts();
+      await loadOverview();
       await loadLedger();
+      if (clientFilter) {
+        await loadClientLedger(clientFilter);
+      } else {
+        setClientLedger([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load trust.");
     } finally {
       setLoading(false);
     }
-  }, [loadAccounts, loadLedger]);
+  }, [loadAccounts, loadOverview, loadLedger, loadClientLedger, clientFilter]);
 
   useEffect(() => {
     void load();
@@ -172,7 +212,11 @@ export function TrustView() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: accountName, accountRef: accountRef || null }),
+        body: JSON.stringify({
+          name: accountName,
+          accountRef: accountRef || null,
+          accountKind,
+        }),
       });
       const body = (await res.json()) as { ok: boolean; error?: { message: string } };
       if (!res.ok || !body.ok) {
@@ -267,13 +311,57 @@ export function TrustView() {
     }
   }
 
+  function openClientLedger(clientIdValue: string) {
+    setClientFilter(clientIdValue);
+    setTab("ledger");
+  }
+
+  function openClientStatement(clientIdValue: string) {
+    setStatementClientId(clientIdValue);
+    setTab("statement");
+    void (async () => {
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/trust/clients/${clientIdValue}/statement`, {
+          credentials: "include",
+        });
+        const body = (await res.json()) as {
+          ok: boolean;
+          data?: {
+            client: { displayName: string };
+            balanceCents: number;
+            currency: string;
+            lines: LedgerItem[];
+          };
+        };
+        if (res.ok && body.ok && body.data) {
+          setStatement({
+            clientName: body.data.client.displayName,
+            balanceCents: body.data.balanceCents,
+            currency: body.data.currency,
+            lines: body.data.lines,
+          });
+        }
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }
+
   const activeAccounts = accounts.filter((a) => a.isActive);
+  const bankAccounts = overview?.accounts.filter((a) => a.accountKind === "bank") ?? [];
+  const vaultAccounts = overview?.accounts.filter((a) => a.accountKind === "vault") ?? [];
+  const ledgerRows = clientFilter && clientLedger.length ? clientLedger : ledger;
+  const ledgerShowsRunning = Boolean(clientFilter && clientLedger.length);
 
   return (
-    <section className="view active scrollable" aria-label="Trust">
+    <section className="view active scrollable finance-desk-view trust-desk-view" aria-label="Trust">
       <div className="panel">
         <div className="panel-head">
-          <h3>Trust ledger</h3>
+          <div>
+            <h3>Trust</h3>
+            <p className="panel-subtitle muted">Client money · not fee revenue</p>
+          </div>
           <Can permission="trust.manage">
             <div style={{ display: "flex", gap: "0.35rem" }}>
               <Button size="sm" variant="outline" onClick={() => setNewAccountOpen(true)}>
@@ -286,12 +374,23 @@ export function TrustView() {
           </Can>
         </div>
         <div className="panel-body">
-          <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Client money held in trust. Separate from fee notes and fee payments. Negative client
-            balances are blocked by default (override is audited).
-          </p>
+          <TrustMoneyCallout />
 
           <div className="toolbar" style={{ marginBottom: "0.75rem" }}>
+            <Button
+              size="sm"
+              variant={tab === "overview" ? "primary" : "outline"}
+              onClick={() => setTab("overview")}
+            >
+              Overview
+            </Button>
+            <Button
+              size="sm"
+              variant={tab === "vault" ? "primary" : "outline"}
+              onClick={() => setTab("vault")}
+            >
+              Vault (cash)
+            </Button>
             <Button
               size="sm"
               variant={tab === "ledger" ? "primary" : "outline"}
@@ -347,6 +446,17 @@ export function TrustView() {
                 />
               </div>
               <div className="form-group">
+                <label htmlFor="ta-kind">Account type</label>
+                <select
+                  id="ta-kind"
+                  value={accountKind}
+                  onChange={(e) => setAccountKind(e.target.value as "bank" | "vault")}
+                >
+                  <option value="bank">Bank (master trust bank)</option>
+                  <option value="vault">Vault (physical cash)</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label htmlFor="ta-ref">Bank / book reference</label>
                 <input
                   id="ta-ref"
@@ -377,6 +487,9 @@ export function TrustView() {
               style={{ padding: "1rem", marginBottom: "1rem" }}
             >
               <h4 style={{ marginTop: 0 }}>Post trust entry</h4>
+              <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                Trust ledger only. To record a fee receipt, use Finance → Invoicing.
+              </p>
               {formError ? (
                 <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
                   {formError}
@@ -545,6 +658,101 @@ export function TrustView() {
             </form>
           ) : null}
 
+          {tab === "vault" ? (
+            <TrustVaultPanel clients={clients} matters={matters} onRefresh={() => load()} />
+          ) : null}
+
+          {tab === "overview" && overview ? (
+            <>
+              <div className="trust-overview-cards">
+                {bankAccounts.map((account) => (
+                  <div key={account.id} className="trust-overview-card panel">
+                    <div className="trust-overview-card-label">Master trust bank</div>
+                    <div className="trust-overview-card-name">{account.name}</div>
+                    <div className="trust-overview-card-balance">
+                      {centsToDisplay(account.balanceCents, account.currency)}
+                    </div>
+                    {account.accountRef ? (
+                      <div className="muted" style={{ fontSize: "0.75rem" }}>
+                        {account.accountRef}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {vaultAccounts.map((account) => (
+                  <div key={account.id} className="trust-overview-card panel">
+                    <div className="trust-overview-card-label">Trust vault (cash)</div>
+                    <div className="trust-overview-card-name">{account.name}</div>
+                    <div className="trust-overview-card-balance">
+                      {centsToDisplay(account.balanceCents, account.currency)}
+                    </div>
+                  </div>
+                ))}
+                {overview.clientTotalsByCurrency.map((total) => (
+                  <div key={total.currency} className="trust-overview-card panel">
+                    <div className="trust-overview-card-label">Sum of client balances</div>
+                    <div className="trust-overview-card-balance">
+                      {centsToDisplay(total.totalBalanceCents, total.currency)}
+                    </div>
+                    <div className="muted" style={{ fontSize: "0.75rem" }}>
+                      {total.clientCount} client{total.clientCount === 1 ? "" : "s"} with balance
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h4>Client trust balances</h4>
+              {!overview.clientBalances.length ? (
+                <EmptyState
+                  title="No client trust balances"
+                  detail="Post a trust receipt when client money is received."
+                />
+              ) : (
+                <div className="table-wrap">
+                  <table className="data data-dense">
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th>Balance</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overview.clientBalances.map((row) => (
+                        <tr key={`${row.clientId}-${row.currency}`}>
+                          <td>
+                            <Link href={`/clients/${row.clientId}`}>{row.clientName}</Link>
+                          </td>
+                          <td className="finance-balance-outstanding">
+                            {centsToDisplay(row.balanceCents, row.currency)}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: "0.35rem" }}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openClientLedger(row.clientId)}
+                              >
+                                Ledger
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openClientStatement(row.clientId)}
+                              >
+                                Statement
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : null}
+
           {tab === "accounts" ? (
             !accounts.length ? (
               <EmptyState
@@ -552,10 +760,11 @@ export function TrustView() {
                 detail="Create a trust bank/book account to start the ledger."
               />
             ) : (
-              <table className="data">
+              <table className="data data-dense">
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Type</th>
                     <th>Reference</th>
                     <th>Balance</th>
                     <th>Status</th>
@@ -565,6 +774,7 @@ export function TrustView() {
                   {accounts.map((a) => (
                     <tr key={a.id}>
                       <td>{a.name}</td>
+                      <td>{accountKindLabel(a.accountKind ?? "bank")}</td>
                       <td>{a.accountRef ?? "n/a"}</td>
                       <td>{centsToDisplay(a.balanceCents, a.currency)}</td>
                       <td>
@@ -608,56 +818,80 @@ export function TrustView() {
                   ))}
                 </select>
               </div>
-              {!ledger.length ? (
+              {ledgerShowsRunning ? (
+                <p className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.75rem" }}>
+                  Per-client ledger with continuous running balance (chronological).
+                </p>
+              ) : null}
+              {!ledgerRows.length ? (
                 <EmptyState
                   title="No ledger entries"
                   detail="Post a receipt when client money is received into trust."
                 />
               ) : (
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Type</th>
-                      <th>Client</th>
-                      <th>Account</th>
-                      <th>Amount</th>
-                      <th>Narrative</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.map((row) => (
-                      <tr key={row.id}>
-                        <td>{new Date(row.occurredAt).toLocaleDateString()}</td>
-                        <td>{row.entryType}</td>
-                        <td>{row.clientDisplayName ?? "n/a"}</td>
-                        <td>{row.accountName}</td>
-                        <td
-                          style={{
-                            color: row.amountCents < 0 ? "var(--danger)" : undefined,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {centsToDisplay(row.amountCents, row.currency)}
-                        </td>
-                        <td>
-                          <div>{row.narrative ?? row.reference ?? ""}</div>
-                          {row.matterTitle ? (
-                            <div className="muted" style={{ fontSize: "0.72rem" }}>
-                              {row.matterTitle}
-                            </div>
-                          ) : null}
-                        </td>
+                <div className="table-wrap">
+                  <table className="data data-dense">
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Type</th>
+                        {!clientFilter ? <th>Client</th> : null}
+                        <th>Account</th>
+                        <th>Amount</th>
+                        {ledgerShowsRunning ? <th>Running</th> : null}
+                        <th>Detail</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {ledgerRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{new Date(row.occurredAt).toLocaleDateString()}</td>
+                          <td>{row.entryType}</td>
+                          {!clientFilter ? (
+                            <td>
+                              {row.clientId ? (
+                                <Link href={`/clients/${row.clientId}`}>
+                                  {row.clientDisplayName ?? "n/a"}
+                                </Link>
+                              ) : (
+                                row.clientDisplayName ?? "n/a"
+                              )}
+                            </td>
+                          ) : null}
+                          <td>{row.accountName}</td>
+                          <td
+                            style={{
+                              color: row.amountCents < 0 ? "var(--danger)" : undefined,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {centsToDisplay(row.amountCents, row.currency)}
+                          </td>
+                          {ledgerShowsRunning ? (
+                            <td>
+                              {centsToDisplay(row.runningBalanceCents ?? 0, row.currency)}
+                            </td>
+                          ) : null}
+                          <td>
+                            <div>{row.narrative ?? row.reference ?? ""}</div>
+                            {row.matterTitle ? (
+                              <div className="muted" style={{ fontSize: "0.72rem" }}>
+                                {row.matterTitle}
+                              </div>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           ) : null}
 
           {tab === "statement" ? (
             <div>
+              <TrustMoneyCallout variant="statement" />
               <div className="toolbar" style={{ marginBottom: "0.75rem" }}>
                 <select
                   className="filter-select"
@@ -680,19 +914,30 @@ export function TrustView() {
                   Load statement
                 </Button>
                 {statement ? (
-                  <Button size="sm" variant="outline" onClick={() => window.print()}>
-                    Print
-                  </Button>
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => window.print()}>
+                      Print
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        window.location.href = `/api/trust/clients/${statementClientId}/statement?format=csv`;
+                      }}
+                    >
+                      Export CSV
+                    </Button>
+                  </>
                 ) : null}
               </div>
               {statement ? (
-                <div className="invoice-sheet">
+                <div className="invoice-sheet trust-statement-sheet">
                   <h4 style={{ marginTop: 0 }}>Trust statement: {statement.clientName}</h4>
                   <p>
-                    <strong>Balance:</strong>{" "}
+                    <strong>Closing balance:</strong>{" "}
                     {centsToDisplay(statement.balanceCents, statement.currency)}
                   </p>
-                  <table className="data">
+                  <table className="data data-dense">
                     <thead>
                       <tr>
                         <th>When</th>
@@ -709,10 +954,7 @@ export function TrustView() {
                           <td>{row.entryType}</td>
                           <td>{centsToDisplay(row.amountCents, row.currency)}</td>
                           <td>
-                            {centsToDisplay(
-                              row.runningBalanceCents ?? 0,
-                              row.currency,
-                            )}
+                            {centsToDisplay(row.runningBalanceCents ?? 0, row.currency)}
                           </td>
                           <td>
                             {row.accountName}
@@ -729,7 +971,7 @@ export function TrustView() {
               ) : (
                 <EmptyState
                   title="Client trust statement"
-                  detail="Select a client to see receipts, payments, and running balance."
+                  detail="Select a client to see receipts, disbursements, and running balance."
                 />
               )}
             </div>

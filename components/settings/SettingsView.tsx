@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
+import type { NavIcon } from "@/lib/nav";
 import { AboutPanel } from "@/components/settings/AboutPanel";
 import { AiSettingsPanel } from "@/components/settings/AiSettingsPanel";
 import { BackupExportPanel } from "@/components/settings/BackupExportPanel";
@@ -25,21 +27,21 @@ type Section =
   | "reminders"
   | "backup";
 
-const SECTIONS: Section[] = [
-  "about",
-  "firm",
-  "licence",
-  "ai",
-  "knowledge",
-  "retrieval",
-  "firm-memory",
-  "deadlines",
-  "reminders",
-  "backup",
+const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
+  { id: "about", label: "About", icon: "shield" },
+  { id: "firm", label: "Firm profile", icon: "briefcase" },
+  { id: "licence", label: "Licence", icon: "lock" },
+  { id: "ai", label: "AI", icon: "robot" },
+  { id: "knowledge", label: "Knowledge pack", icon: "folder" },
+  { id: "retrieval", label: "RAG diagnostic", icon: "search" },
+  { id: "firm-memory", label: "Firm memory", icon: "chart" },
+  { id: "deadlines", label: "Deadline templates", icon: "calendar" },
+  { id: "reminders", label: "Reminders", icon: "bell" },
+  { id: "backup", label: "Backup & Export", icon: "clipboard" },
 ];
 
 function parseSection(raw: string | null): Section {
-  if (raw && (SECTIONS as string[]).includes(raw)) return raw as Section;
+  if (raw && NAV.some((n) => n.id === raw)) return raw as Section;
   return "about";
 }
 
@@ -53,116 +55,70 @@ export function SettingsView() {
     setSection(parseSection(searchParams.get("section")));
   }, [searchParams]);
 
+  const activeLabel = NAV.find((n) => n.id === section)?.label ?? "Settings";
+
   return (
-    <div className="view">
-      <div className="toolbar">
+    <div className="view active settings-view" aria-label="Settings">
+      <div className="settings-hero">
+        <span className="settings-hero-icon">
+          <Icon name="gear" />
+        </span>
         <div>
-          <h1 style={{ margin: 0, fontSize: "1.15rem" }}>Settings</h1>
-          <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+          <h1>Settings</h1>
+          <p className="muted">
             Firm profile, licence, AI, knowledge, backup, and preferences
           </p>
         </div>
       </div>
 
       <div className="settings-grid">
-        <div className="panel">
-          <div className="panel-body settings-nav">
-            <button
-              type="button"
-              className={section === "about" ? "active" : undefined}
-              onClick={() => setSection("about")}
-            >
-              About
-            </button>
-            <button
-              type="button"
-              className={section === "firm" ? "active" : undefined}
-              onClick={() => setSection("firm")}
-            >
-              Firm profile
-            </button>
-            <button
-              type="button"
-              className={section === "licence" ? "active" : undefined}
-              onClick={() => setSection("licence")}
-            >
-              Licence
-            </button>
-            <button
-              type="button"
-              className={section === "ai" ? "active" : undefined}
-              onClick={() => setSection("ai")}
-            >
-              AI
-            </button>
-            <button
-              type="button"
-              className={section === "knowledge" ? "active" : undefined}
-              onClick={() => setSection("knowledge")}
-            >
-              Knowledge pack
-            </button>
-            <button
-              type="button"
-              className={section === "retrieval" ? "active" : undefined}
-              onClick={() => setSection("retrieval")}
-            >
-              RAG diagnostic
-            </button>
-            <button
-              type="button"
-              className={section === "firm-memory" ? "active" : undefined}
-              onClick={() => setSection("firm-memory")}
-            >
-              Firm memory
-            </button>
-            <button
-              type="button"
-              className={section === "deadlines" ? "active" : undefined}
-              onClick={() => setSection("deadlines")}
-            >
-              Deadline templates
-            </button>
-            <button
-              type="button"
-              className={section === "reminders" ? "active" : undefined}
-              onClick={() => setSection("reminders")}
-            >
-              Reminders
-            </button>
-            <button
-              type="button"
-              className={section === "backup" ? "active" : undefined}
-              onClick={() => setSection("backup")}
-            >
-              Backup &amp; Export
-            </button>
+        <aside className="panel settings-nav-panel" aria-label="Settings sections">
+          <div className="panel-head">
+            <h3>Sections</h3>
           </div>
-        </div>
+          <nav className="panel-body settings-nav">
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={section === item.id ? "active" : undefined}
+                onClick={() => setSection(item.id)}
+              >
+                <Icon name={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-        <div className="panel">
-          {section === "about" ? (
-            <AboutPanel />
-          ) : section === "firm" ? (
-            <FirmProfilePanel />
-          ) : section === "licence" ? (
-            <LicencePanel />
-          ) : section === "ai" ? (
-            <AiSettingsPanel />
-          ) : section === "knowledge" ? (
-            <KnowledgePackPanel />
-          ) : section === "retrieval" ? (
-            <RetrievalDiagnosticPanel />
-          ) : section === "firm-memory" ? (
-            <FirmMemoryPanel />
-          ) : section === "deadlines" ? (
-            <DeadlineTemplatesPanel />
-          ) : section === "reminders" ? (
-            <RemindersSettingsPanel />
-          ) : (
-            <BackupExportPanel />
-          )}
-        </div>
+        <section className="panel settings-main-panel" aria-label={activeLabel}>
+          <div className="panel-head">
+            <h3>{activeLabel}</h3>
+          </div>
+          <div className="panel-body settings-main-body">
+            {section === "about" ? (
+              <AboutPanel />
+            ) : section === "firm" ? (
+              <FirmProfilePanel />
+            ) : section === "licence" ? (
+              <LicencePanel />
+            ) : section === "ai" ? (
+              <AiSettingsPanel />
+            ) : section === "knowledge" ? (
+              <KnowledgePackPanel />
+            ) : section === "retrieval" ? (
+              <RetrievalDiagnosticPanel />
+            ) : section === "firm-memory" ? (
+              <FirmMemoryPanel />
+            ) : section === "deadlines" ? (
+              <DeadlineTemplatesPanel />
+            ) : section === "reminders" ? (
+              <RemindersSettingsPanel />
+            ) : (
+              <BackupExportPanel />
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

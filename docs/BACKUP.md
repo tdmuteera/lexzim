@@ -11,7 +11,7 @@ Managing Partners with `settings.manage` use **Settings → Backup & Export**.
 - **Archive contents**
   - `manifest.json` (format version **3**, firm metadata, counts, exclusions)
   - `data/*.json` for core entities: firm, clients, matters, team, parties, procedures, events, documents, templates, versions, users (profile fields only), firm_settings
-  - Phase 3 practice-ops: calendar_events, deadline_templates, matter_deadlines, time_entries, disbursements, invoices, invoice_lines, fee_payments, trust_accounts, trust_ledger_entries, intakes, conflict_checks
+  - Phase 3 practice-ops: calendar_events, deadline_templates, matter_deadlines, time_entries, disbursements, invoices, invoice_lines, fee_payments, trust_accounts, trust_ledger_entries
   - Phase 5 portal: portal_users (no password hashes), matter_portal_shares, document_portal_shares, portal_inbox_uploads
   - `data/storage_keys.json`: Supabase Storage object keys under `firms/{firm_id}/…` (includes portal inbox paths)
 - **Not included**

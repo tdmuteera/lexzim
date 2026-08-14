@@ -1,8 +1,10 @@
 import "server-only";
 
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
-import { getDb } from "@/lib/db";
+import { getDb, noteDbConnectivityFailure, noteDbConnectivitySuccess } from "@/lib/db";
+import { asDatabaseUnavailable } from "@/lib/db/connectivity";
 import { firms, roles, users } from "@/lib/db/schema";
 import { getPermissionCodesForRole } from "@/lib/rbac/repository";
 import { AuthError, type AuthSessionUser } from "@/lib/auth/types";
@@ -69,29 +71,43 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
   };
 }
 
-/** Current signed-in app user + firm + role + permission codes, or null. */
-export async function authCurrentUser(): Promise<AuthSessionUser | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+/**
+ * Current signed-in app user + firm + role + permission codes, or null.
+ * React.cache dedupes layout + page + nested server calls within one request.
+ */
+export const authCurrentUser = cache(async (): Promise<AuthSessionUser | null> => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) return null;
+    if (!user) return null;
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const accessToken = session?.access_token ?? null;
-  if (accessToken) {
-    const { sessionId } = decodeAccessTokenClaims(accessToken);
-    if (await isStaffSessionRevoked(sessionId)) {
-      await supabase.auth.signOut();
-      return null;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token ?? null;
+    if (accessToken) {
+      const { sessionId } = decodeAccessTokenClaims(accessToken);
+      if (await isStaffSessionRevoked(sessionId)) {
+        await supabase.auth.signOut();
+        return null;
+      }
     }
-  }
 
-  return loadSessionUser(user.id);
-}
+    const profile = await loadSessionUser(user.id);
+    noteDbConnectivitySuccess();
+    return profile;
+  } catch (err) {
+    const unavailable = asDatabaseUnavailable(err);
+    if (unavailable) {
+      noteDbConnectivityFailure();
+      throw unavailable;
+    }
+    throw err;
+  }
+});
 
 /** Require a valid session; throws AuthError if missing/inactive. */
 export async function requireSession(): Promise<AuthSessionUser> {
@@ -100,6 +116,18 @@ export async function requireSession(): Promise<AuthSessionUser> {
     throw new AuthError("unauthorized", "Sign in required.");
   }
   return session;
+}
+
+/**
+ * Fast gate for platform shell: JWT / cookie only, no Postgres.
+ * Full firm/role profile still loads via APIs and authCurrentUser when needed.
+ */
+export async function authHasCookieSession(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return Boolean(user);
 }
 
 export { loadSessionUser };

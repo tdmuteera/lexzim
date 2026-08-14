@@ -40,11 +40,11 @@ Record the URL used in `docs/HOSTING.md` when production is live.
 | Seats | `/api/staff` seats used/limit |
 | Onboarding / profile | `/api/onboarding`, `/api/firm/profile` |
 | Clients / matters / docx | lists + templates / generate reachability |
-| Calendar / billing / trust / intake | list APIs |
+| Calendar / billing / trust | list APIs |
 | AI | settings, provider switch (web lookup forced off), grounded ask or clear key/budget error |
 | Export | GET meta + POST archive |
 | Diagnostics | safe JSON, `containsMatterData: false`, no auto-upload |
-| RBAC | secretary ≠ billing/licence; accounts ≠ intake |
+| RBAC | secretary ≠ billing/licence |
 | Isolation | isolation firm does not see pilot invoices |
 
 ## Manual checklist
@@ -57,13 +57,13 @@ Record the URL used in `docs/HOSTING.md` when production is live.
 | 4 | Licence + seats | Settings → Licence; invite within seats | |
 | 5 | Onboarding | Dashboard checklist dismissible; Firm profile save | |
 | 6 | Client / matter / docx | Create or open matter; generate template Word | |
-| 7 | Calendar / billing / trust / intake | Spot-check UI; trust ≠ fees | |
+| 7 | Calendar / billing / trust | Spot-check UI; trust ≠ fees | |
 | 8 | AI BYO or managed | Settings → AI keys; grounded ask in AI Assistant | |
 | 9 | Provider switch | Change default provider; ask again; web lookup stays off unless chosen | |
 | 10 | Export | Settings → Backup & Export download | |
 | 11 | Diagnostics | Settings → About → Download diagnostics | |
 | 12 | Help docs | `/help` and `/help/getting-started` render | |
-| 13 | RBAC | Secretary cannot open Billing; Accounts cannot open Intake | |
+| 13 | RBAC | Secretary cannot open Billing | |
 | 14 | firm_id isolation | Isolation user cannot see pilot matters/invoices | |
 | 15 | About / version | Settings → About matches `package.json` | |
 

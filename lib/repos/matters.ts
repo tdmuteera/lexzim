@@ -21,6 +21,7 @@ import {
   OPEN_MATTER_STATUSES,
 } from "@/lib/matters/validation";
 import type { MatterStatus } from "@/lib/db/mvp-types";
+import { syncMatterHearingEvent } from "@/lib/repos/calendar";
 
 export type ListMattersOpts = {
   q?: string;
@@ -265,7 +266,6 @@ export async function createMatter(firmId: string, userId: string, input: Matter
       firmId,
       createdBy: userId,
       status,
-      conflictCheckStatus: input.conflictCheckStatus ?? "not_done",
       ...valuesFromInput(input),
       ...stamps,
     })
@@ -284,10 +284,24 @@ export async function createMatter(firmId: string, userId: string, input: Matter
       .onConflictDoNothing();
   }
 
+  await syncMatterHearingEvent({
+    firmId,
+    userId,
+    matterId: matter.id,
+    matterTitle: matter.title,
+    courtName: matter.courtName,
+    nextHearingAt: matter.nextHearingAt,
+  });
+
   return matter;
 }
 
-export async function updateMatter(firmId: string, matterId: string, input: MatterInput) {
+export async function updateMatter(
+  firmId: string,
+  matterId: string,
+  input: MatterInput,
+  actorUserId?: string,
+) {
   const db = getDb();
   const existing = await getMatterById(firmId, matterId);
   if (!existing) return null;
@@ -317,9 +331,6 @@ export async function updateMatter(firmId: string, matterId: string, input: Matt
   if (input.clientId) {
     patch.clientId = input.clientId;
   }
-  if (input.conflictCheckStatus) {
-    patch.conflictCheckStatus = input.conflictCheckStatus;
-  }
 
   const rows = await db
     .update(matters)
@@ -338,6 +349,17 @@ export async function updateMatter(firmId: string, matterId: string, input: Matt
         roleOnMatter: "responsible_lawyer",
       })
       .onConflictDoNothing();
+  }
+
+  if (matter) {
+    await syncMatterHearingEvent({
+      firmId,
+      userId: actorUserId ?? matter.createdBy,
+      matterId: matter.id,
+      matterTitle: matter.title,
+      courtName: matter.courtName,
+      nextHearingAt: matter.nextHearingAt,
+    });
   }
 
   return matter;

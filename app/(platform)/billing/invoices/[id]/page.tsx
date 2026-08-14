@@ -1,13 +1,16 @@
-import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+import { FinanceModuleNav } from "@/components/finance/FinanceModuleNav";
 import { InvoiceDetailView } from "@/components/billing/InvoiceDetailView";
+import { LEGACY_BILLING_LIST_PATH } from "@/lib/billing/paths";
 
 type PageProps = { params: Promise<{ id: string }> };
 
-export default async function InvoiceDetailPage({ params }: PageProps) {
+/** Legacy alias for finance invoicing invoice detail (bookmarks preserved). */
+export default async function LegacyInvoiceDetailPage({ params }: PageProps) {
   const { id } = await params;
   return (
-    <ProtectedModulePage path="/billing">
-      <InvoiceDetailView invoiceId={id} />
-    </ProtectedModulePage>
+    <div className="module-with-tabs">
+      <FinanceModuleNav />
+      <InvoiceDetailView invoiceId={id} listPath={LEGACY_BILLING_LIST_PATH} />
+    </div>
   );
 }

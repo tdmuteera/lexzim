@@ -4,9 +4,12 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Can } from "@/components/auth/Can";
+import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
+import { INVOICING_LIST_PATH } from "@/lib/billing/paths";
 
 type Invoice = {
   id: string;
@@ -20,6 +23,7 @@ type Invoice = {
   totalCents: number;
   notes: string | null;
   matterId: string;
+  clientId: string | null;
   matterTitle: string | null;
   matterNumber: string | null;
   clientDisplayName: string | null;
@@ -48,6 +52,7 @@ type Payment = {
 
 type InvoiceDetailViewProps = {
   invoiceId: string;
+  listPath?: string;
 };
 
 function todayInput() {
@@ -56,7 +61,19 @@ function todayInput() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
+function formatShortDate(value: string | null) {
+  if (!value) return "n/a";
+  return new Date(value).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function InvoiceDetailView({
+  invoiceId,
+  listPath = INVOICING_LIST_PATH,
+}: InvoiceDetailViewProps) {
   const router = useRouter();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
@@ -177,31 +194,52 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
         <p role="alert" style={{ color: "var(--danger)" }}>
           {error ?? "Invoice not found."}
         </p>
-        <Button size="sm" variant="outline" onClick={() => router.push("/billing")}>
-          Back to billing
+        <Button size="sm" variant="outline" onClick={() => router.push(listPath)}>
+          Back to invoicing
         </Button>
       </section>
     );
   }
 
+  const overdue =
+    invoice.displayOverdue || invoice.status === "overdue";
   const statusLabel =
     invoice.displayOverdue && invoice.status === "sent" ? "overdue" : invoice.status;
+  const pastDue = overdue && invoice.balanceCents > 0 ? daysPastDue(invoice.dueDate) : null;
+  const bucket =
+    overdue && invoice.balanceCents > 0 ? ageingBucketLabel(invoice.dueDate) : null;
 
   return (
-    <section className="view active scrollable invoice-print-root" aria-label="Fee note">
+    <section className="view active scrollable invoice-print-root finance-desk-view" aria-label="Fee note">
       <div className="panel no-print">
         <div className="panel-head">
-          <h3>{invoice.invoiceNumber}</h3>
+          <div>
+            <h3>{invoice.invoiceNumber}</h3>
+            <p className="panel-subtitle muted">Fee note · firm revenue</p>
+          </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               Print
             </Button>
-            <Link href="/billing" className="btn btn-outline btn-sm">
-              Back
+            <Link href={listPath} className="btn btn-outline btn-sm">
+              Back to invoicing
             </Link>
           </div>
         </div>
         <div className="panel-body">
+          <FeeMoneyCallout variant="detail" />
+
+          {overdue && invoice.balanceCents > 0 ? (
+            <div className="finance-overdue-banner" role="status">
+              <strong>Overdue</strong>
+              {pastDue !== null ? ` · ${pastDue} days past due` : ""}
+              {bucket ? ` · ${bucket} bucket` : ""}
+              <span className="finance-overdue-banner-amt">
+                Balance {centsToDisplay(invoice.balanceCents, invoice.currency)}
+              </span>
+            </div>
+          ) : null}
+
           {error ? (
             <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
               {error}
@@ -259,6 +297,9 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
               style={{ padding: "1rem", marginBottom: "1rem" }}
             >
               <h4 style={{ marginTop: 0 }}>Fee payment (not trust)</h4>
+              <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                Records a fee receipt against this invoice. Does not post to the trust ledger.
+              </p>
               {payError ? (
                 <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
                   {payError}
@@ -339,11 +380,18 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
             <div>
               <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>Fee note</div>
               <div>{invoice.invoiceNumber}</div>
-              <Badge>{statusLabel}</Badge>
+              <Badge tone={overdue ? "danger" : "default"}>{statusLabel}</Badge>
             </div>
             <div style={{ textAlign: "right", fontSize: "0.85rem" }}>
               <div>
-                <strong>Client:</strong> {invoice.clientDisplayName ?? "n/a"}
+                <strong>Client:</strong>{" "}
+                {invoice.clientId ? (
+                  <Link href={`/clients/${invoice.clientId}`}>
+                    {invoice.clientDisplayName ?? "n/a"}
+                  </Link>
+                ) : (
+                  invoice.clientDisplayName ?? "n/a"
+                )}
               </div>
               <div>
                 <strong>Matter:</strong>{" "}
@@ -354,21 +402,15 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
                 </Link>
               </div>
               <div>
-                <strong>Issued:</strong>{" "}
-                {invoice.issueDate
-                  ? new Date(invoice.issueDate).toLocaleDateString()
-                  : "Draft"}
+                <strong>Issued:</strong> {formatShortDate(invoice.issueDate)}
               </div>
               <div>
-                <strong>Due:</strong>{" "}
-                {invoice.dueDate
-                  ? new Date(invoice.dueDate).toLocaleDateString()
-                  : "n/a"}
+                <strong>Due:</strong> {formatShortDate(invoice.dueDate)}
               </div>
             </div>
           </div>
 
-          <table className="data">
+          <table className="data data-dense">
             <thead>
               <tr>
                 <th>Description</th>
@@ -391,16 +433,18 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
             </tbody>
           </table>
 
-          <div style={{ marginTop: "1rem", textAlign: "right", fontSize: "0.9rem" }}>
+          <div className="finance-invoice-totals">
             <div>Subtotal: {centsToDisplay(invoice.subtotalCents, invoice.currency)}</div>
             {invoice.taxCents ? (
               <div>Tax: {centsToDisplay(invoice.taxCents, invoice.currency)}</div>
             ) : null}
-            <div style={{ fontWeight: 700 }}>
+            <div className="finance-invoice-total-line">
               Total: {centsToDisplay(invoice.totalCents, invoice.currency)}
             </div>
             <div>Paid: {centsToDisplay(invoice.paidCents, invoice.currency)}</div>
-            <div>Balance: {centsToDisplay(invoice.balanceCents, invoice.currency)}</div>
+            <div className={invoice.balanceCents > 0 ? "finance-balance-outstanding" : ""}>
+              Balance: {centsToDisplay(invoice.balanceCents, invoice.currency)}
+            </div>
           </div>
 
           {invoice.notes ? (
@@ -412,7 +456,7 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
           {payments.length ? (
             <div style={{ marginTop: "1.25rem" }}>
               <h4>Fee payments</h4>
-              <table className="data">
+              <table className="data data-dense">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -436,8 +480,8 @@ export function InvoiceDetailView({ invoiceId }: InvoiceDetailViewProps) {
           ) : null}
 
           <p className="muted" style={{ marginTop: "1.5rem", fontSize: "0.75rem" }}>
-            This is a fee note. Payments recorded here are fee receipts only and are not posted to
-            the trust ledger.
+            Fee money (firm). Payments here are fee receipts only and are not posted to the
+            trust ledger.
           </p>
         </div>
       </div>

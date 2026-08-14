@@ -9,12 +9,12 @@ Commercial feature flags and seat limits from the firm licence (P4-05). Export i
 | Seats (default) | 3 | 2 | 15 |
 | Matter cap | 25 total | Unlimited | Unlimited |
 | Duration | Time-limited (default 30 days) | Dated licence | Dated licence |
-| Trust / Billing / Calendar / Intake / Reports | Yes | Yes | Yes |
+| Trust / Billing / Calendar / Reports | Yes | Yes | Yes |
 | AI (BYO or managed server keys) | Yes | Yes (BYO-oriented) | Yes |
 | LexZim AI proxy eligible | No | No | Yes (`ai_proxy`) |
 | Export | Always | Always | Always |
 
-Feature keys: `trust`, `reports`, `intake`, `billing`, `calendar`, `ai`, `ai_byo`, `ai_proxy`, `export`.
+Feature keys: `trust`, `reports`, `billing`, `calendar`, `ai`, `ai_byo`, `ai_proxy`, `export`.
 
 ## API: `canUse`
 
@@ -33,10 +33,9 @@ Resolved flags = edition defaults merged with `features_json` overrides. `export
 | Gate | Where |
 |---|---|
 | Seats | `POST /api/staff` invite |
-| Matter cap / expiry | `POST /api/matters`, intake convert |
+| Matter cap / expiry | `POST /api/matters` |
 | `trust` | Trust APIs |
 | `reports` | Reports API |
-| `intake` | Intake list/create |
 | `ai_proxy` | Reserved for P4-06 proxy mode |
 | Export | Never blocked by licence |
 

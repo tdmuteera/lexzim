@@ -79,7 +79,7 @@ function statusLabel(status: ConnectionStatus): string {
 
 const PROVIDER_LABELS: Record<ProviderId, string> = {
   gemini: "Gemini",
-  claude: "Claude",
+  claude: "Claude (Anthropic)",
   openai: "OpenAI",
 };
 
@@ -105,8 +105,8 @@ export function AiSettingsPanel() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(null);
   const [lastTestMessage, setLastTestMessage] = useState<string | null>(null);
   const [providerDefault, setProviderDefault] = useState<ProviderId>("gemini");
-  const [modelDefault, setModelDefault] = useState("gemini-2.0-flash");
-  const [embeddingsModel, setEmbeddingsModel] = useState("text-embedding-004");
+  const [modelDefault, setModelDefault] = useState("gemini-3.6-flash");
+  const [embeddingsModel, setEmbeddingsModel] = useState("gemini-embedding-001");
   const [webLookupEnabled, setWebLookupEnabled] = useState(false);
   const [routingMode, setRoutingMode] = useState<RoutingMode>("auto");
   const [keyMode, setKeyMode] = useState<"direct" | "proxy">("direct");
@@ -430,238 +430,145 @@ export function AiSettingsPanel() {
 
   return (
     <Can permission="ai.manage_settings">
-      <div style={{ display: "grid", gap: "1rem", maxWidth: "42rem" }}>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>AI</h2>
+      <div className="settings-form">
+        <div className="settings-form-head">
           <Badge tone={statusTone(connectionStatus)}>{statusLabel(connectionStatus)}</Badge>
+          {loading ? <span className="muted">Loading…</span> : null}
+          {error ? (
+            <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem", width: "100%" }}>
+              {error}
+            </p>
+          ) : null}
         </div>
 
-        {error ? (
-          <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
-        ) : null}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Routing & models</h3>
+          <div className="settings-fields">
+            <label className="settings-field">
+              <span>Routing</span>
+              <select
+                className="input"
+                value={routingMode}
+                onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
+              >
+                <option value="auto">Auto (use Claude for law if a Claude key exists)</option>
+                <option value="manual">Manual: always use the provider below (Gemini, Claude, or OpenAI)</option>
+              </select>
+              {help?.routing ? <p className="settings-hint">{help.routing}</p> : null}
+            </label>
 
-        {loading ? <p className="muted">Loading…</p> : null}
-
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Routing
-            </div>
-            <select
-              value={routingMode}
-              onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            >
-              <option value="auto">Auto (legal research prefers Claude)</option>
-              <option value="manual">Manual (always use selected provider)</option>
-            </select>
-          </label>
-          {help?.routing ? (
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              {help.routing}
-            </p>
-          ) : null}
-
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Key mode
-            </div>
-            <select
-              value={keyMode}
-              onChange={(e) => setKeyMode(e.target.value as "direct" | "proxy")}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            >
-              <option value="direct">Direct (BYO or managed server keys)</option>
-              <option value="proxy" disabled={!proxyEligible}>
-                LexZim Proxy {proxyEligible ? "" : "(Firm edition required)"}
-              </option>
-            </select>
-          </label>
-          {help?.keyMode ? (
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              {help.keyMode}
-            </p>
-          ) : null}
-
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Default provider
-            </div>
-            <select
-              value={providerDefault}
-              onChange={(e) => onProviderChange(e.target.value as ProviderId)}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            >
-              {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
-                <option key={id} value={id}>
-                  {PROVIDER_LABELS[id]}
+            <label className="settings-field">
+              <span>Key mode</span>
+              <select
+                className="input"
+                value={keyMode}
+                onChange={(e) => setKeyMode(e.target.value as "direct" | "proxy")}
+              >
+                <option value="direct">Direct (BYO or managed server keys)</option>
+                <option value="proxy" disabled={!proxyEligible}>
+                  LexZim Proxy {proxyEligible ? "" : "(Firm edition required)"}
                 </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Chat model
-            </div>
-            <input
-              value={modelDefault}
-              onChange={(e) => setModelDefault(e.target.value)}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            />
-          </label>
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Embeddings model
-            </div>
-            <input
-              value={embeddingsModel}
-              onChange={(e) => setEmbeddingsModel(e.target.value)}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            />
-          </label>
-          <label>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Max output tokens (256 to 4096)
-            </div>
-            <input
-              type="number"
-              min={256}
-              max={4096}
-              value={maxOutputTokens}
-              onChange={(e) => setMaxOutputTokens(e.target.value)}
-              style={{
-                width: "100%",
-                marginTop: "0.25rem",
-                padding: "0.55rem 0.7rem",
-                border: "1px solid var(--border-2)",
-                borderRadius: "var(--radius-sm)",
-                background: "var(--bg-1)",
-                color: "var(--text)",
-              }}
-            />
-          </label>
-        </div>
+              </select>
+              {help?.keyMode ? <p className="settings-hint">{help.keyMode}</p> : null}
+            </label>
 
-        <div className="muted" style={{ fontSize: "0.8rem" }}>
-          Key status: Gemini {key?.providers?.gemini?.status ?? "n/a"} (
-          {key?.providers?.gemini?.source ?? "n/a"}) · Claude{" "}
-          {key?.providers?.claude?.status ?? "n/a"} (
-          {key?.providers?.claude?.source ?? "n/a"}) · OpenAI{" "}
-          {key?.providers?.openai?.status ?? "n/a"} (
-          {key?.providers?.openai?.source ?? "n/a"})
-        </div>
+            <label className="settings-field">
+              <span>Default provider (switch here after you paste that provider’s API key)</span>
+              <select
+                className="input"
+                value={providerDefault}
+                onChange={(e) => onProviderChange(e.target.value as ProviderId)}
+              >
+                {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
+                  <option key={id} value={id}>
+                    {PROVIDER_LABELS[id]}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        {help?.embeddings ? (
-          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            {help.embeddings}
+            <label className="settings-field">
+              <span>Chat model</span>
+              <input
+                className="input"
+                value={modelDefault}
+                onChange={(e) => setModelDefault(e.target.value)}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>Embeddings model</span>
+              <input
+                className="input"
+                value={embeddingsModel}
+                onChange={(e) => setEmbeddingsModel(e.target.value)}
+              />
+              {help?.embeddings ? <p className="settings-hint">{help.embeddings}</p> : null}
+            </label>
+
+            <label className="settings-field">
+              <span>Max output tokens (256 to 4096)</span>
+              <input
+                className="input"
+                type="number"
+                min={256}
+                max={4096}
+                value={maxOutputTokens}
+                onChange={(e) => setMaxOutputTokens(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="settings-key-status">
+            <div>
+              Key status: Gemini {key?.providers?.gemini?.status ?? "n/a"} (
+              {key?.providers?.gemini?.source ?? "n/a"})
+            </div>
+            <div>
+              Claude {key?.providers?.claude?.status ?? "n/a"} (
+              {key?.providers?.claude?.source ?? "n/a"}) · OpenAI{" "}
+              {key?.providers?.openai?.status ?? "n/a"} (
+              {key?.providers?.openai?.source ?? "n/a"})
+            </div>
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h3 className="settings-section-title">Features & safety</h3>
+          <label className="settings-check">
+            <input
+              type="checkbox"
+              checked={webLookupEnabled}
+              onChange={(e) => setWebLookupEnabled(e.target.checked)}
+            />
+            <span>
+              Enable optional allowlisted web lookup (ZimLII, Veritas, Parliament). Results are
+              always labelled <strong>[UNVERIFIED]</strong>. Local knowledge-base RAG still runs
+              first. Default is off.
+            </span>
+          </label>
+          <label className="settings-check">
+            <input
+              type="checkbox"
+              checked={matterContextEnabled}
+              onChange={(e) => setMatterContextEnabled(e.target.checked)}
+            />
+            <span>
+              Allow Matter Assist to use matter-file context (live snapshot + firm memory). When
+              off, Matter Assist is blocked firm-wide.
+            </span>
+          </label>
+          <p className="settings-hint">
+            Disclaimer is always appended to AI answers and cannot be disabled.
+            {help?.safety ? ` ${help.safety}` : ""}
           </p>
-        ) : null}
+        </section>
 
-        <label
-          style={{
-            display: "flex",
-            gap: "0.55rem",
-            alignItems: "flex-start",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={webLookupEnabled}
-            onChange={(e) => setWebLookupEnabled(e.target.checked)}
-            style={{ marginTop: "0.2rem" }}
-          />
-          <span>
-            Enable optional allowlisted web lookup (ZimLII, Veritas, Parliament). Results are always
-            labelled <strong>[UNVERIFIED]</strong>. Local knowledge-base RAG still runs first. Default
-            is off.
-          </span>
-        </label>
-
-        <label
-          style={{
-            display: "flex",
-            gap: "0.55rem",
-            alignItems: "flex-start",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={matterContextEnabled}
-            onChange={(e) => setMatterContextEnabled(e.target.checked)}
-            style={{ marginTop: "0.2rem" }}
-          />
-          <span>
-            Allow Matter Assist to use matter-file context (live snapshot + firm memory). When off,
-            Matter Assist is blocked firm-wide.
-          </span>
-        </label>
-
-        <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-          Disclaimer is always appended to AI answers and cannot be disabled.
-          {help?.safety ? ` ${help.safety}` : ""}
-        </p>
-
-        <div
-          style={{
-            padding: "0.85rem 1rem",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--bg-1)",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-            lineHeight: 1.45,
-            display: "grid",
-            gap: "0.65rem",
-          }}
-        >
-          <strong style={{ color: "var(--text)" }}>Usage (this UTC month)</strong>
+        <section className="settings-section">
+          <h3 className="settings-section-title">Usage (this UTC month)</h3>
           {usage ? (
             <>
-              <div>
+              <div style={{ fontSize: "0.9rem", color: "var(--text-2)", lineHeight: 1.5 }}>
                 Calls: {usage.callsThisMonth}
                 {usage.softBudgetUnlimited
                   ? " (no soft budget)"
@@ -669,64 +576,45 @@ export function AiSettingsPanel() {
                 {usage.warnAt80 && !usage.exceeded ? " · approaching limit" : ""}
                 {usage.exceeded ? " · limit reached (new LLM calls soft-blocked)" : ""}
               </div>
-              <div className="muted" style={{ fontSize: "0.8rem" }}>
+              <p className="settings-hint">
                 Success {usage.successCalls} · Failed {usage.failedCalls}
                 {usage.remaining !== null ? ` · Remaining ${usage.remaining}` : ""}
-              </div>
+              </p>
             </>
           ) : (
-            <div className="muted">Usage not loaded yet.</div>
+            <p className="settings-hint">Usage not loaded yet.</p>
           )}
-          <label
-            style={{
-              display: "flex",
-              gap: "0.55rem",
-              alignItems: "center",
-              fontSize: "0.85rem",
-            }}
-          >
+          <label className="settings-check">
             <input
               type="checkbox"
               checked={budgetUnlimited}
               onChange={(e) => setBudgetUnlimited(e.target.checked)}
             />
-            Unlimited monthly soft budget
+            <span>Unlimited monthly soft budget</span>
           </label>
           {!budgetUnlimited ? (
-            <label>
-              Monthly soft budget (LLM call events)
+            <label className="settings-field">
+              <span>Monthly soft budget (LLM call events)</span>
               <input
+                className="input"
                 type="number"
                 min={1}
                 value={monthlySoftBudget}
                 onChange={(e) => setMonthlySoftBudget(e.target.value)}
-                style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
               />
             </label>
           ) : null}
-        </div>
+        </section>
 
-        <div
-          style={{
-            padding: "0.85rem 1rem",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--bg-1)",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-            lineHeight: 1.45,
-            display: "grid",
-            gap: "0.65rem",
-          }}
-        >
-          <strong style={{ color: "var(--text)" }}>LexZim AI Proxy</strong>
+        <section className="settings-section">
+          <h3 className="settings-section-title">LexZim AI Proxy</h3>
           {!proxyEligible ? (
-            <div className="muted">
+            <p className="settings-hint">
               Not available on this edition. Firm edition includes `ai_proxy`.
-            </div>
+            </p>
           ) : (
             <>
-              <div>
+              <div style={{ fontSize: "0.9rem", color: "var(--text-2)", lineHeight: 1.5 }}>
                 Status: {proxyStatus?.configured ? proxyStatus.status : "no token"} · Quota{" "}
                 {proxyStatus
                   ? `${proxyStatus.callsThisMonth}/${proxyStatus.monthlyQuota}`
@@ -738,7 +626,7 @@ export function AiSettingsPanel() {
                   New token (copy once): {issuedToken}
                 </p>
               ) : null}
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div className="settings-actions">
                 <Button
                   variant="outline"
                   disabled={proxyBusy}
@@ -813,93 +701,73 @@ export function AiSettingsPanel() {
               </div>
             </>
           )}
-        </div>
+        </section>
 
-        <div
-          style={{
-            padding: "0.85rem 1rem",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--bg-1)",
-            fontSize: "0.85rem",
-            color: "var(--text-2)",
-            lineHeight: 1.45,
-            display: "grid",
-            gap: "0.65rem",
-          }}
-        >
-          <strong style={{ color: "var(--text)" }}>Firm BYO API keys (optional)</strong>
-          <div>{key?.byoNote ?? "Encrypted per firm. Leave blank to keep existing / use env."}</div>
-          <label>
-            Gemini BYO
-            <input
-              type="password"
-              autoComplete="off"
-              value={byoGemini}
-              onChange={(e) => setByoGemini(e.target.value)}
-              placeholder="Leave blank to keep"
-              style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
-            />
-          </label>
-          <label>
-            Claude BYO
-            <input
-              type="password"
-              autoComplete="off"
-              value={byoClaude}
-              onChange={(e) => setByoClaude(e.target.value)}
-              placeholder="Leave blank to keep"
-              style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
-            />
-          </label>
-          <label>
-            OpenAI BYO
-            <input
-              type="password"
-              autoComplete="off"
-              value={byoOpenAi}
-              onChange={(e) => setByoOpenAi(e.target.value)}
-              placeholder="Leave blank to keep"
-              style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
-            />
-          </label>
-        </div>
-
-        {lastTestMessage ? (
-          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-            {lastTestMessage}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Firm BYO API keys (optional)</h3>
+          <p className="settings-hint">
+            {key?.byoNote ?? "Encrypted per firm. Leave blank to keep existing / use env."}
           </p>
-        ) : null}
+          <div className="settings-fields">
+            <label className="settings-field">
+              <span>Gemini BYO</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={byoGemini}
+                onChange={(e) => setByoGemini(e.target.value)}
+                placeholder="Leave blank to keep"
+              />
+            </label>
+            <label className="settings-field">
+              <span>Claude BYO</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={byoClaude}
+                onChange={(e) => setByoClaude(e.target.value)}
+                placeholder="Leave blank to keep"
+              />
+            </label>
+            <label className="settings-field">
+              <span>OpenAI BYO</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={byoOpenAi}
+                onChange={(e) => setByoOpenAi(e.target.value)}
+                placeholder="Leave blank to keep"
+              />
+            </label>
+          </div>
+        </section>
 
+        <section className="settings-section">
+          <h3 className="settings-section-title">Conversation retention</h3>
+          <p className="settings-hint">
+            Minimize stored AI chat after {retentionDays} days (default). {expiringCount}{" "}
+            conversation(s) currently eligible. See docs/cloud/PRIVACY.md.
+          </p>
+          <div className="settings-actions">
+            <Button
+              variant="outline"
+              onClick={() => void onPurgeAi()}
+              disabled={purgingAi || loading}
+            >
+              {purgingAi ? "Purging…" : "Purge old AI conversations"}
+            </Button>
+          </div>
+        </section>
+
+        {lastTestMessage ? <p className="settings-hint">{lastTestMessage}</p> : null}
         {settings?.updatedAt ? (
-          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Settings updated {formatDateTime(settings.updatedAt)}
-          </p>
+          <p className="settings-hint">Settings updated {formatDateTime(settings.updatedAt)}</p>
         ) : null}
 
-        <div
-          style={{
-            display: "grid",
-            gap: "0.45rem",
-            padding: "0.75rem 0",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
-          <strong style={{ fontSize: "0.9rem" }}>Conversation retention</strong>
-          <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Minimize stored AI chat after {retentionDays} days (default). {expiringCount} conversation(s)
-            currently eligible. See docs/cloud/PRIVACY.md.
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => void onPurgeAi()}
-            disabled={purgingAi || loading}
-          >
-            {purgingAi ? "Purging…" : "Purge old AI conversations"}
-          </Button>
-        </div>
-
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="settings-actions">
           <Button variant="gold" onClick={() => void onTest()} disabled={testing || loading}>
             {testing ? "Testing…" : "Test connection"}
           </Button>

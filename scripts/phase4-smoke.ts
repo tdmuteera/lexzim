@@ -215,7 +215,7 @@ async function main() {
     check("Matter generate/docx helpers reachable", false, "no matters");
   }
 
-  // Calendar / billing / trust / intake (regression)
+  // Calendar / billing / trust (regression)
   const from = new Date(Date.now() - 7 * 86400000).toISOString();
   const to = new Date(Date.now() + 60 * 86400000).toISOString();
   const cal = await fetchJson(
@@ -232,9 +232,6 @@ async function main() {
     "Trust accounts",
     trustAccounts.status === 200 && trustAccounts.body.ok === true,
   );
-
-  const intakes = await fetchJson("/api/intakes", { cookieJar: mp });
-  check("Intake list", intakes.status === 200 && intakes.body.ok === true);
 
   // AI settings, provider switch, grounded ask
   const aiGet = await fetchJson("/api/ai/settings", { cookieJar: mp });
@@ -343,9 +340,6 @@ async function main() {
   // RBAC
   const secBilling = await fetchJson("/api/invoices", { cookieJar: secretary });
   check("RBAC: secretary blocked from billing", secBilling.status === 403);
-
-  const accIntake = await fetchJson("/api/intakes", { cookieJar: accounts });
-  check("RBAC: accounts blocked from intake", accIntake.status === 403);
 
   const secLicence = await fetchJson("/api/licence", { cookieJar: secretary });
   check(

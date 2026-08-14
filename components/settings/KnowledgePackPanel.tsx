@@ -170,63 +170,51 @@ export function KnowledgePackPanel() {
   }
 
   return (
-    <>
-      <div className="panel-head">
-        <h3>Zimbabwe knowledge pack</h3>
+    <div className="settings-form">
+      <div className="settings-form-head">
         <Badge tone={stats?.embeddingsReady ? "open" : "pending"}>
           {stats?.embeddingsReady ? "Embeddings ready" : "Starter / demo"}
         </Badge>
-      </div>
-      <div className="panel-body" style={{ display: "grid", gap: "1rem" }}>
-        {loading ? <p className="muted">Loading…</p> : null}
+        {loading ? <span className="muted">Loading…</span> : null}
+        <p className="settings-lede">
+          System knowledge pack for RAG (Zimbabwe only). Re-ingest reloads the starter pack, chunks
+          to ~500 to 800 tokens with overlap, then embeds with Gemini into pgvector. See
+          docs/KNOWLEDGE_BASE.md and docs/AI.md.
+        </p>
         {error ? (
           <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
             {error}
           </p>
         ) : null}
+      </div>
 
-        <p className="muted" style={{ margin: 0, fontSize: "0.85rem", lineHeight: 1.45 }}>
-          System knowledge pack for RAG (Zimbabwe only). Re-ingest reloads the starter pack, chunks
-          to ~500–800 tokens with overlap, then embeds with Gemini into pgvector. See
-          docs/KNOWLEDGE_BASE.md and docs/AI.md.
-        </p>
-
-        <div
-          style={{
-            display: "grid",
-            gap: "0.75rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          }}
-        >
-          <div>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Pack version
-            </div>
-            <div style={{ fontWeight: 600 }}>{stats?.packVersion ?? "—"}</div>
+      <section className="settings-section">
+        <h3 className="settings-section-title">Pack stats</h3>
+        <div className="settings-stat-grid">
+          <div className="settings-stat">
+            <div className="settings-label">Pack version</div>
+            <div className="settings-stat-value">{stats?.packVersion ?? "—"}</div>
           </div>
-          <div>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Starter sources
-            </div>
-            <div style={{ fontWeight: 600 }}>{stats?.starterPackSourceCount ?? 0}</div>
+          <div className="settings-stat">
+            <div className="settings-label">Starter sources</div>
+            <div className="settings-stat-value">{stats?.starterPackSourceCount ?? 0}</div>
           </div>
-          <div>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              System chunks
-            </div>
-            <div style={{ fontWeight: 600 }}>{stats?.systemChunkCount ?? 0}</div>
+          <div className="settings-stat">
+            <div className="settings-label">System chunks</div>
+            <div className="settings-stat-value">{stats?.systemChunkCount ?? 0}</div>
           </div>
-          <div>
-            <div className="muted" style={{ fontSize: "0.8rem" }}>
-              Embeddings
-            </div>
-            <div style={{ fontWeight: 600 }}>
-              {stats?.embeddingCount ?? 0}
-              {stats?.embeddingsModel ? ` (${stats.embeddingsModel})` : ""}
-            </div>
+          <div className="settings-stat">
+            <div className="settings-label">Embeddings</div>
+            <div className="settings-stat-value">{stats?.embeddingCount ?? 0}</div>
           </div>
         </div>
+        {stats?.embeddingsModel ? (
+          <p className="settings-hint">Embeddings model: {stats.embeddingsModel}</p>
+        ) : null}
+      </section>
 
+      <section className="settings-section">
+        <h3 className="settings-section-title">Sources</h3>
         {stats?.sources?.length ? (
           <div className="table-wrap">
             <table className="data">
@@ -254,9 +242,7 @@ export function KnowledgePackPanel() {
             </table>
           </div>
         ) : (
-          <p className="muted" style={{ margin: 0 }}>
-            No starter pack loaded yet. Click Re-ingest knowledge pack.
-          </p>
+          <p className="settings-hint">No starter pack loaded yet. Click Re-ingest knowledge pack.</p>
         )}
 
         {lastSteps.length > 0 ? (
@@ -266,31 +252,31 @@ export function KnowledgePackPanel() {
             ))}
           </ul>
         ) : null}
+      </section>
 
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <Button
-            variant="gold"
-            onClick={() => void runIngest("all")}
-            disabled={reingesting || embeddingOnly || loading}
-          >
-            {reingesting ? "Re-ingesting…" : "Re-ingest knowledge pack"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void runIngest("embed")}
-            disabled={reingesting || embeddingOnly || loading}
-          >
-            {embeddingOnly ? "Embedding…" : "Embed chunks only"}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => void load()}
-            disabled={loading || reingesting || embeddingOnly}
-          >
-            Refresh counts
-          </Button>
-        </div>
+      <div className="settings-actions">
+        <Button
+          variant="gold"
+          onClick={() => void runIngest("all")}
+          disabled={reingesting || embeddingOnly || loading}
+        >
+          {reingesting ? "Re-ingesting…" : "Re-ingest knowledge pack"}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void runIngest("embed")}
+          disabled={reingesting || embeddingOnly || loading}
+        >
+          {embeddingOnly ? "Embedding…" : "Embed chunks only"}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => void load()}
+          disabled={loading || reingesting || embeddingOnly}
+        >
+          Refresh counts
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 # Phase 3 practice-ops schema (P3-01)
 
-Firm-scoped tables for calendar, billing, trust, and intake. **No payment gateways.** Money amounts use **integer cents** (`*_cents`) plus a currency code.
+Firm-scoped tables for calendar, billing, and trust. **No payment gateways.** Money amounts use **integer cents** (`*_cents`) plus a currency code.
 
 ## Rule
 
@@ -35,13 +35,6 @@ Every firm-scoped query MUST filter `firm_id` from the session.
 
 **Never mix** `trust_ledger_entries` balances with `fee_payments`.
 
-### Intake
-
-| Table | Purpose |
-|---|---|
-| `intakes` | Structured prospects |
-| `conflict_checks` | Search result before open |
-
 ### Firm settings (existing KV)
 
 `firm_settings` already exists. Phase 3 keys:
@@ -67,8 +60,6 @@ Already in `lib/rbac/matrix.ts` (seed with `npm run db:seed:rbac`):
 | `billing.manage` | ✓ | ✓ | | | ✓ |
 | `trust.view` | ✓ | ✓ | | | ✓ |
 | `trust.manage` | ✓ | | | | ✓ |
-| `intake.view` | ✓ | ✓ | ✓ | ✓ | |
-| `intake.manage` | ✓ | ✓ | | ✓ | |
 | `reports.view` | ✓ | ✓ | | | ✓ |
 
 ## Code
@@ -76,7 +67,7 @@ Already in `lib/rbac/matrix.ts` (seed with `npm run db:seed:rbac`):
 - Migration: `drizzle/migrations/0005_phase3_practice_ops.sql`
 - Schema: `lib/db/schema.ts`
 - Types: `lib/db/ops-types.ts`
-- Repos: `lib/repos/calendar.ts` (events CRUD), stubs in `billing.ts`, `trust.ts`, `intake.ts`
+- Repos: `lib/repos/calendar.ts` (events CRUD), stubs in `billing.ts`, `trust.ts`
 - Calendar UI: `docs/CALENDAR.md`, `/calendar`, `/api/calendar`
 - Deadlines: `docs/DEADLINES.md`, Settings templates, matter Deadlines tab
 - Reminders: `docs/REMINDERS.md`, `/reminders`, topbar bell, optional browser alerts
@@ -84,11 +75,8 @@ Already in `lib/rbac/matrix.ts` (seed with `npm run db:seed:rbac`):
 - Disbursements: `docs/BILLING.md`, matter Costs tab (fee side ≠ trust)
 - Invoices: `/billing`, fee notes from unbilled time/costs, fee payments (not trust)
 - Trust: `docs/TRUST.md`, `/trust` (separate from billing)
-- Intake: `docs/INTAKE.md`, `/intake` list/create/detail (no auto client)
-- Conflicts: `docs/CONFLICTS.md`, run check on intake, MP override audited
-- Conversion: `docs/INTAKE_CONVERT.md`, intake → client + matter + opposing party
 - Reports: `docs/REPORTS.md`, `/reports`, `/api/reports/[type]` (+ CSV)
-- Dashboard: `docs/DASHBOARD.md`, role-aware money/intake widgets; invoice matter access hardened
+- Dashboard: `docs/DASHBOARD.md`, role-aware money widgets; invoice matter access hardened
 - Handoff: `docs/PHASE3_SMOKE_TEST.md`, `docs/ARCHITECTURE_PHASE3.md`, `docs/PHASE4_READY_CHECKLIST.md`
 
 ## Next

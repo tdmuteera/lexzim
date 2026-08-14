@@ -86,28 +86,23 @@ export function RemindersSettingsPanel() {
   }
 
   return (
-    <>
-      <div className="panel-head">
-        <h3>Reminders</h3>
-      </div>
-      <div className="panel-body">
-        <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
+    <div className="settings-form">
+      <div className="settings-form-head">
+        <p className="settings-lede">
           In-app reminders centre lists overdue procedures/deadlines and upcoming hearings. Email
           and mobile push are out of scope. Optional browser notifications only work while this tab
           is open.
         </p>
-
         {error ? (
           <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}
           </p>
         ) : null}
-        {msg ? (
-          <p className="muted" style={{ fontSize: "0.85rem" }}>
-            {msg}
-          </p>
-        ) : null}
+        {msg ? <p className="settings-hint">{msg}</p> : null}
+      </div>
 
+      <section className="settings-section">
+        <h3 className="settings-section-title">Browser notifications</h3>
         {loading ? (
           <p className="muted" style={{ fontSize: "0.85rem" }}>
             Loading…
@@ -116,35 +111,38 @@ export function RemindersSettingsPanel() {
           <Can
             permission="settings.manage"
             fallback={
-              <p className="muted" style={{ fontSize: "0.85rem" }}>
+              <p className="settings-hint">
                 Firm browser alerts: {enabled ? "on" : "off"}. Ask a managing partner to change
                 this.
               </p>
             }
           >
-            <div className="form-group">
-              <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  disabled={saving}
-                  onChange={(e) => void save(e.target.checked)}
-                />
-                Allow browser notifications while LexZim is open
-              </label>
-            </div>
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={saving}
+                onChange={(e) => void save(e.target.checked)}
+              />
+              <span>Allow browser notifications while LexZim is open</span>
+            </label>
           </Can>
         )}
 
-        <div style={{ marginTop: "1rem" }}>
-          <p style={{ fontSize: "0.85rem" }}>
-            Browser permission: <strong>{perm}</strong>
-          </p>
+        <div className="settings-summary" style={{ marginTop: "0.25rem" }}>
+          <div className="settings-summary-row">
+            <span className="settings-label">Browser permission</span>
+            <span className="settings-value" style={{ textTransform: "capitalize" }}>
+              {perm}
+            </span>
+          </div>
+        </div>
+        <div className="settings-actions">
           <Button size="sm" variant="outline" onClick={() => void requestBrowserPermission()}>
             Request browser permission
           </Button>
         </div>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }

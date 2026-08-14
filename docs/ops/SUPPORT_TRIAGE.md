@@ -40,7 +40,7 @@ How LexZim ops triages pilot tickets. Prefer facts over guesswork. Never ask for
 
 ### Licence / cannot create matter
 
-- Expired or revoked licence blocks **new** matters and intake conversion
+- Expired or revoked licence blocks **new** matters
 - Export still works. Renew licence; do not “fix” by deleting data
 
 ### AI errors

@@ -2,10 +2,12 @@
 
 Two money worlds in LexZim. Keep them separate.
 
+For the full **Finance desk** (debtors, recon, expenses, reports), see `Finance_Desk_Quickstart.md`.
+
 | | Billing (fees) | Trust |
 |--|----------------|-------|
 | Purpose | Fee notes, time, disbursements, fee receipts | Client money held in trust |
-| Menu | **Billing** | **Trust** |
+| Menu | **Finance → Invoicing** (alias `/billing`) | **Finance → Trust** (alias `/trust`) |
 | Example | Fee note for professional fees | Deposit from client into trust account |
 
 Recording a **fee payment** does **not** post to trust. Posting a **trust receipt** does **not** mark a fee note paid.
@@ -21,7 +23,7 @@ Recording a **fee payment** does **not** post to trust. Posting a **trust receip
 ## Fees: from work to fee note
 
 1. On a **matter**, capture billable **time** (with rate) and fee-side **costs**.
-2. Open **Billing → New from unbilled** (or your firm’s equivalent flow) for that matter.
+2. Open **Finance → Invoicing → New from unbilled** for that matter.
 3. Review the **draft** fee note, then mark it **sent** when ready.
 4. Record **fee payments** against the fee note until it is paid.
 5. Use **Print** on the fee note when you need a paper or PDF copy from the browser.
@@ -30,13 +32,7 @@ Voiding a draft or unused note can unlock source time and costs for re-billing. 
 
 ## Trust: client money
 
-Open **Trust**.
-
-- Maintain trust **accounts** and balances.
-- Post **receipts** (money in), **disbursements** (money out for the client), **transfers**, or careful **adjustments**.
-- Open a **client statement** when you need a running balance for the client.
-
-By default, LexZim rejects a trust debit that would put the **client** trust balance below zero. Override only when policy and permission allow (audited).
+Open **Finance → Trust**. For trust overview, client ledgers, and statements see `docs/user/Finance_Trust_Quickstart.md`.
 
 ## Who can do what
 
@@ -55,4 +51,10 @@ If a menu is missing, you do not have that permission. Ask your Managing Partner
 
 ## Reports
 
-**Reports** (if permitted) includes fee and trust summaries and CSV export for management review.
+**Reports** (`/reports`) includes operational reports (time, workload) when permitted.
+
+**Finance → Reports** includes weekly debtors pack, monthly close, P&L, and finance KPIs for Accounts and Managing Partner.
+
+## HR
+
+Employment records, contracts, and leave are under **Firm → HR**, separate from **User access**. Payroll is planned for Phase 6B. See `HR_Quickstart.md`.
