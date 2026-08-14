@@ -25,7 +25,7 @@ export type MatterFormValues = {
   priority: string;
 };
 
-type ClientOption = { id: string; displayName: string };
+type ClientOption = { id: string; displayLabel: string };
 type LawyerOption = { id: string; fullName: string };
 
 type MatterFormProps = {
@@ -75,7 +75,7 @@ export function MatterForm({
         ]);
         const clientsBody = (await clientsRes.json()) as {
           ok: boolean;
-          data?: { items: Array<{ id: string; displayName: string }> };
+          data?: { items: Array<{ id: string; displayLabel: string; displayName: string }> };
         };
         const mattersBody = (await mattersRes.json()) as {
           ok: boolean;
@@ -85,7 +85,7 @@ export function MatterForm({
           setClients(
             (clientsBody.data?.items ?? []).map((c) => ({
               id: c.id,
-              displayName: c.displayName,
+              displayLabel: c.displayLabel ?? c.displayName,
             })),
           );
         }
@@ -169,7 +169,7 @@ export function MatterForm({
           <option value="">Select client…</option>
           {clients.map((client) => (
             <option key={client.id} value={client.id}>
-              {client.displayName}
+              {client.displayLabel}
             </option>
           ))}
         </select>

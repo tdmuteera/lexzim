@@ -74,6 +74,12 @@ export const navSections: NavSection[] = [
         icon: "bell",
         permission: "calendar.view",
       },
+      {
+        href: "/crm",
+        label: "CRM",
+        icon: "user",
+        permission: "crm.view",
+      },
     ],
   },
   {
@@ -129,6 +135,12 @@ export const navSections: NavSection[] = [
     items: [
       { href: "/staff", label: "User access", icon: "tie", permission: "users.manage" },
       { href: "/reports", label: "Reports", icon: "chart", permission: "reports.view" },
+      {
+        href: "/reports/lawyer-performance",
+        label: "Lawyer performance",
+        icon: "chart",
+        permission: "reports.view",
+      },
       { href: "/ai", label: "AI Assistant", icon: "robot", permission: "ai.use" },
     ],
   },
@@ -155,7 +167,7 @@ export type RouteMeta = {
   title: string;
   subtitle: string;
   purpose: string;
-  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+";
+  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+" | "Phase 7+";
 };
 
 export const routeMeta: Record<string, RouteMeta> = {
@@ -194,6 +206,12 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "Overdue · due soon · hearings",
     purpose: "In-app reminder centre for procedures, filing deadlines, and hearings.",
     phaseBadge: "Phase 3+",
+  },
+  "/crm": {
+    title: "Client relationships",
+    subtitle: "Birthdays · public holidays · client care",
+    purpose: "Track client birthdays and firm holidays for thoughtful follow-up. Not a marketing CRM.",
+    phaseBadge: "Phase 6+",
   },
   "/billing": {
     title: "Invoicing",
@@ -272,6 +290,12 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "AR · time · trust · workload · upcoming",
     purpose: "Management reports for fees, trust, time, and workload.",
     phaseBadge: "Phase 3+",
+  },
+  "/reports/lawyer-performance": {
+    title: "Lawyer performance",
+    subtitle: "Caseload · fees collected by responsible lawyer",
+    purpose: "Open matters and cash collected, attributed to the matter responsible lawyer.",
+    phaseBadge: "Phase 7+",
   },
   "/ai": {
     title: "AI Legal Assistant",

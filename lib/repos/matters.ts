@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, matterTeam, matters, users } from "@/lib/db/schema";
-import { clientDisplayName } from "@/lib/clients/display";
+import { clientDisplayLabel } from "@/lib/clients/display";
 import type { MatterInput } from "@/lib/matters/validation";
 import {
   CLOSED_MATTER_STATUSES,
@@ -145,8 +145,12 @@ export async function listMatters(firmId: string, opts?: ListMattersOpts): Promi
     .select({
       matter: matters,
       clientFullName: clients.fullName,
+      clientFirstName: clients.firstName,
+      clientSurname: clients.surname,
       clientLegalName: clients.legalName,
+      clientRegisteredName: clients.registeredName,
       clientTradingName: clients.tradingName,
+      clientNumber: clients.clientNumber,
       clientType: clients.clientType,
       lawyerName: users.fullName,
     })
@@ -158,10 +162,14 @@ export async function listMatters(firmId: string, opts?: ListMattersOpts): Promi
 
   return rows.map((row) => ({
     ...row.matter,
-    clientDisplayName: clientDisplayName({
+    clientDisplayName: clientDisplayLabel({
+      clientNumber: row.clientNumber,
       clientType: row.clientType,
       fullName: row.clientFullName,
+      firstName: row.clientFirstName,
+      surname: row.clientSurname,
       legalName: row.clientLegalName,
+      registeredName: row.clientRegisteredName,
       tradingName: row.clientTradingName,
     }),
     responsibleLawyerName: row.lawyerName ?? null,
@@ -174,8 +182,12 @@ export async function getMatterById(firmId: string, matterId: string) {
     .select({
       matter: matters,
       clientFullName: clients.fullName,
+      clientFirstName: clients.firstName,
+      clientSurname: clients.surname,
       clientLegalName: clients.legalName,
+      clientRegisteredName: clients.registeredName,
       clientTradingName: clients.tradingName,
+      clientNumber: clients.clientNumber,
       clientType: clients.clientType,
       lawyerName: users.fullName,
     })
@@ -190,10 +202,14 @@ export async function getMatterById(firmId: string, matterId: string) {
 
   return {
     ...row.matter,
-    clientDisplayName: clientDisplayName({
+    clientDisplayName: clientDisplayLabel({
+      clientNumber: row.clientNumber,
       clientType: row.clientType,
       fullName: row.clientFullName,
+      firstName: row.clientFirstName,
+      surname: row.clientSurname,
       legalName: row.clientLegalName,
+      registeredName: row.clientRegisteredName,
       tradingName: row.clientTradingName,
     }),
     responsibleLawyerName: row.lawyerName ?? null,

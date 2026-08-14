@@ -170,7 +170,7 @@ export function OnboardingChecklist() {
                   gap: "0.75rem",
                   alignItems: "flex-start",
                   flexWrap: "wrap",
-                  padding: "0.55rem 0.65rem",
+                  padding: "0.75rem 0.9rem",
                   borderRadius: "6px",
                   background: step.done ? "transparent" : "var(--surface-2, rgba(0,0,0,0.03))",
                   border: "1px solid var(--border, #e5e5e5)",

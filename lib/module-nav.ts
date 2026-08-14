@@ -43,6 +43,26 @@ export const FINANCE_TABS: ModuleTab[] = [
     label: "Finance reports",
     permission: "finance.view",
   },
+  {
+    href: "/finance/quotations",
+    label: "Quotations",
+    permission: "billing.view",
+  },
+  {
+    href: "/finance/petty-cash",
+    label: "Petty cash",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/creditors",
+    label: "Creditors",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/accounting",
+    label: "Accounting",
+    permission: "finance.gl.view",
+  },
 ];
 
 export const HR_TABS: ModuleTab[] = [
@@ -61,11 +81,16 @@ export const ROUTE_PERMISSION_RULES: { prefix: string; permission: string }[] = 
   { prefix: "/finance/reconciliations", permission: "finance.reconcile" },
   { prefix: "/finance/expenses", permission: "finance.view" },
   { prefix: "/finance/reports", permission: "finance.view" },
+  { prefix: "/finance/quotations", permission: "billing.view" },
+  { prefix: "/finance/petty-cash", permission: "finance.view" },
+  { prefix: "/finance/creditors", permission: "finance.view" },
+  { prefix: "/finance/accounting", permission: "finance.gl.view" },
   { prefix: "/finance", permission: "finance.view" },
   { prefix: "/hr/staff", permission: "hr.view" },
   { prefix: "/hr/contracts", permission: "hr.view" },
   { prefix: "/hr/leave", permission: "hr.view" },
   { prefix: "/hr", permission: "hr.view" },
+  { prefix: "/crm", permission: "crm.view" },
 ];
 
 function matchesPrefix(pathname: string, prefix: string): boolean {

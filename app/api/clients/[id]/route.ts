@@ -5,7 +5,7 @@ import { serializeClient } from "@/lib/clients/serialize";
 import { parseClientInput } from "@/lib/clients/validation";
 import { getClientById, updateClient } from "@/lib/repos/clients";
 import { getMatterCountsForClient } from "@/lib/repos/matters";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import { canViewAllMatters, requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -37,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("clients.edit");
+    const session = await requireAny(["clients.edit", "clients.kyc.manage"]);
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
     const body = await request.json();

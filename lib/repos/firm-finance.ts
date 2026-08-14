@@ -11,6 +11,8 @@ import {
   matters,
 } from "@/lib/db/schema";
 import type { CashbookEntryInput, ExpenseInput } from "@/lib/finance/firm-finance-validation";
+import { resolveExpenseGlAccountId } from "@/lib/finance/expense-gl-tree";
+import { postFirmExpenseGl } from "@/lib/gl/posting-expenses";
 
 export async function listFirmExpenses(
   firmId: string,
@@ -54,6 +56,9 @@ export async function createFirmExpense(firmId: string, userId: string, input: E
   const { assertPeriodNotLocked } = await import("@/lib/repos/period-locks");
   await assertPeriodNotLocked(firmId, input.expenseDate);
 
+  const glAccountId =
+    input.glAccountId ?? (await resolveExpenseGlAccountId(firmId, input.category));
+
   const db = getDb();
   const rows = await db
     .insert(firmExpenses)
@@ -67,11 +72,18 @@ export async function createFirmExpense(firmId: string, userId: string, input: E
       matterId: input.matterId,
       paymentMethod: input.paymentMethod,
       notes: input.notes,
+      glAccountId,
+      paymentSource: input.paymentSource,
+      budgetMonth: input.budgetMonth,
       createdBy: userId,
       updatedAt: new Date(),
     })
     .returning();
-  return rows[0]!;
+  const expense = rows[0]!;
+  if (input.paymentSource !== "ap") {
+    await postFirmExpenseGl(firmId, userId, expense.id);
+  }
+  return expense;
 }
 
 export async function updateFirmExpense(
@@ -94,6 +106,9 @@ export async function updateFirmExpense(
       matterId: input.matterId,
       paymentMethod: input.paymentMethod,
       notes: input.notes,
+      glAccountId: input.glAccountId ?? undefined,
+      paymentSource: input.paymentSource,
+      budgetMonth: input.budgetMonth,
       updatedAt: new Date(),
     })
     .where(and(eq(firmExpenses.firmId, firmId), eq(firmExpenses.id, id)))

@@ -1,4 +1,5 @@
 import type { calendarEvents } from "@/lib/db/schema";
+import { clientDisplayName } from "@/lib/clients/display";
 
 type CalendarEventRow = typeof calendarEvents.$inferSelect;
 
@@ -6,6 +7,8 @@ export type SerializedCalendarEvent = {
   id: string;
   firmId: string;
   matterId: string | null;
+  clientId: string | null;
+  clientDisplayName: string | null;
   matterNumber: string | null;
   matterTitle: string | null;
   eventType: string;
@@ -22,14 +25,35 @@ export type SerializedCalendarEvent = {
 
 export function serializeCalendarEvent(
   row: CalendarEventRow,
-  matter?: { matterNumber: string | null; title: string | null } | null,
+  extras?: {
+    matterNumber?: string | null;
+    title?: string | null;
+    clientType?: string | null;
+    clientFullName?: string | null;
+    clientLegalName?: string | null;
+    clientTradingName?: string | null;
+  } | null,
 ): SerializedCalendarEvent {
+  const matterNumber = extras?.matterNumber ?? null;
+  const matterTitle = extras?.title ?? null;
+  const clientDisplay =
+    extras?.clientType != null
+      ? clientDisplayName({
+          clientType: extras.clientType,
+          fullName: extras.clientFullName,
+          legalName: extras.clientLegalName,
+          tradingName: extras.clientTradingName,
+        })
+      : null;
+
   return {
     id: row.id,
     firmId: row.firmId,
     matterId: row.matterId,
-    matterNumber: matter?.matterNumber ?? null,
-    matterTitle: matter?.title ?? null,
+    clientId: row.clientId,
+    clientDisplayName: clientDisplay,
+    matterNumber,
+    matterTitle,
     eventType: row.eventType,
     title: row.title,
     description: row.description,
@@ -41,4 +65,23 @@ export function serializeCalendarEvent(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+export function serializeCalendarEventRow(row: {
+  event: CalendarEventRow;
+  matterNumber?: string | null;
+  matterTitle?: string | null;
+  clientType?: string | null;
+  clientFullName?: string | null;
+  clientLegalName?: string | null;
+  clientTradingName?: string | null;
+}) {
+  return serializeCalendarEvent(row.event, {
+    matterNumber: row.matterNumber,
+    title: row.matterTitle,
+    clientType: row.clientType,
+    clientFullName: row.clientFullName,
+    clientLegalName: row.clientLegalName,
+    clientTradingName: row.clientTradingName,
+  });
 }

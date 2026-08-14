@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { centsToDisplay } from "@/lib/billing/money";
 
-type ClientOption = { id: string; displayName: string };
+type ClientOption = { id: string; displayLabel: string; displayName?: string };
 type MatterOption = { id: string; title: string; matterNumber: string | null };
 
 type VaultData = {
@@ -326,7 +326,7 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
               <select id="vc-client" value={cashClientId} onChange={(e) => setCashClientId(e.target.value)} required>
                 <option value="">Select client</option>
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.displayName}</option>
+                  <option key={c.id} value={c.id}>{c.displayLabel ?? c.displayName}</option>
                 ))}
               </select>
             </div>
@@ -375,7 +375,7 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
               <select id="vb-client" value={bankClientId} onChange={(e) => setBankClientId(e.target.value)} required>
                 <option value="">Select client</option>
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.displayName}</option>
+                  <option key={c.id} value={c.id}>{c.displayLabel ?? c.displayName}</option>
                 ))}
               </select>
             </div>

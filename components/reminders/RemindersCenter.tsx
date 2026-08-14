@@ -25,19 +25,22 @@ export type RemindersPayload = {
   generatedAt: string;
   dueSoonDays: number;
   hearingHorizonDays?: number;
+  meetingHorizonDays?: number;
   counts: {
     overdue: number;
     dueSoon: number;
     hearings: number;
+    meetings: number;
     total: number;
   };
   overdue: ReminderItem[];
   dueSoon: ReminderItem[];
   hearings: ReminderItem[];
+  meetings: ReminderItem[];
   settings?: { browserNotificationsEnabled: boolean };
 };
 
-type Tab = "overdue" | "dueSoon" | "hearings";
+type Tab = "overdue" | "dueSoon" | "hearings" | "meetings";
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -103,7 +106,9 @@ export function RemindersCenter() {
       ? data?.overdue ?? []
       : tab === "dueSoon"
         ? data?.dueSoon ?? []
-        : data?.hearings ?? [];
+        : tab === "meetings"
+          ? data?.meetings ?? []
+          : data?.hearings ?? [];
 
   return (
     <section className="view active scrollable" aria-label="Reminders">
@@ -116,8 +121,9 @@ export function RemindersCenter() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Overdue work, items due in the next {data?.dueSoonDays ?? 7} days, and hearings in the
-            next {data?.hearingHorizonDays ?? 60} days. In-app only (no email). Optional browser
+            Overdue work, items due in the next {data?.dueSoonDays ?? 7} days, client meetings in
+            the next {data?.meetingHorizonDays ?? 7} days, and hearings in the next{" "}
+            {data?.hearingHorizonDays ?? 60} days. In-app only (no email). Optional browser
             alerts while LexZim is open: Settings → Reminders.
           </p>
 
@@ -144,6 +150,13 @@ export function RemindersCenter() {
             </Button>
             <Button
               size="sm"
+              variant={tab === "meetings" ? "primary" : "outline"}
+              onClick={() => setTab("meetings")}
+            >
+              Meetings ({data?.counts.meetings ?? 0})
+            </Button>
+            <Button
+              size="sm"
               variant={tab === "hearings" ? "primary" : "outline"}
               onClick={() => setTab("hearings")}
             >
@@ -164,9 +177,11 @@ export function RemindersCenter() {
                   ? "Nothing overdue"
                   : tab === "dueSoon"
                     ? "Nothing due soon"
-                    : "No hearings in window"
+                    : tab === "meetings"
+                      ? "No meetings in window"
+                      : "No hearings in window"
               }
-              detail="When procedures, filing deadlines, or hearings need attention, they appear here."
+              detail="When procedures, filing deadlines, client meetings, or hearings need attention, they appear here."
             />
           ) : (
             <table className="data">

@@ -10,11 +10,14 @@ Practical day-to-day use for associates and partners working files in LexZim.
 
 ## Clients
 
-**Clients** holds individual and company records.
+**Clients** holds individual and entity records with **CL numbers** and KYC intake.
 
 - Search before creating a duplicate.
-- Capture contact details and identification notes as your firm requires.
+- On create, phone and WhatsApp are required; individuals need first name and surname.
+- Capture date of birth so the client appears on **CRM** birthday lists.
 - Link work to clients through **matters**, not loose notes only.
+
+See `Clients_KYC_Guide.md` and `CRM_Guide.md`.
 
 ## Matters
 

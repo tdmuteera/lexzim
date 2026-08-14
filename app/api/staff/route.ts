@@ -3,6 +3,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { validateEmail, validatePassword } from "@/lib/auth/password";
+import { generateTempPassword } from "@/lib/auth/temp-password";
 import { getDb } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
 import {
@@ -76,12 +77,20 @@ export async function POST(request: Request) {
       fullName?: string;
       password?: string;
       roleCode?: string;
+      forceChange?: boolean;
     };
 
     const email = validateEmail(body.email ?? "");
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     if (!fullName) throw new AuthError("validation", "fullName is required.");
-    validatePassword(body.password ?? "");
+
+    // System-generated temp password when the creator leaves it blank.
+    const providedPassword = typeof body.password === "string" ? body.password.trim() : "";
+    const generatedTemp = providedPassword ? null : generateTempPassword();
+    const password = providedPassword || generatedTemp!;
+    validatePassword(password);
+    // Force change on first login by default; explicit false keeps it off.
+    const forceChange = body.forceChange !== false;
     const roleCode = (body.roleCode ?? "junior_associate").trim();
     if (!(INVITABLE_ROLES as readonly string[]).includes(roleCode)) {
       throw new AuthError(
@@ -109,7 +118,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      password: body.password!,
+      password,
       email_confirm: true,
       user_metadata: { full_name: fullName },
     });
@@ -130,6 +139,7 @@ export async function POST(request: Request) {
         fullName,
         roleId: role.id,
         isActive: true,
+        mustChangePassword: forceChange,
       });
     } catch (err) {
       await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
@@ -142,7 +152,7 @@ export async function POST(request: Request) {
       userId: session.id,
       entityType: "user",
       entityId: created.user.id,
-      metadata: { email, roleCode, fullName },
+      metadata: { email, roleCode, fullName, tempPasswordGenerated: Boolean(generatedTemp), forceChange },
       ipOrUserAgent: clientInfo(request),
     });
 
@@ -155,7 +165,10 @@ export async function POST(request: Request) {
           fullName,
           roleCode,
           isActive: true,
+          mustChangePassword: forceChange,
         },
+        // Shown ONCE to the creator. Never persisted or returned again.
+        tempPassword: generatedTemp ?? null,
         seats: {
           limit: usage.seats,
           used: usage.seatsUsed,

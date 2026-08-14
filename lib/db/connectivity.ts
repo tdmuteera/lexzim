@@ -49,24 +49,59 @@ export function assertDbCircuitClosed() {
   );
 }
 
+/**
+ * Postgres SQLSTATE class 08 ("connection_exception") codes, plus the string
+ * codes postgres.js itself raises for socket/handshake failures. These are the
+ * only `code` values that indicate the *link* is broken, as opposed to a query
+ * being malformed, forbidden, or violating a constraint.
+ */
+const CONNECTIVITY_CODES = new Set([
+  "08000",
+  "08001",
+  "08003",
+  "08004",
+  "08006",
+  "08007",
+  "08P01",
+  "CONNECT_TIMEOUT",
+  "CONNECTION_CLOSED",
+  "CONNECTION_DESTROYED",
+  "CONNECTION_ENDED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "ECONNREFUSED",
+  "EHOSTUNREACH",
+  "ETIMEDOUT",
+]);
+
+/**
+ * Walk an error's `.cause` chain (up to 4 levels) looking for a genuine
+ * transport-level failure. Deliberately does NOT match on generic wrapper
+ * text like "Failed query", which postgres.js/drizzle attach to *every*
+ * query error (syntax errors, missing columns, constraint violations, etc.)
+ * regardless of whether the connection itself is healthy. Matching on that
+ * text would mislabel real query/schema bugs as "database unreachable".
+ */
 export function isDbConnectivityError(err: unknown): boolean {
   if (err instanceof DatabaseUnavailableError) return true;
-  const parts: string[] = [];
+  const messages: string[] = [];
   let cur: unknown = err;
   for (let i = 0; i < 4 && cur; i += 1) {
     if (cur instanceof Error) {
-      parts.push(cur.message, cur.name);
+      const code = (cur as Error & { code?: string }).code;
+      if (code && CONNECTIVITY_CODES.has(String(code))) return true;
+      messages.push(cur.message);
       cur = (cur as Error & { cause?: unknown }).cause;
     } else if (typeof cur === "object" && cur && "code" in cur) {
-      parts.push(String((cur as { code?: string }).code));
+      const code = String((cur as { code?: string }).code);
+      if (CONNECTIVITY_CODES.has(code)) return true;
       cur = (cur as { cause?: unknown }).cause;
     } else {
-      parts.push(String(cur));
       break;
     }
   }
-  const text = parts.join(" ");
-  return /CONNECT_TIMEOUT|ECONNRESET|ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|ETIMEDOUT|getaddrinfo|Connection terminated|ssl|TLS|Failed query|database_unavailable|Database marked unreachable/i.test(
+  const text = messages.join(" ");
+  return /CONNECT_TIMEOUT|ECONNRESET|ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|ETIMEDOUT|getaddrinfo|Connection terminated|TLS handshake|SSL connection|database_unavailable|Database marked unreachable/i.test(
     text,
   );
 }

@@ -38,3 +38,16 @@ export function canViewAllMatters(
 ): boolean {
   return hasPermission(user, "matters.view_all");
 }
+
+/**
+ * Lawyer caseload / revenue: MP and finance.view see the firm.
+ * Others see self unless they have matters.view_all.
+ */
+export function canViewAllLawyerPerformance(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.role.code === "managing_partner") return true;
+  if (hasPermission(user, "finance.view")) return true;
+  return canViewAllMatters(user);
+}

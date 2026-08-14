@@ -9,6 +9,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lt,
   lte,
   or,
@@ -16,7 +17,9 @@ import {
 } from "drizzle-orm";
 import { invoiceDetailPath } from "@/lib/billing/paths";
 import { getDb } from "@/lib/db";
+import { listCaseloadByLawyer } from "@/lib/repos/lawyer-performance";
 import {
+  calendarEvents,
   clients,
   feePayments,
   invoices,
@@ -28,6 +31,7 @@ import {
   trustLedgerEntries,
   users,
 } from "@/lib/db/schema";
+import { clientDisplayName } from "@/lib/clients/display";
 import {
   CLOSED_MATTER_STATUSES,
   OPEN_MATTER_STATUSES,
@@ -216,6 +220,92 @@ export async function listUpcomingHearings(input: {
   }));
 }
 
+export async function listUpcomingMeetings(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  limit?: number;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const teamMatterIds = accessibleMatterIdsSubquery(input.firmId, input.userId);
+
+  const rows = await db
+    .select({
+      event: calendarEvents,
+      matterTitle: matters.title,
+      matterNumber: matters.matterNumber,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      clientNumber: clients.clientNumber,
+    })
+    .from(calendarEvents)
+    .leftJoin(
+      matters,
+      and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, input.firmId)),
+    )
+    .leftJoin(
+      clients,
+      and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, input.firmId)),
+    )
+    .where(
+      and(
+        eq(calendarEvents.firmId, input.firmId),
+        eq(calendarEvents.eventType, "appointment"),
+        gte(calendarEvents.startsAt, now),
+        input.viewAll
+          ? undefined
+          : or(
+              isNull(calendarEvents.matterId),
+              inArray(
+                calendarEvents.matterId,
+                db
+                  .select({ id: matters.id })
+                  .from(matters)
+                  .where(
+                    and(
+                      eq(matters.firmId, input.firmId),
+                      or(
+                        eq(matters.responsibleLawyerId, input.userId),
+                        inArray(matters.id, teamMatterIds),
+                      ),
+                    ),
+                  ),
+              ),
+            ),
+      ),
+    )
+    .orderBy(asc(calendarEvents.startsAt))
+    .limit(input.limit ?? 5);
+
+  return rows.map((row) => ({
+    id: row.event.id,
+    title: row.event.title,
+    startsAt: row.event.startsAt.toISOString(),
+    location: row.event.location,
+    clientDisplayName: row.clientType
+      ? clientDisplayName({
+          clientType: row.clientType,
+          fullName: row.clientFullName,
+          legalName: row.clientLegalName,
+          tradingName: row.clientTradingName,
+        })
+      : null,
+    clientNumber: row.clientNumber,
+    matterTitle: row.matterTitle,
+    matterNumber: row.matterNumber,
+    matterId: row.event.matterId,
+    clientId: row.event.clientId,
+    href: row.event.matterId
+      ? `/matters/${row.event.matterId}`
+      : row.event.clientId
+        ? `/clients/${row.event.clientId}`
+        : "/calendar",
+  }));
+}
+
 export async function listRecentActivity(input: {
   firmId: string;
   userId: string;
@@ -256,30 +346,8 @@ export async function listRecentActivity(input: {
 }
 
 /** Managing Partner workload: open matters per responsible lawyer. */
-export async function listWorkloadByLawyer(firmId: string) {
-  const db = getDb();
-  const rows = await db
-    .select({
-      lawyerId: matters.responsibleLawyerId,
-      lawyerName: users.fullName,
-      openCount: sql<number>`count(*)::int`,
-    })
-    .from(matters)
-    .leftJoin(users, eq(users.id, matters.responsibleLawyerId))
-    .where(
-      and(
-        eq(matters.firmId, firmId),
-        inArray(matters.status, [...OPEN_MATTER_STATUSES]),
-      ),
-    )
-    .groupBy(matters.responsibleLawyerId, users.fullName)
-    .orderBy(desc(sql`count(*)`));
-
-  return rows.map((row) => ({
-    lawyerId: row.lawyerId,
-    lawyerName: row.lawyerName ?? "Unassigned",
-    openMatters: row.openCount,
-  }));
+export async function listWorkloadByLawyer(firmId: string, opts?: { lawyerId?: string }) {
+  return listCaseloadByLawyer(firmId, opts);
 }
 
 /** Fee invoices with outstanding balance past due (billing.view only on call site). */

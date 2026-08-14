@@ -42,7 +42,7 @@ Phase 5 (Portal & Scale) is complete. Phase 6 adds the practice **finance desk**
 ## Explicitly deferred
 
 - [ ] Payroll, payslips, PAYE/NSSA engines → **Phase 6B** (`docs/PHASE6B_PAYROLL_HANDOFF.md`)
-- [ ] Full double-entry GL / chart of accounts
+- [x] Full double-entry GL / chart of accounts → **delivered in Phase 7** (`docs/PHASE7_ADR.md`). Phase 6 explicitly deferred this; Phase 7 supersedes that non-goal.
 - [ ] Bank feeds / payment gateways
 - [ ] Marketing / social product features
 - [ ] Depreciation beyond light asset register list

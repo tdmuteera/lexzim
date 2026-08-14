@@ -8,12 +8,14 @@ import { AboutPanel } from "@/components/settings/AboutPanel";
 import { AiSettingsPanel } from "@/components/settings/AiSettingsPanel";
 import { BackupExportPanel } from "@/components/settings/BackupExportPanel";
 import { DeadlineTemplatesPanel } from "@/components/settings/DeadlineTemplatesPanel";
+import { EmailSettingsPanel } from "@/components/settings/EmailSettingsPanel";
 import { FirmMemoryPanel } from "@/components/settings/FirmMemoryPanel";
 import { FirmProfilePanel } from "@/components/settings/FirmProfilePanel";
 import { KnowledgePackPanel } from "@/components/settings/KnowledgePackPanel";
 import { LicencePanel } from "@/components/settings/LicencePanel";
 import { RemindersSettingsPanel } from "@/components/settings/RemindersSettingsPanel";
 import { RetrievalDiagnosticPanel } from "@/components/settings/RetrievalDiagnosticPanel";
+import { SecurityPanel } from "@/components/settings/SecurityPanel";
 
 type Section =
   | "about"
@@ -25,6 +27,8 @@ type Section =
   | "firm-memory"
   | "deadlines"
   | "reminders"
+  | "email"
+  | "security"
   | "backup";
 
 const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
@@ -37,6 +41,8 @@ const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
   { id: "firm-memory", label: "Firm memory", icon: "chart" },
   { id: "deadlines", label: "Deadline templates", icon: "calendar" },
   { id: "reminders", label: "Reminders", icon: "bell" },
+  { id: "email", label: "Email", icon: "clipboard" },
+  { id: "security", label: "Security", icon: "lock" },
   { id: "backup", label: "Backup & Export", icon: "clipboard" },
 ];
 
@@ -114,6 +120,10 @@ export function SettingsView() {
               <DeadlineTemplatesPanel />
             ) : section === "reminders" ? (
               <RemindersSettingsPanel />
+            ) : section === "email" ? (
+              <EmailSettingsPanel />
+            ) : section === "security" ? (
+              <SecurityPanel />
             ) : (
               <BackupExportPanel />
             )}

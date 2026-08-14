@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["tesseract.js"],
+  serverExternalPackages: ["tesseract.js", "pdfkit", "exceljs"],
 
   // Ensure pilot Help markdown ships with the server bundle (P4-11).
   outputFileTracingIncludes: {

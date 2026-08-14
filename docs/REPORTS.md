@@ -17,9 +17,38 @@ Firm-scoped operational reports. Permission: **`reports.view` only**.
 
 Fee AR and Trust are always labeled separately. Trust reports never include `fee_payments`.
 
+## Lawyer performance (P7-10)
+
+Dedicated page: `/reports/lawyer-performance`. Permission: **`reports.view`**.
+
+| Metric | Source |
+|---|---|
+| Open caseload | Count of open/prospective/on_hold matters grouped by `matters.responsible_lawyer_id` |
+| Revenue | Sum of `fee_payments.amount_cents` where `paid_at` is in the period, attributed to the **invoice matter's current responsible lawyer** |
+
+**Attribution policy (documented choice):** cash collected, not billed-on-issue, and not the timekeeper on invoice lines. If a matter's responsible lawyer changes, historical receipts follow the lawyer on the matter **now**.
+
+Dashboard widgets (last 6 months): caseload for all `dashboard.view` users (scoped); revenue only with billing/reports/finance access.
+
+MP / `finance.gl.view` sees an optional **GL variance** hint: cash collected vs GL revenue accounts (4000) for the same window. Mismatch is expected because GL posts on invoice send (accrual) while this report is cash.
+
+### API
+
+`GET /api/reports/lawyer-performance?from=&to=`
+
+### Export
+
+`GET /api/export/practice_report?format=pdf|docx|xlsx|csv&type=ar-aging|time|trust-balances|trust-movements|workload|upcoming&from=&to=&lawyerId=&matterId=&groupBy=`
+
+The Reports page **Download** menu offers PDF, Word, Excel, and CSV for the currently selected report.
+
+Lawyer performance: `GET /api/export/lawyer_performance?format=pdf|docx|xlsx|csv&from=&to=`
+
+Finance weekly/monthly packs: `GET /api/export/finance_weekly` and `GET /api/export/finance_monthly`.
+
 ### UI
 
-`/reports` with report selector, filters, refresh, and **Download CSV**.
+`/reports` with report selector, filters, refresh, and a **Download** menu (PDF, Word, Excel, CSV). Lawyer performance also has its own page with bar charts.
 
 ### API
 

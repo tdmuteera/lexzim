@@ -14,6 +14,7 @@ import {
 import { getDb } from "@/lib/db";
 import {
   calendarEvents,
+  clients,
   deadlineTemplates,
   matterDeadlines,
   matterTeam,
@@ -73,11 +74,19 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
       event: calendarEvents,
       matterNumber: matters.matterNumber,
       matterTitle: matters.title,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
     })
     .from(calendarEvents)
     .leftJoin(
       matters,
       and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, firmId)),
+    )
+    .leftJoin(
+      clients,
+      and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)),
     )
     .where(and(...conditions))
     .orderBy(asc(calendarEvents.startsAt));
@@ -150,6 +159,7 @@ async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendar
           id: `matter-hearing:${row.id}`,
           firmId,
           matterId: row.id,
+          clientId: null,
           eventType: "hearing",
           title: `Hearing: ${row.title}`,
           description: MATTER_HEARING_SYNC_NOTE,
@@ -163,6 +173,10 @@ async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendar
         },
         matterNumber: row.matterNumber,
         matterTitle: row.title,
+        clientType: null,
+        clientFullName: null,
+        clientLegalName: null,
+        clientTradingName: null,
       };
     });
 }
@@ -340,6 +354,7 @@ export async function applyDeadlineTemplate(
   if (input.createCalendarEvent) {
     const event = await createCalendarEvent(firmId, userId, {
       matterId,
+      clientId: null,
       eventType: toCalendarEventType(template.defaultEventType),
       title,
       description: template.description,
@@ -426,11 +441,19 @@ export async function getCalendarEvent(firmId: string, id: string) {
       event: calendarEvents,
       matterNumber: matters.matterNumber,
       matterTitle: matters.title,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
     })
     .from(calendarEvents)
     .leftJoin(
       matters,
       and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, firmId)),
+    )
+    .leftJoin(
+      clients,
+      and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)),
     )
     .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
     .limit(1);
@@ -448,6 +471,7 @@ export async function createCalendarEvent(
     .values({
       firmId,
       matterId: input.matterId,
+      clientId: input.clientId,
       eventType: input.eventType,
       title: input.title,
       description: input.description,
@@ -472,6 +496,7 @@ export async function updateCalendarEvent(
     .update(calendarEvents)
     .set({
       matterId: input.matterId,
+      clientId: input.clientId,
       eventType: input.eventType,
       title: input.title,
       description: input.description,

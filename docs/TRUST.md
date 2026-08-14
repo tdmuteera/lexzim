@@ -1,49 +1,58 @@
-# Trust accounting (P3-08)
+# Trust accounting (P7-07)
 
-Client money held in trust. **Never mix** with fee notes or `fee_payments`.
+Client trust money is separate from firm fee revenue. Trust ledger entries never mix with `fee_payments` or invoices.
 
-## Access
+## Four accounts (UI clarity)
 
-| Permission | Who (default) | Capability |
-|---|---|---|
-| `trust.view` | MP, Senior, Accounts | Accounts, ledger, statements |
-| `trust.manage` | MP, Accounts | Create accounts, post entries |
+| Label | Meaning | GL |
+|-------|---------|-----|
+| Business vault | Firm operating cash on hand | 1010 |
+| Business bank | Firm operating bank | 1010/1020 |
+| Trust vault | Client cash held in physical vault | Trust sub-ledger |
+| Trust bank | Client money at bank | 1210 (asset) / 2100 (liability) |
 
-## Concepts
+## Trust movements
 
-| Entry type | Signed amount | Meaning |
-|---|---|---|
-| `receipt` | + | Money received into trust for a client |
-| `disbursement` | − | Trust payment out for a client |
-| `transfer` | − then + | Move between trust accounts (two ledger rows) |
-| `adjustment` | ± | Manual correction (credit increases balance) |
+- **Receipt:** increases client trust balance (+). Mandatory reference number (user supplied or auto `TR-0001`).
+- **Disbursement:** decreases client trust balance (-). Same reference rules.
+- **Transfer:** between trust accounts (no GL mirror in v1).
+- **Adjustment:** audited correction (+/−).
 
-Balances = sum of signed `amount_cents`. Client statements include running balance.
+### GL mirror (receipt / disbursement)
 
-## Negative balance rule
+Posted automatically when a receipt or disbursement is saved:
 
-By default, posting a debit that would make the **client** trust balance negative is rejected. Managing Partner / Accounts may set `allowNegative: true` (audited).
+| Entry | Debit | Credit |
+|-------|-------|--------|
+| Receipt | 1210 Trust bank | 2100 Trust liability |
+| Disbursement | 2100 Trust liability | 1210 Trust bank |
+
+Client and matter ids are stored on journal lines for sub-ledger traceability.
+
+Reference numbers are allocated per firm via `allocateTrustReferenceNumber()` (`TR-0001` sequence).
 
 ## UI
 
-Route: `/trust` (separate from `/billing`)
+**Finance → Trust**
 
-- Trust accounts + balances
-- Ledger with filters
-- Post entry form
-- Client statement (printable)
+- **Open trust for client:** search by CL number or name, then post receipt/disbursement.
+- **Client statement:** running balance with PDF/Word/Excel export (`trust_statement`).
+- Vault panel for physical cash counts and bank-ins.
 
-## API
+## Exports
 
-| Method | Path |
-|---|---|
-| GET/POST | `/api/trust/accounts` |
-| GET/PATCH | `/api/trust/accounts/[id]` |
-| GET/POST | `/api/trust/ledger` |
-| GET | `/api/trust/clients/[id]/statement` |
+| Kind | Params |
+|------|--------|
+| `trust_statement` | `clientId` |
 
-## Code
+## Migration
 
-- Repo: `lib/repos/trust.ts`
-- Validation: `lib/trust/validation.ts`
-- UI: `components/trust/TrustView.tsx`
+Run before use:
+
+```bash
+npm run db:migrate
+```
+
+Migration `0021_phase7_trust_ap_petty.sql` adds `reference_number` on trust ledger, petty cash, creditors, and expense GL links.
+
+**Next:** P7-08 CRM birthdays and holidays.

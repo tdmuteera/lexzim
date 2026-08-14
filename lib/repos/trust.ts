@@ -15,6 +15,8 @@ import {
   type TrustLedgerInput,
 } from "@/lib/trust/validation";
 import type { VaultBankInInput, VaultCountInput } from "@/lib/trust/vault-validation";
+import { allocateTrustReferenceNumber } from "@/lib/repos/firm-settings";
+import { postTrustLedgerGl } from "@/lib/gl/posting-trust";
 
 export async function listTrustAccounts(firmId: string, activeOnly = true) {
   const db = getDb();
@@ -392,6 +394,16 @@ export async function postTrustLedgerEntry(
   }
 
   const db = getDb();
+
+  let referenceNumber = input.referenceNumber ?? input.reference;
+  if (
+    (input.entryType === "receipt" || input.entryType === "disbursement") &&
+    !referenceNumber
+  ) {
+    referenceNumber = await allocateTrustReferenceNumber(firmId);
+  }
+  const reference = input.reference ?? referenceNumber;
+
   const rows = await db
     .insert(trustLedgerEntries)
     .values({
@@ -403,11 +415,17 @@ export async function postTrustLedgerEntry(
       amountCents: signed,
       currency: input.currency || account.currency,
       occurredAt: input.occurredAt,
-      reference: input.reference,
+      reference,
+      referenceNumber,
       narrative: input.narrative,
       createdBy: userId,
     })
     .returning();
+
+  if (input.entryType === "receipt" || input.entryType === "disbursement") {
+    await postTrustLedgerGl(firmId, userId, rows[0]!.id);
+  }
+
   return { entries: [rows[0]!] };
 }
 
@@ -571,6 +589,7 @@ export async function bankVaultCash(
     currency: input.currency || vault.currency,
     occurredAt: input.occurredAt,
     reference: input.reference,
+    referenceNumber: null,
     narrative,
     adjustmentCredit: true,
     allowNegative: input.allowNegative,

@@ -18,6 +18,8 @@ export type DisbursementInput = {
   incurredAt: Date;
   /** Billable to client (schema column: billable). */
   billable: boolean;
+  /** operating | trust — source of funds for GL posting. */
+  paidFrom: "operating" | "trust";
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -140,12 +142,18 @@ export function parseDisbursementInput(
   const billableFlag =
     "billableToClient" in raw ? raw.billableToClient : raw.billable;
 
+  const paidFromRaw = trimOrNull(raw.paidFrom) ?? "operating";
+  if (paidFromRaw !== "operating" && paidFromRaw !== "trust") {
+    throw new AuthError("validation", "paidFrom must be operating or trust.");
+  }
+
   return {
     description,
     amountCents,
     currency,
     incurredAt: parseDate(raw.incurredAt, "Incurred at"),
     billable: billableFlag === false ? false : true,
+    paidFrom: paidFromRaw,
   };
 }
 
@@ -170,6 +178,24 @@ export type CreateInvoiceInput = {
   includeDisbursements: boolean;
   timeEntryIds: string[] | null;
   disbursementIds: string[] | null;
+};
+
+export type ServiceInvoiceLineInput = {
+  firmServiceId?: string | null;
+  description: string;
+  qty: number;
+  unitPriceCents: number;
+  revenueGlAccountId?: string | null;
+};
+
+export type CreateServiceInvoiceInput = {
+  clientId: string;
+  matterId: string;
+  notes?: string | null;
+  discountCents?: number;
+  discountPct?: number | null;
+  currency?: string;
+  lines: ServiceInvoiceLineInput[];
 };
 
 export type FeePaymentInput = {
@@ -206,6 +232,85 @@ export function parseCreateInvoiceInput(body: unknown): CreateInvoiceInput {
     timeEntryIds,
     disbursementIds,
   };
+}
+
+function parseServiceLine(raw: unknown, idx: number): ServiceInvoiceLineInput {
+  if (!raw || typeof raw !== "object") {
+    throw new AuthError("validation", `Invalid line at index ${idx}.`);
+  }
+  const line = raw as Record<string, unknown>;
+  const description = typeof line.description === "string" ? line.description.trim() : "";
+  if (!description) {
+    throw new AuthError("validation", `Line ${idx + 1}: description is required.`);
+  }
+  const qty = Number(line.qty ?? 1);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    throw new AuthError("validation", `Line ${idx + 1}: quantity must be positive.`);
+  }
+  let unitPriceCents: number | null = null;
+  if (line.unitPriceCents != null && line.unitPriceCents !== "") {
+    unitPriceCents = Number(line.unitPriceCents);
+  } else {
+    unitPriceCents = dollarsToCents(line.unitPrice ?? line.unitPriceDollars);
+  }
+  if (unitPriceCents == null || !Number.isInteger(unitPriceCents) || unitPriceCents < 0) {
+    throw new AuthError("validation", `Line ${idx + 1}: unit price is invalid.`);
+  }
+  return {
+    firmServiceId: typeof line.firmServiceId === "string" ? line.firmServiceId : null,
+    description,
+    qty,
+    unitPriceCents,
+    revenueGlAccountId:
+      typeof line.revenueGlAccountId === "string" ? line.revenueGlAccountId : null,
+  };
+}
+
+export function parseCreateServiceInvoiceInput(body: unknown): CreateServiceInvoiceInput {
+  if (!body || typeof body !== "object") {
+    throw new AuthError("validation", "Invalid invoice payload.");
+  }
+  const raw = body as Record<string, unknown>;
+  const clientId = typeof raw.clientId === "string" ? raw.clientId.trim() : "";
+  const matterId = typeof raw.matterId === "string" ? raw.matterId.trim() : "";
+  if (!clientId) throw new AuthError("validation", "Client is required.");
+  if (!matterId) throw new AuthError("validation", "Matter is required.");
+  if (!Array.isArray(raw.lines) || raw.lines.length === 0) {
+    throw new AuthError("validation", "At least one line is required.");
+  }
+
+  const discountPctRaw = raw.discountPct;
+  const discountPct =
+    discountPctRaw == null || discountPctRaw === "" ? null : Number(discountPctRaw);
+  let discountCents = 0;
+  if (raw.discountCents != null && raw.discountCents !== "") {
+    discountCents = Number(raw.discountCents);
+  } else {
+    const dollars = dollarsToCents(raw.discountDollars);
+    if (dollars != null) discountCents = dollars;
+  }
+  if (discountPct != null && (discountPct < 0 || discountPct > 100)) {
+    throw new AuthError("validation", "Discount percent must be between 0 and 100.");
+  }
+  if (discountCents > 0 && discountPct != null && discountPct > 0) {
+    throw new AuthError("validation", "Use either a discount amount or a discount percent, not both.");
+  }
+
+  return {
+    clientId,
+    matterId,
+    notes: trimOrNull(raw.notes),
+    discountCents,
+    discountPct,
+    currency: trimOrNull(raw.currency) ?? undefined,
+    lines: raw.lines.map((line, idx) => parseServiceLine(line, idx)),
+  };
+}
+
+export function isServiceInvoicePayload(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const raw = body as Record<string, unknown>;
+  return Array.isArray(raw.lines) && raw.lines.length > 0;
 }
 
 export function parseInvoiceStatus(body: unknown): InvoiceStatusValue {

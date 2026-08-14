@@ -37,7 +37,7 @@ type CashbookItem = {
   notes: string | null;
 };
 
-type CategoryOption = { id: string; label: string };
+type CategoryOption = { id: string; label: string; glAccountId?: string | null };
 type MatterOption = { id: string; title: string; matterNumber: string | null };
 type FeePaymentOption = {
   id: string;
@@ -72,7 +72,9 @@ export function ExpensesAndCashbookView() {
 
   const [expOpen, setExpOpen] = useState(false);
   const [expDate, setExpDate] = useState(todayInput);
-  const [expCategory, setExpCategory] = useState("other");
+  const [expCategory, setExpCategory] = useState("9070");
+  const [expBudgetMonth, setExpBudgetMonth] = useState("");
+  const [expPaymentSource, setExpPaymentSource] = useState<"cash" | "petty">("cash");
   const [expPayee, setExpPayee] = useState("");
   const [expAmount, setExpAmount] = useState("");
   const [expMatterId, setExpMatterId] = useState("");
@@ -195,6 +197,10 @@ export function ExpensesAndCashbookView() {
           matterId: expMatterId || null,
           paymentMethod: expMethod || null,
           notes: expNotes || null,
+          paymentSource: expPaymentSource,
+          budgetMonth: expBudgetMonth || null,
+          glAccountId:
+            categories.find((c) => c.id === expCategory)?.glAccountId ?? null,
         }),
       });
       const body = (await res.json()) as { ok: boolean; error?: { message: string } };
@@ -390,6 +396,28 @@ export function ExpensesAndCashbookView() {
                     <div className="form-group">
                       <label>Payment method</label>
                       <input value={expMethod} onChange={(e) => setExpMethod(e.target.value)} placeholder="EFT, card…" />
+                    </div>
+                  </div>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label>Paid from</label>
+                      <select
+                        value={expPaymentSource}
+                        onChange={(e) =>
+                          setExpPaymentSource(e.target.value as "cash" | "petty")
+                        }
+                      >
+                        <option value="cash">Business bank (1010)</option>
+                        <option value="petty">Petty cash (1050)</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Budget month (optional)</label>
+                      <input
+                        type="month"
+                        value={expBudgetMonth}
+                        onChange={(e) => setExpBudgetMonth(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className="form-group">

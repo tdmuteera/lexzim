@@ -1,10 +1,8 @@
-/**
- * Global search (P1-11). Firm-scoped ILIKE; callers enforce permissions.
- */
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
-import { clientDisplayName } from "@/lib/clients/display";
+import { clientDisplayLabel } from "@/lib/clients/display";
+import { clientTypeLabel } from "@/lib/clients/kyc-types";
 import { listMatters } from "@/lib/repos/matters";
 
 export type SearchHit = {
@@ -30,11 +28,17 @@ export async function searchClients(
         eq(clients.firmId, firmId),
         isNull(clients.archivedAt),
         or(
+          ilike(clients.clientNumber, pattern),
+          ilike(clients.firstName, pattern),
+          ilike(clients.surname, pattern),
           ilike(clients.fullName, pattern),
           ilike(clients.legalName, pattern),
+          ilike(clients.registeredName, pattern),
           ilike(clients.tradingName, pattern),
+          ilike(clients.idNumber, pattern),
           ilike(clients.nationalIdOrRegNumber, pattern),
           ilike(clients.phone, pattern),
+          ilike(clients.whatsapp, pattern),
           ilike(clients.email, pattern),
         )!,
       ),
@@ -44,10 +48,10 @@ export async function searchClients(
   return rows.map((row) => ({
     type: "client" as const,
     id: row.id,
-    title: clientDisplayName(row),
+    title: clientDisplayLabel(row),
     subtitle: [
-      row.clientType === "company" ? "Company" : "Individual",
-      row.nationalIdOrRegNumber,
+      clientTypeLabel(row.clientType),
+      row.idNumber ?? row.nationalIdOrRegNumber,
       row.phone,
     ]
       .filter(Boolean)

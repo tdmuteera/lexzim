@@ -20,6 +20,33 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+  async function onRequestReset() {
+    setResetBusy(true);
+    setResetMsg(null);
+    try {
+      const res = await fetch("/api/auth/reset-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { message?: string };
+      };
+      setResetMsg(
+        body.data?.message ??
+          "If that account exists, your firm administrator has been notified to approve a reset.",
+      );
+    } catch {
+      setResetMsg("Could not submit the request. Try again later.");
+    } finally {
+      setResetBusy(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,15 +130,56 @@ export function LoginForm() {
             />
           </div>
           <div className="login-row">
-            <span className="muted" style={{ fontSize: "0.82rem" }}>
-              Password reset: contact your Managing Partner or platform admin (MVP).
-            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ padding: 0, fontSize: "0.82rem" }}
+              onClick={() => {
+                setResetOpen((v) => !v);
+                setResetMsg(null);
+              }}
+              disabled={loading}
+            >
+              Forgot / request password reset
+            </button>
           </div>
           <Button type="submit" variant="primary" block disabled={loading}>
             <Icon name="login" style={{ marginRight: "0.35rem" }} />
             {loading ? "Signing in…" : "Sign in to platform"}
           </Button>
         </form>
+
+        {resetOpen ? (
+          <div
+            style={{
+              marginTop: "1rem",
+              padding: "0.85rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.02)",
+            }}
+          >
+            <p className="muted" style={{ margin: "0 0 0.5rem", fontSize: "0.82rem" }}>
+              Enter your email above, then request a reset. There is no automatic email link: your
+              Managing Partner approves the request and issues a temporary password.
+            </p>
+            {resetMsg ? (
+              <p className="settings-hint" style={{ fontSize: "0.82rem" }}>
+                {resetMsg}
+              </p>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void onRequestReset()}
+                disabled={resetBusy || !email.trim()}
+              >
+                {resetBusy ? "Submitting…" : "Request reset"}
+              </Button>
+            )}
+          </div>
+        ) : null}
 
         <div className="login-security">
           <Icon name="lock" />

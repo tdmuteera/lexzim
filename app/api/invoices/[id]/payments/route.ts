@@ -40,7 +40,8 @@ export async function POST(request: Request, context: RouteContext) {
         invoiceId,
         amountCents: payment.amountCents,
         currency: payment.currency,
-        note: "Fee receipt only. Not posted to trust.",
+        receiptNumber: payment.receiptNumber,
+        note: "Fee receipt with GL posting Dr cash Cr AR.",
       },
       ipOrUserAgent: clientInfo(request),
     });

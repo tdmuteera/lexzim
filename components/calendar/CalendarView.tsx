@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { CalendarEventType } from "@/lib/db/ops-types";
@@ -12,6 +13,8 @@ import { CALENDAR_EVENT_TYPES } from "@/lib/calendar/validation";
 type SerializedEvent = {
   id: string;
   matterId: string | null;
+  clientId: string | null;
+  clientDisplayName: string | null;
   matterNumber: string | null;
   matterTitle: string | null;
   eventType: string;
@@ -27,6 +30,7 @@ type MatterOption = {
   id: string;
   matterNumber: string | null;
   title: string;
+  clientId: string;
 };
 
 type ListResponse = {
@@ -49,10 +53,13 @@ type FormState = {
   description: string;
   location: string;
   matterId: string;
+  clientId: string;
   startsAt: string;
   endsAt: string;
   allDay: boolean;
 };
+
+type CategoryFilter = "all" | "meetings" | "hearings";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -101,6 +108,7 @@ function emptyForm(defaults?: Partial<FormState>): FormState {
     description: "",
     location: "",
     matterId: "",
+    clientId: "",
     startsAt: toLocalInputValue(now),
     endsAt: toLocalInputValue(end),
     allDay: false,
@@ -117,6 +125,7 @@ function formFromEvent(ev: SerializedEvent): FormState {
     description: ev.description ?? "",
     location: ev.location ?? "",
     matterId: ev.matterId ?? "",
+    clientId: ev.clientId ?? "",
     startsAt: toLocalInputValue(ev.startsAt),
     endsAt: ev.endsAt ? toLocalInputValue(ev.endsAt) : "",
     allDay: ev.allDay,
@@ -161,7 +170,7 @@ export function CalendarView() {
   const [matters, setMatters] = useState<MatterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [matterFilter, setMatterFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -197,7 +206,8 @@ export function CalendarView() {
       const params = new URLSearchParams();
       params.set("from", range.from.toISOString());
       params.set("to", range.to.toISOString());
-      if (typeFilter) params.set("eventType", typeFilter);
+      if (categoryFilter === "meetings") params.set("eventType", "appointment");
+      if (categoryFilter === "hearings") params.set("eventType", "hearing");
       if (matterFilter) params.set("matterId", matterFilter);
 
       const res = await fetch(`/api/calendar?${params.toString()}`, {
@@ -216,7 +226,7 @@ export function CalendarView() {
     } finally {
       setLoading(false);
     }
-  }, [range, typeFilter, matterFilter]);
+  }, [range, categoryFilter, matterFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -287,14 +297,23 @@ export function CalendarView() {
       defaults.endsAt = toLocalInputValue(end);
     }
     if (matterFilter) defaults.matterId = matterFilter;
-    if (typeFilter && CALENDAR_EVENT_TYPES.includes(typeFilter as CalendarEventType)) {
-      defaults.eventType = typeFilter as CalendarEventType;
-    }
+    if (categoryFilter === "meetings") defaults.eventType = "appointment";
+    if (categoryFilter === "hearings") defaults.eventType = "hearing";
     setEditingId(null);
     setForm(emptyForm(defaults));
     setFormError(null);
     setFormOpen(true);
   }
+
+  function openCreateMeeting(day?: Date) {
+    openCreate(day);
+    setForm((f) => ({ ...f, eventType: "appointment" }));
+  }
+
+  const filteredMatters = useMemo(() => {
+    if (!form.clientId) return matters;
+    return matters.filter((m) => m.clientId === form.clientId);
+  }, [matters, form.clientId]);
 
   function openEdit(ev: SerializedEvent) {
     if (ev.id.startsWith("matter-hearing:") && ev.matterId) {
@@ -322,6 +341,7 @@ export function CalendarView() {
         description: form.description || null,
         location: form.location || null,
         matterId: form.matterId || null,
+        clientId: form.clientId || null,
         startsAt: new Date(form.startsAt).toISOString(),
         endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
         allDay: form.allDay,
@@ -385,6 +405,9 @@ export function CalendarView() {
           <h3>Court Calendar</h3>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <Can permission="calendar.manage">
+              <Button size="sm" variant="outline" onClick={() => openCreateMeeting()}>
+                New meeting
+              </Button>
               <Button size="sm" onClick={() => openCreate()}>
                 New event
               </Button>
@@ -442,19 +465,24 @@ export function CalendarView() {
 
             <span className="toolbar-spacer" />
 
-            <select
-              className="filter-select"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Filter by event type"
-            >
-              <option value="">All types</option>
-              {CALENDAR_EVENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {EVENT_TYPE_LABELS[t]}
-                </option>
+            <div style={{ display: "flex", gap: "0.35rem" }}>
+              {(
+                [
+                  ["all", "All"],
+                  ["meetings", "Meetings"],
+                  ["hearings", "Hearings"],
+                ] as const
+              ).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={categoryFilter === key ? "primary" : "outline"}
+                  onClick={() => setCategoryFilter(key)}
+                >
+                  {label}
+                </Button>
               ))}
-            </select>
+            </div>
 
             <select
               className="filter-select"
@@ -629,6 +657,18 @@ export function CalendarView() {
                     <strong>Notes:</strong> {selected.description}
                   </p>
                 ) : null}
+                {selected.clientId || selected.clientDisplayName ? (
+                  <p>
+                    <strong>Client:</strong>{" "}
+                    {selected.clientId ? (
+                      <Link href={`/clients/${selected.clientId}`}>
+                        {selected.clientDisplayName ?? "Client"}
+                      </Link>
+                    ) : (
+                      selected.clientDisplayName
+                    )}
+                  </p>
+                ) : null}
                 {selected.matterId ? (
                   <p>
                     <strong>Matter:</strong>{" "}
@@ -646,7 +686,15 @@ export function CalendarView() {
           {formOpen ? (
             <div className="panel" style={{ marginTop: "1rem" }}>
               <div className="panel-head">
-                <h3>{editingId ? "Edit event" : "New event"}</h3>
+                <h3>
+                  {editingId
+                    ? form.eventType === "appointment"
+                      ? "Edit meeting"
+                      : "Edit event"
+                    : form.eventType === "appointment"
+                      ? "New meeting"
+                      : "New event"}
+                </h3>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -674,6 +722,26 @@ export function CalendarView() {
                     required
                   />
                 </div>
+                {form.eventType === "appointment" ? (
+                  <div className="form-group">
+                    <ClientSearchPicker
+                      value={form.clientId}
+                      onChange={(id) =>
+                        setForm((f) => ({
+                          ...f,
+                          clientId: id,
+                          matterId:
+                            f.matterId &&
+                            matters.find((m) => m.id === f.matterId)?.clientId !== id
+                              ? ""
+                              : f.matterId,
+                        }))
+                      }
+                      label="Client"
+                      placeholder="Search client for this meeting…"
+                    />
+                  </div>
+                ) : null}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <div className="form-group">
                     <label htmlFor="cal-type">Type</label>
@@ -684,6 +752,8 @@ export function CalendarView() {
                         setForm((f) => ({
                           ...f,
                           eventType: e.target.value as CalendarEventType,
+                          clientId:
+                            e.target.value === "appointment" ? f.clientId : "",
                         }))
                       }
                     >
@@ -699,10 +769,20 @@ export function CalendarView() {
                     <select
                       id="cal-matter"
                       value={form.matterId}
-                      onChange={(e) => setForm((f) => ({ ...f, matterId: e.target.value }))}
+                      onChange={(e) => {
+                        const matterId = e.target.value;
+                        const matter = matters.find((m) => m.id === matterId);
+                        setForm((f) => ({
+                          ...f,
+                          matterId,
+                          clientId:
+                            matter?.clientId ??
+                            (f.eventType === "appointment" ? f.clientId : ""),
+                        }));
+                      }}
                     >
                       <option value="">No matter</option>
-                      {matters.map((m) => (
+                      {filteredMatters.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title}
                         </option>

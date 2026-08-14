@@ -14,10 +14,10 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function EditClientPage({ params }: PageProps) {
   let session;
   try {
-    session = await requirePermission("clients.edit");
+    session = await requirePermission("clients.kyc.manage");
   } catch (err) {
     if (err instanceof AuthError && err.code === "forbidden") {
-      return <AccessDenied permission="clients.edit" />;
+      return <AccessDenied permission="clients.kyc.manage" />;
     }
     throw err;
   }
@@ -34,7 +34,7 @@ export default async function EditClientPage({ params }: PageProps) {
     <section className="view active scrollable" aria-label="Edit client">
       <div className="panel">
         <div className="panel-head">
-          <h3>Edit client</h3>
+          <h3>Edit client KYC</h3>
           <Link href={`/clients/${id}`} className="btn btn-outline btn-sm">
             Back
           </Link>

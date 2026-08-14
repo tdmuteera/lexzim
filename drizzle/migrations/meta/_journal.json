@@ -120,6 +120,62 @@
       "when": 1786302000000,
       "tag": "0016_phase6_hr_leave_entitlement",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786400000000,
+      "tag": "0017_phase7_gl",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786401000000,
+      "tag": "0018_phase7_client_kyc",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786402000000,
+      "tag": "0019_phase7_quotations",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786403000000,
+      "tag": "0020_phase7_invoices_gl",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786404000000,
+      "tag": "0021_phase7_trust_ap_petty",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786405000000,
+      "tag": "0022_phase7_crm_holidays",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786406000000,
+      "tag": "0023_phase7_calendar_client",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786407000000,
+      "tag": "0024_phase7_email_security",
+      "breakpoints": true
     }
   ]
 }

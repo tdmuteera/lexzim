@@ -11,6 +11,10 @@ export const DEFAULT_CURRENCY_KEY = "default_currency";
 export const INVOICE_PREFIX_KEY = "invoice_prefix";
 export const NEXT_INVOICE_NUMBER_KEY = "next_invoice_number";
 export const INVOICE_DUE_DAYS_KEY = "invoice_due_days";
+export const RECEIPT_PREFIX_KEY = "receipt_prefix";
+export const NEXT_RECEIPT_NUMBER_KEY = "next_receipt_number";
+export const TRUST_REF_PREFIX_KEY = "trust_ref_prefix";
+export const NEXT_TRUST_REF_NUMBER_KEY = "next_trust_ref_number";
 /** P3-04: firm allows in-browser Notification API while app is open (no push/SMTP). */
 export const BROWSER_NOTIFICATIONS_KEY = "browser_notifications_enabled";
 
@@ -146,4 +150,101 @@ export async function getInvoiceDueDays(firmId: string): Promise<number> {
   const n = raw ? Number(raw) : 14;
   if (!Number.isInteger(n) || n < 0 || n > 365) return 14;
   return n;
+}
+
+/** Allocate next fee receipt number (RCP-0001 per firm). */
+export async function allocateReceiptNumber(firmId: string): Promise<string> {
+  const db = getDb();
+  const prefixExisting = await getFirmSetting(firmId, RECEIPT_PREFIX_KEY);
+  const prefix = prefixExisting || "RCP";
+  if (!prefixExisting) {
+    await upsertFirmSetting(firmId, RECEIPT_PREFIX_KEY, prefix);
+  }
+
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(firmSettings)
+      .values({
+        firmId,
+        key: NEXT_RECEIPT_NUMBER_KEY,
+        value: "1",
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [firmSettings.firmId, firmSettings.key],
+      });
+
+    const locked = await tx.execute<{ value: string }>(sql`
+      select value
+      from firm_settings
+      where firm_id = ${firmId}
+        and key = ${NEXT_RECEIPT_NUMBER_KEY}
+      for update
+    `);
+
+    const lockedRows =
+      (locked as unknown as { rows?: Array<{ value: string }> }).rows ??
+      (Array.isArray(locked) ? (locked as Array<{ value: string }>) : []);
+    let next = Number(lockedRows[0]?.value ?? "1");
+    if (!Number.isInteger(next) || next < 1) next = 1;
+
+    await tx
+      .update(firmSettings)
+      .set({ value: String(next + 1), updatedAt: new Date() })
+      .where(
+        and(
+          eq(firmSettings.firmId, firmId),
+          eq(firmSettings.key, NEXT_RECEIPT_NUMBER_KEY),
+        ),
+      );
+
+    return `${prefix}-${String(next).padStart(4, "0")}`;
+  });
+}
+
+/** Allocate trust movement reference (TR-0001 per firm). */
+export async function allocateTrustReferenceNumber(firmId: string): Promise<string> {
+  const db = getDb();
+  const prefixExisting = await getFirmSetting(firmId, TRUST_REF_PREFIX_KEY);
+  const prefix = prefixExisting || "TR";
+  if (!prefixExisting) {
+    await upsertFirmSetting(firmId, TRUST_REF_PREFIX_KEY, prefix);
+  }
+
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(firmSettings)
+      .values({
+        firmId,
+        key: NEXT_TRUST_REF_NUMBER_KEY,
+        value: "1",
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [firmSettings.firmId, firmSettings.key],
+      });
+
+    const locked = await tx.execute<{ value: string }>(sql`
+      select value from firm_settings
+      where firm_id = ${firmId} and key = ${NEXT_TRUST_REF_NUMBER_KEY}
+      for update
+    `);
+    const lockedRows =
+      (locked as unknown as { rows?: Array<{ value: string }> }).rows ??
+      (Array.isArray(locked) ? (locked as Array<{ value: string }>) : []);
+    let next = Number(lockedRows[0]?.value ?? "1");
+    if (!Number.isInteger(next) || next < 1) next = 1;
+
+    await tx
+      .update(firmSettings)
+      .set({ value: String(next + 1), updatedAt: new Date() })
+      .where(
+        and(
+          eq(firmSettings.firmId, firmId),
+          eq(firmSettings.key, NEXT_TRUST_REF_NUMBER_KEY),
+        ),
+      );
+
+    return `${prefix}-${String(next).padStart(4, "0")}`;
+  });
 }

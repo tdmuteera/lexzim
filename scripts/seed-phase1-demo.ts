@@ -112,14 +112,21 @@ async function main() {
     .insert(clients)
     .values({
       firmId: pilotFirm.id,
+      clientNumber: "CL0001",
       clientType: "individual",
+      firstName: "Tendai",
+      surname: "Moyo",
       fullName: "Tendai Moyo",
       nationalIdOrRegNumber: "63-123456A63",
+      idNumber: "63-123456A63",
       email: "tendai.moyo@example.zw",
       phone: "+263 77 123 4567",
+      whatsapp: "+263 77 123 4567",
       physicalAddress: "12 Samora Machel Avenue, Harare",
+      residentialAddress: "12 Samora Machel Avenue, Harare",
       postalAddress: "P.O. Box CY 400, Causeway, Harare",
       kycNotes: "Demo KYC: National ID verified (seed).",
+      kycStatus: "complete",
       createdBy: mp.id,
     })
     .returning();
@@ -128,14 +135,21 @@ async function main() {
     .insert(clients)
     .values({
       firmId: pilotFirm.id,
-      clientType: "company",
+      clientNumber: "CL0002",
+      clientType: "corporate",
       legalName: "Chitungwiza Trading (Private) Limited",
+      registeredName: "Chitungwiza Trading (Private) Limited",
       tradingName: "Chitungwiza Trading",
+      fullName: "Chitungwiza Trading (Private) Limited",
       nationalIdOrRegNumber: "1234/2019",
+      regTaxNumber: "200012345",
       taxNumber: "200012345",
       email: "accounts@chitungwiza-trading.example.zw",
       phone: "+263 24 2123456",
+      whatsapp: "+263 24 2123456",
       physicalAddress: "Unit 4, Seke Road Industrial Area, Chitungwiza",
+      registeredAddress: "Unit 4, Seke Road Industrial Area, Chitungwiza",
+      kycStatus: "complete",
       createdBy: mp.id,
     })
     .returning();
@@ -144,11 +158,17 @@ async function main() {
     .insert(clients)
     .values({
       firmId: pilotFirm.id,
+      clientNumber: "CL0003",
       clientType: "individual",
+      firstName: "Farai",
+      surname: "Ncube",
       fullName: "Farai Ncube",
       email: "farai.ncube@example.zw",
       phone: "+263 71 987 6543",
+      whatsapp: "+263 71 987 6543",
       physicalAddress: "45 Jason Moyo Street, Bulawayo",
+      residentialAddress: "45 Jason Moyo Street, Bulawayo",
+      kycStatus: "draft",
       createdBy: mp.id,
     })
     .returning();

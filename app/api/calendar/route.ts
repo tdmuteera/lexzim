@@ -1,7 +1,9 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
-import { serializeCalendarEvent } from "@/lib/calendar/serialize";
+import { serializeCalendarEventRow } from "@/lib/calendar/serialize";
+import { syncMeetingRemindersForFirm } from "@/lib/calendar/meeting-notifications";
+import { resolveCalendarClientId } from "@/lib/calendar/resolve-client";
 import {
   isCalendarEventType,
   parseCalendarEventInput,
@@ -11,7 +13,7 @@ import {
   getCalendarEvent,
   listCalendarEvents,
 } from "@/lib/repos/calendar";
-import { getMatterById, userCanAccessMatter } from "@/lib/repos/matters";
+import { userCanAccessMatter } from "@/lib/repos/matters";
 import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -58,13 +60,10 @@ export async function GET(request: Request) {
       userId: session.id,
     });
 
+    void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
+
     return jsonOk({
-      items: rows.map((r) =>
-        serializeCalendarEvent(r.event, {
-          matterNumber: r.matterNumber,
-          title: r.matterTitle,
-        }),
-      ),
+      items: rows.map((r) => serializeCalendarEventRow(r)),
     });
   } catch (err) {
     return jsonError(err);
@@ -77,13 +76,10 @@ export async function POST(request: Request) {
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
     const body = await request.json();
-    const input = parseCalendarEventInput(body);
+    const parsed = parseCalendarEventInput(body);
+    const input = await resolveCalendarClientId(firmId, parsed);
 
     if (input.matterId) {
-      const matter = await getMatterById(firmId, input.matterId);
-      if (!matter) {
-        throw new AuthError("validation", "Matter not found for this firm.");
-      }
       const allowed = await userCanAccessMatter(
         firmId,
         input.matterId,
@@ -97,6 +93,10 @@ export async function POST(request: Request) {
 
     const row = await createCalendarEvent(firmId, session.id, input);
     const full = await getCalendarEvent(firmId, row.id);
+
+    if (row.eventType === "appointment") {
+      void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
+    }
 
     await writeAuditLog({
       action: "calendar.create",
@@ -115,12 +115,7 @@ export async function POST(request: Request) {
 
     return jsonOk(
       {
-        event: full
-          ? serializeCalendarEvent(full.event, {
-              matterNumber: full.matterNumber,
-              title: full.matterTitle,
-            })
-          : serializeCalendarEvent(row),
+        event: full ? serializeCalendarEventRow(full) : serializeCalendarEventRow({ event: row }),
       },
       { status: 201 },
     );

@@ -51,6 +51,7 @@ HR is separate from **User access** (`/staff`, `users.manage`), which manages lo
 |---|---|---|
 | `/staff` | `users.manage` | User access |
 | `/reports` | `reports.view` | Reports |
+| `/reports/lawyer-performance` | `reports.view` | Lawyer performance |
 | `/ai` | `ai.use` | AI Assistant |
 
 ### System

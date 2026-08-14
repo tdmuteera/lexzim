@@ -41,6 +41,7 @@ export function serializeTrustLedgerEntry(
     currency: row.currency,
     occurredAt: row.occurredAt.toISOString(),
     reference: row.reference,
+    referenceNumber: row.referenceNumber,
     narrative: row.narrative,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),

@@ -40,6 +40,7 @@ type DashboardData = {
     calendar: boolean;
     billing: boolean;
     trust: boolean;
+    reports: boolean;
   };
   stats: {
     openMatters: number;
@@ -88,6 +89,19 @@ type DashboardData = {
     clientDisplayName: string;
     responsibleLawyerName: string | null;
   }>;
+  upcomingMeetings: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    location: string | null;
+    clientDisplayName: string | null;
+    clientNumber: string | null;
+    matterTitle: string | null;
+    matterNumber: string | null;
+    matterId: string | null;
+    clientId: string | null;
+    href: string;
+  }>;
   recentActivity: Array<{
     id: string;
     matterId: string;
@@ -98,10 +112,17 @@ type DashboardData = {
     createdByName: string | null;
   }>;
   calendarReminders: {
-    counts: { overdue: number; dueSoon: number; hearings: number; total: number };
+    counts: {
+      overdue: number;
+      dueSoon: number;
+      hearings: number;
+      meetings: number;
+      total: number;
+    };
     overdue: ReminderItem[];
     dueSoon: ReminderItem[];
     hearings: ReminderItem[];
+    meetings: ReminderItem[];
   } | null;
   overdueInvoices: Array<{
     id: string;
@@ -134,6 +155,28 @@ type DashboardData = {
     }>;
   } | null;
   financeKpis: FinanceKpis | null;
+  lawyerPerformance: {
+    viewAll: boolean;
+    canViewRevenue: boolean;
+    from: string;
+    to: string;
+    currency: string;
+    attributionPolicy: string;
+    rows: Array<{
+      lawyerId: string | null;
+      lawyerName: string;
+      openMatters: number;
+      collectedCents: number;
+    }>;
+    totals: { openMatters: number; collectedCents: number };
+    glCheck: {
+      feePaymentsTotalCents: number;
+      glRevenueCents: number;
+      varianceCents: number;
+      mismatch: boolean;
+      note: string;
+    } | null;
+  } | null;
   labels: { billing: string; trust: string };
 };
 
@@ -165,6 +208,12 @@ function formatShortDate(iso: string | null) {
     day: "numeric",
     month: "short",
   });
+}
+
+function chartPersonLabel(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return name;
+  return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
 }
 
 function KpiCard({
@@ -338,7 +387,6 @@ export function DashboardView() {
         <div className="dash-skeleton-row dash-skeleton-charts" style={{ marginTop: "0.5rem" }}>
           <div className="dash-skeleton-block" style={{ height: 240 }} />
           <div className="dash-skeleton-block" style={{ height: 240 }} />
-          <div className="dash-skeleton-block" style={{ height: 240 }} />
         </div>
       </section>
     );
@@ -387,6 +435,7 @@ export function DashboardView() {
   const diaryItems: ReminderItem[] = [];
   if (data.calendarReminders) {
     diaryItems.push(
+      ...data.calendarReminders.meetings,
       ...data.calendarReminders.hearings,
       ...data.calendarReminders.overdue,
       ...data.calendarReminders.dueSoon,
@@ -439,6 +488,22 @@ export function DashboardView() {
     })) ?? [];
 
   const feeCurrency = data.feeRevenue?.[0]?.currency ?? "USD";
+  const lp = data.lawyerPerformance;
+  const caseloadBars =
+    lp?.rows.map((r) => ({
+      key: r.lawyerId ?? "unassigned",
+      label: chartPersonLabel(r.lawyerName),
+      title: r.lawyerName,
+      value: r.openMatters,
+    })) ?? [];
+  const lawyerRevenueBars =
+    lp?.rows.map((r) => ({
+      key: r.lawyerId ?? "unassigned",
+      label: chartPersonLabel(r.lawyerName),
+      title: r.lawyerName,
+      value: r.collectedCents / 100,
+    })) ?? [];
+  const lawyerCurrency = lp?.currency ?? feeCurrency;
 
   return (
     <section
@@ -446,7 +511,7 @@ export function DashboardView() {
       aria-label="Dashboard"
       id="view-dashboard"
     >
-      <div className="dash-hero">
+      <div className="dash-hero motion-hero">
         <div className="dash-greeting">
           <h2>
             {greeting}, {roleLabel}
@@ -469,7 +534,7 @@ export function DashboardView() {
         </div>
       </div>
 
-      <div className="alert-pills">
+      <div className="alert-pills motion-pills">
         {permissions.calendar ? (
           <Link
             href="/calendar"
@@ -514,7 +579,7 @@ export function DashboardView() {
         <FinanceKpisPanel kpis={data.financeKpis} compact />
       ) : null}
 
-      <div className="stats-grid dash-kpi-row">
+      <div className="stats-grid dash-kpi-row motion-kpis">
         <KpiCard
           href="/clients"
           icon="users"
@@ -579,7 +644,7 @@ export function DashboardView() {
         />
       </div>
 
-      <div className="dash-body">
+      <div className="dash-body dash-charts motion-charts">
         <div className="panel dash-chart-panel">
           <div className="panel-head">
             <h3>Case distribution</h3>
@@ -613,37 +678,39 @@ export function DashboardView() {
               />
             )}
             {permissions.billing ? (
-              <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
+              <p className="muted dash-chart-caption">
                 Collected fees ({feeCurrency})
               </p>
             ) : null}
           </div>
         </div>
+      </div>
 
-        <div className="dash-side-stack">
+      {permissions.calendar ? (
+        <div className="dash-body dash-lists motion-lists">
           <div className="panel">
             <div className="panel-head">
-              <h3>Upcoming diary</h3>
-              <Link href="/reminders" className="btn btn-ghost btn-sm">
-                All
+              <h3>Upcoming meetings</h3>
+              <Link href="/calendar" className="btn btn-ghost btn-sm">
+                Calendar
               </Link>
             </div>
             <div className="panel-body">
-              {diary.length === 0 ? (
-                <p className="muted">Nothing upcoming.</p>
+              {data.upcomingMeetings.length === 0 ? (
+                <p className="muted">No client meetings scheduled.</p>
               ) : (
                 <ul className="dash-feed">
-                  {diary.map((item) => (
-                    <li key={`${item.kind}-${item.id}`}>
-                      <Link href={item.href}>
-                        <strong>{item.title}</strong>
+                  {data.upcomingMeetings.slice(0, 6).map((m) => (
+                    <li key={m.id}>
+                      <Link href={m.href}>
+                        <strong>{m.title}</strong>
                         <span>
-                          <em className={item.isOverdue ? "tone-danger" : ""}>
-                            {item.kind}
-                          </em>
-                          {" · "}
-                          {formatShortDate(item.dueAt)}
-                          {item.matterTitle ? ` · ${item.matterTitle}` : ""}
+                          {formatShortDate(m.startsAt)}
+                          {m.clientDisplayName ? ` · ${m.clientDisplayName}` : ""}
+                          {m.matterTitle
+                            ? ` · ${m.matterNumber ? `${m.matterNumber} · ` : ""}${m.matterTitle}`
+                            : ""}
+                          {m.location ? ` · ${m.location}` : ""}
                         </span>
                       </Link>
                     </li>
@@ -655,20 +722,24 @@ export function DashboardView() {
 
           <div className="panel">
             <div className="panel-head">
-              <h3>Recent activity</h3>
+              <h3>Upcoming hearings</h3>
+              <Link href="/calendar" className="btn btn-ghost btn-sm">
+                Calendar
+              </Link>
             </div>
             <div className="panel-body">
-              {data.recentActivity.length === 0 ? (
-                <p className="muted">No recent timeline activity.</p>
+              {data.upcomingHearings.length === 0 ? (
+                <p className="muted">No hearings on the diary.</p>
               ) : (
                 <ul className="dash-feed">
-                  {data.recentActivity.slice(0, 5).map((a) => (
-                    <li key={a.id}>
-                      <Link href={`/matters/${a.matterId}`}>
-                        <strong>{a.title}</strong>
+                  {data.upcomingHearings.slice(0, 6).map((h) => (
+                    <li key={h.id}>
+                      <Link href={`/matters/${h.id}`}>
+                        <strong>{h.title}</strong>
                         <span>
-                          {a.createdByName ? `${a.createdByName} · ` : ""}
-                          {a.matterTitle} · {formatDateTime(a.eventAt)}
+                          {formatShortDate(h.nextHearingAt)}
+                          {h.clientDisplayName ? ` · ${h.clientDisplayName}` : ""}
+                          {h.courtName ? ` · ${h.courtName}` : ""}
                         </span>
                       </Link>
                     </li>
@@ -678,7 +749,123 @@ export function DashboardView() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      <div className="dash-body dash-lists motion-lists">
+        <div className="panel">
+          <div className="panel-head">
+            <h3>Upcoming diary</h3>
+            <Link href="/reminders" className="btn btn-ghost btn-sm">
+              All
+            </Link>
+          </div>
+          <div className="panel-body">
+            {diary.length === 0 ? (
+              <p className="muted">Nothing upcoming.</p>
+            ) : (
+              <ul className="dash-feed">
+                {diary.map((item) => (
+                  <li key={`${item.kind}-${item.id}`}>
+                    <Link href={item.href}>
+                      <strong>{item.title}</strong>
+                      <span>
+                        <em className={item.isOverdue ? "tone-danger" : ""}>
+                          {item.kind}
+                        </em>
+                        {" · "}
+                        {formatShortDate(item.dueAt)}
+                        {item.matterTitle ? ` · ${item.matterTitle}` : ""}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <h3>Recent activity</h3>
+          </div>
+          <div className="panel-body">
+            {data.recentActivity.length === 0 ? (
+              <p className="muted">No recent timeline activity.</p>
+            ) : (
+              <ul className="dash-feed">
+                {data.recentActivity.slice(0, 6).map((a) => (
+                  <li key={a.id}>
+                    <Link href={`/matters/${a.matterId}`}>
+                      <strong>{a.title}</strong>
+                      <span>
+                        {a.createdByName ? `${a.createdByName} · ` : ""}
+                        {a.matterTitle} · {formatDateTime(a.eventAt)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
+
+      {lp ? (
+        <div className="dash-body dash-charts motion-charts">
+          <div className="panel dash-chart-panel">
+            <div className="panel-head">
+              <h3>Caseload by lawyer</h3>
+              <span className="muted">
+                {lp.viewAll ? "Open matters" : "Your open matters"} · {lp.totals.openMatters}
+              </span>
+            </div>
+            <div className="panel-body">
+              {caseloadBars.length === 0 || caseloadBars.every((b) => b.value === 0) ? (
+                <p className="muted">No open matters in this scope.</p>
+              ) : (
+                <AnimatedBarChart bars={caseloadBars} formatValue={(n) => String(Math.round(n))} />
+              )}
+            </div>
+          </div>
+
+          <div className="panel dash-chart-panel">
+            <div className="panel-head">
+              <h3>Revenue by lawyer</h3>
+              {permissions.reports ? (
+                <Link href="/reports/lawyer-performance" className="btn btn-ghost btn-sm">
+                  Full report
+                </Link>
+              ) : (
+                <span className="muted">Last 6 months</span>
+              )}
+            </div>
+            <div className="panel-body">
+              {!lp.canViewRevenue ? (
+                <p className="muted">Fee totals require billing or reports access.</p>
+              ) : lawyerRevenueBars.every((b) => b.value === 0) ? (
+                <p className="muted">No fee receipts in the last 6 months.</p>
+              ) : (
+                <AnimatedBarChart
+                  bars={lawyerRevenueBars}
+                  formatValue={(n) =>
+                    n >= 1000
+                      ? `${(n / 1000).toFixed(0)}k`
+                      : centsToDisplay(Math.round(n * 100), lawyerCurrency)
+                  }
+                />
+              )}
+              {lp.canViewRevenue ? (
+                <p className="muted dash-chart-caption">
+                  Collected fees ({lawyerCurrency}) by responsible lawyer. Cash basis.
+                  {lp.glCheck?.mismatch
+                    ? ` GL revenue differs by ${centsToDisplay(lp.glCheck.varianceCents, lawyerCurrency)}.`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="dash-foot">
         <Button size="sm" variant="outline" onClick={() => void load()}>

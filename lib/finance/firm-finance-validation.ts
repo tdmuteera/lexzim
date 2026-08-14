@@ -2,8 +2,8 @@ import { AuthError } from "@/lib/auth/types";
 import { dollarsToCents } from "@/lib/billing/money";
 import {
   isCashbookEntryType,
-  isExpenseCategory,
 } from "@/lib/finance/expense-categories";
+import { isExpenseCategoryOrGlCode } from "@/lib/finance/expense-gl-tree";
 
 function trimOrNull(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -46,6 +46,9 @@ export type ExpenseInput = {
   matterId: string | null;
   paymentMethod: string | null;
   notes: string | null;
+  glAccountId: string | null;
+  paymentSource: "cash" | "ap" | "petty";
+  budgetMonth: string | null;
 };
 
 export type CashbookEntryInput = {
@@ -70,19 +73,27 @@ export function parseExpenseInput(
   const raw = body as Record<string, unknown>;
   const payee = typeof raw.payee === "string" ? raw.payee.trim() : "";
   if (!payee) throw new AuthError("validation", "Payee is required.");
-  if (!isExpenseCategory(raw.category)) {
-    throw new AuthError("validation", "Invalid expense category.");
+  if (!isExpenseCategoryOrGlCode(raw.category)) {
+    throw new AuthError("validation", "Invalid expense category or GL code.");
+  }
+
+  const paymentSourceRaw = trimOrNull(raw.paymentSource) ?? "cash";
+  if (paymentSourceRaw !== "cash" && paymentSourceRaw !== "ap" && paymentSourceRaw !== "petty") {
+    throw new AuthError("validation", "paymentSource must be cash, ap, or petty.");
   }
 
   return {
     expenseDate: parseDate(raw.expenseDate, "Expense date"),
-    category: raw.category,
+    category: String(raw.category),
     payee,
     amountCents: parsePositiveCents(raw),
     currency: trimOrNull(raw.currency) ?? defaults?.currency ?? "USD",
     matterId: trimOrNull(raw.matterId),
     paymentMethod: trimOrNull(raw.paymentMethod),
     notes: trimOrNull(raw.notes),
+    glAccountId: trimOrNull(raw.glAccountId),
+    paymentSource: paymentSourceRaw,
+    budgetMonth: trimOrNull(raw.budgetMonth),
   };
 }
 

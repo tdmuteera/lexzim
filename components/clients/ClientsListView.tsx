@@ -6,25 +6,22 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { clientTypeLabel, normalizeClientType } from "@/lib/clients/kyc-types";
 
 type SerializedClient = {
   id: string;
+  clientNumber: string;
   clientType: string;
-  fullName: string | null;
-  legalName: string | null;
-  tradingName: string | null;
-  nationalIdOrRegNumber: string | null;
   phone: string | null;
+  whatsapp: string | null;
   email: string | null;
+  idNumber: string | null;
+  nationalIdOrRegNumber: string | null;
   displayName: string;
+  displayLabel: string;
+  kycStatus: string;
   archivedAt: string | null;
   updatedAt: string;
-};
-
-type ListResponse = {
-  ok: boolean;
-  data?: { items: SerializedClient[] };
-  error?: { message: string };
 };
 
 export function ClientsListView() {
@@ -51,7 +48,11 @@ export function ClientsListView() {
       const res = await fetch(`/api/clients?${params.toString()}`, {
         credentials: "include",
       });
-      const body = (await res.json()) as ListResponse;
+      const body = (await res.json()) as {
+        ok?: boolean;
+        data?: { items?: SerializedClient[] };
+        error?: { message: string };
+      };
       if (!res.ok || !body.ok) {
         setError(body.error?.message ?? "Could not load clients.");
         setItems([]);
@@ -68,7 +69,7 @@ export function ClientsListView() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      load();
+      void load();
     }, 200);
     return () => window.clearTimeout(timer);
   }, [load]);
@@ -88,7 +89,7 @@ export function ClientsListView() {
           <div className="toolbar">
             <input
               className="search-input"
-              placeholder="Search name, ID, phone, email…"
+              placeholder="Search CL number, name, phone, ID…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               aria-label="Search clients"
@@ -101,7 +102,9 @@ export function ClientsListView() {
             >
               <option value="">All types</option>
               <option value="individual">Individual</option>
-              <option value="company">Company</option>
+              <option value="corporate">Corporate</option>
+              <option value="partnership">Partnership</option>
+              <option value="trust">Trust</option>
             </select>
             <select
               className="filter-select"
@@ -125,39 +128,41 @@ export function ClientsListView() {
             >
               <option value="name:asc">Name A–Z</option>
               <option value="name:desc">Name Z–A</option>
+              <option value="number:asc">Client number</option>
               <option value="updated:desc">Recently updated</option>
               <option value="created:desc">Recently created</option>
             </select>
             <div className="toolbar-spacer" />
-            <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               Refresh
             </Button>
           </div>
 
-          {error ? (
-            <p style={{ color: "var(--danger)", marginBottom: "0.75rem" }}>{error}</p>
-          ) : null}
+          {error ? <p className="error-text">{error}</p> : null}
 
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
+                  <th>CL #</th>
                   <th>Name</th>
                   <th>Type</th>
-                  <th>ID / Reg</th>
                   <th>Phone</th>
-                  <th>Email</th>
+                  <th>WhatsApp</th>
+                  <th>KYC</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="muted">Loading clients…</td>
+                    <td colSpan={7} className="muted">
+                      Loading clients…
+                    </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <EmptyState
                         icon="users"
                         title="No clients match your filters"
@@ -168,24 +173,24 @@ export function ClientsListView() {
                 ) : (
                   items.map((client) => (
                     <tr key={client.id}>
+                      <td>{client.clientNumber}</td>
                       <td>
-                        <Link href={`/clients/${client.id}`} style={{ fontWeight: 600 }}>
-                          {client.displayName}
-                        </Link>
-                        {client.clientType === "company" && client.legalName && client.tradingName ? (
-                          <div className="muted" style={{ fontSize: "0.8rem" }}>
-                            {client.legalName}
-                          </div>
-                        ) : null}
+                        <Link href={`/clients/${client.id}`}>{client.displayName}</Link>
                       </td>
                       <td>
-                        <Badge tone={client.clientType === "company" ? "company" : "individual"}>
-                          {client.clientType === "company" ? "Company" : "Individual"}
+                        <Badge
+                          tone={
+                            normalizeClientType(client.clientType) === "individual"
+                              ? "individual"
+                              : "company"
+                          }
+                        >
+                          {clientTypeLabel(client.clientType)}
                         </Badge>
                       </td>
-                      <td>{client.nationalIdOrRegNumber ?? "—"}</td>
                       <td>{client.phone ?? "—"}</td>
-                      <td>{client.email ?? "—"}</td>
+                      <td>{client.whatsapp ?? "—"}</td>
+                      <td>{client.kycStatus}</td>
                       <td>
                         {client.archivedAt ? (
                           <Badge tone="closed">Archived</Badge>

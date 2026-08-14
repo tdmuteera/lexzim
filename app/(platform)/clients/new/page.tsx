@@ -18,7 +18,7 @@ export default async function NewClientPage() {
     <section className="view active scrollable" aria-label="New client">
       <div className="panel">
         <div className="panel-head">
-          <h3>New client</h3>
+          <h3>New client (KYC intake)</h3>
           <Link href="/clients" className="btn btn-outline btn-sm">
             Back
           </Link>

@@ -40,6 +40,8 @@ export async function GET(_request: Request, context: RouteContext) {
       sumFeePayments(firmId, id),
     ]);
 
+    const balanceCents = Math.max(0, full.invoice.totalCents - paidCents);
+
     return jsonOk({
       invoice: serializeInvoice(full.invoice, {
         matterTitle: full.matterTitle,
@@ -52,10 +54,11 @@ export async function GET(_request: Request, context: RouteContext) {
               tradingName: full.clientTradingName,
             })
           : null,
+        clientNumber: full.clientNumber,
         paidCents,
       }),
       lines: lines.map(serializeInvoiceLine),
-      payments: payments.map(serializeFeePayment),
+      payments: payments.map((p) => serializeFeePayment(p, { balanceCents })),
     });
   } catch (err) {
     return jsonError(err);
@@ -77,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     await assertInvoiceMatterAccess(session, firmId, existing.invoice.matterId);
 
-    const row = await updateInvoiceStatus(firmId, id, status);
+    const row = await updateInvoiceStatus(firmId, id, status, session.id);
     if (!row) {
       throw new AuthError("not_found", "Invoice not found.");
     }

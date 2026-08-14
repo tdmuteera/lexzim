@@ -5,7 +5,7 @@ type TrustMoneyCalloutProps = {
 };
 
 /**
- * Trust vs fee money wall (Phase 6).
+ * Trust vs fee money wall (Phase 6) with four-account clarity (P7-07).
  */
 export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) {
   return (
@@ -16,6 +16,37 @@ export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) 
           ? "This statement shows trust ledger movements only. Fee notes and fee payments are separate."
           : "Receipts, disbursements, transfers, and adjustments here are client trust money. They are not firm fee revenue."}
       </p>
+      <div
+        className="muted"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "0.5rem",
+          fontSize: "0.78rem",
+          margin: "0.5rem 0",
+        }}
+      >
+        <div>
+          <strong>Business vault</strong>
+          <br />
+          Firm operating cash (1010)
+        </div>
+        <div>
+          <strong>Business bank</strong>
+          <br />
+          Firm operating account (1010/1020)
+        </div>
+        <div>
+          <strong>Trust vault</strong>
+          <br />
+          Client cash held in vault
+        </div>
+        <div>
+          <strong>Trust bank</strong>
+          <br />
+          Client money at bank (GL 1210)
+        </div>
+      </div>
       <p className="finance-desk-callout-link">
         <Link href="/finance/invoicing">Open Invoicing (fee money)</Link>
         <span className="muted"> · never record fee receipts in the trust ledger</span>

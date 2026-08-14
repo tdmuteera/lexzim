@@ -11,6 +11,7 @@ export const CALENDAR_EVENT_TYPES: CalendarEventType[] = [
 
 export type CalendarEventInput = {
   matterId: string | null;
+  clientId: string | null;
   eventType: CalendarEventType;
   title: string;
   description: string | null;
@@ -77,8 +78,22 @@ export function parseCalendarEventInput(body: unknown): CalendarEventInput {
     matterId = matterRaw.trim();
   }
 
+  const clientRaw = raw.clientId;
+  let clientId: string | null = null;
+  if (typeof clientRaw === "string" && clientRaw.trim()) {
+    clientId = clientRaw.trim();
+  }
+
+  if (raw.eventType === "appointment" && !clientId && !matterId) {
+    throw new AuthError(
+      "validation",
+      "Client is required for a client meeting (or link a matter with a client).",
+    );
+  }
+
   return {
     matterId,
+    clientId,
     eventType: raw.eventType,
     title,
     description: trimOrNull(raw.description),

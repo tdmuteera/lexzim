@@ -1,5 +1,5 @@
 /**
- * Client repository (P1-01 stubs + P1-02 CRUD).
+ * Client repository (P1-02 + P7-04 KYC).
  * EVERY query MUST filter by firmId from session.
  */
 import {
@@ -14,29 +14,58 @@ import {
 } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients } from "@/lib/db/schema";
+import { allocateClientNumber } from "@/lib/clients/client-number";
 import type { ClientInput } from "@/lib/clients/validation";
 
 export type ListClientsOpts = {
   q?: string;
-  clientType?: "individual" | "company";
+  clientType?: string;
   archived?: "active" | "archived" | "all";
-  sort?: "name" | "created" | "updated";
+  sort?: "name" | "created" | "updated" | "number";
   sortDir?: "asc" | "desc";
 };
 
 function clientValuesFromInput(input: ClientInput) {
   return {
     clientType: input.clientType,
-    fullName: input.clientType === "individual" ? input.fullName : input.fullName ?? null,
-    legalName: input.clientType === "company" ? input.legalName : input.legalName ?? null,
+    firstName: input.firstName,
+    surname: input.surname,
+    otherNames: input.otherNames,
+    maidenName: input.maidenName,
+    dateOfBirth: input.dateOfBirth ?? null,
+    nationality: input.nationality,
+    idNumber: input.idNumber,
+    fullName: input.fullName,
+    legalName: input.legalName,
+    registeredName: input.registeredName,
     tradingName: input.tradingName,
     nationalIdOrRegNumber: input.nationalIdOrRegNumber,
+    regTaxNumber: input.regTaxNumber,
     taxNumber: input.taxNumber,
+    incorporationDate: input.incorporationDate ?? null,
+    incorporationCountry: input.incorporationCountry,
     email: input.email,
     phone: input.phone,
+    whatsapp: input.whatsapp,
     altPhone: input.altPhone,
+    residentialAddress: input.residentialAddress,
+    registeredAddress: input.registeredAddress,
+    businessAddress: input.businessAddress,
     physicalAddress: input.physicalAddress,
     postalAddress: input.postalAddress,
+    occupation: input.occupation,
+    employer: input.employer,
+    industry: input.industry,
+    pepStatus: input.pepStatus ?? false,
+    pepDetails: input.pepDetails,
+    uboJson: input.uboJson ?? [],
+    matterScopePurpose: input.matterScopePurpose,
+    sourceOfFunds: input.sourceOfFunds,
+    sourceOfFundsOther: input.sourceOfFundsOther,
+    kycDocumentsJson: input.kycDocumentsJson ?? {},
+    declarationSignedAt: input.declarationSignedAt ?? null,
+    declarationSignatory: input.declarationSignatory,
+    kycStatus: input.kycStatus ?? "draft",
     kycNotes: input.kycNotes,
   };
 }
@@ -60,11 +89,17 @@ export async function listClients(firmId: string, opts?: ListClientsOpts) {
     const pattern = `%${opts.q.trim()}%`;
     conditions.push(
       or(
+        ilike(clients.clientNumber, pattern),
+        ilike(clients.firstName, pattern),
+        ilike(clients.surname, pattern),
         ilike(clients.fullName, pattern),
         ilike(clients.legalName, pattern),
+        ilike(clients.registeredName, pattern),
         ilike(clients.tradingName, pattern),
+        ilike(clients.idNumber, pattern),
         ilike(clients.nationalIdOrRegNumber, pattern),
         ilike(clients.phone, pattern),
+        ilike(clients.whatsapp, pattern),
         ilike(clients.email, pattern),
       )!,
     );
@@ -78,13 +113,15 @@ export async function listClients(firmId: string, opts?: ListClientsOpts) {
       ? clients.createdAt
       : sortKey === "updated"
         ? clients.updatedAt
-        : clients.fullName;
+        : sortKey === "number"
+          ? clients.clientNumber
+          : clients.surname;
 
   return db
     .select()
     .from(clients)
     .where(and(...conditions))
-    .orderBy(orderFn(orderCol), orderFn(clients.legalName));
+    .orderBy(orderFn(orderCol), orderFn(clients.firstName), orderFn(clients.clientNumber));
 }
 
 export async function getClientById(firmId: string, clientId: string) {
@@ -99,10 +136,12 @@ export async function getClientById(firmId: string, clientId: string) {
 
 export async function createClient(firmId: string, userId: string, input: ClientInput) {
   const db = getDb();
+  const clientNumber = await allocateClientNumber(firmId);
   const rows = await db
     .insert(clients)
     .values({
       firmId,
+      clientNumber,
       createdBy: userId,
       ...clientValuesFromInput(input),
     })

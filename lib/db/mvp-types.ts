@@ -1,6 +1,6 @@
 /** Phase 1 MVP domain types (P1-01). */
 
-export type ClientType = "individual" | "company";
+export type ClientType = "individual" | "corporate" | "partnership" | "trust" | "company";
 
 export type MatterStatus = "prospective" | "open" | "on_hold" | "closed" | "archived";
 

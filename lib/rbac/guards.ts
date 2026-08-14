@@ -5,6 +5,7 @@ import { AuthError } from "@/lib/auth/types";
 import type { AuthSessionUser } from "@/lib/auth/types";
 import type { PermissionCode } from "@/lib/db/types";
 import {
+  canViewAllLawyerPerformance,
   canViewAllMatters,
   hasAllPermissions,
   hasAnyPermission,
@@ -53,4 +54,10 @@ export async function requireFirmScope(firmId: string): Promise<AuthSessionUser>
   return session;
 }
 
-export { canViewAllMatters, hasPermission, hasAnyPermission, hasAllPermissions };
+export {
+  canViewAllMatters,
+  canViewAllLawyerPerformance,
+  hasPermission,
+  hasAnyPermission,
+  hasAllPermissions,
+};

@@ -27,7 +27,7 @@ LexZim already implements Phase 3 **billing** and **trust** as separate modules 
 | Topic | Decision |
 |---|---|
 | Finance shape | One **Finance** nav area with sub-sections; **trust and fees remain structurally separated** |
-| Accounting depth | **Practice finance desk** (invoices, debtors, trust, recon, expenses, cashbook, P&L). **No** full double-entry GL / chart of accounts in Phase 6 |
+| Accounting depth | **Practice finance desk** in Phase 6. **Phase 7 supersedes “no full GL”**: double-entry COA, journals, TB, P&L, balance sheet (`docs/PHASE7_ADR.md`, `docs/FULL_ACCOUNTING.md`). Phase 6 tables remain. |
 | Trust vs fees | **Hard wall**: fee payments never post to trust; trust movements never mark invoices paid |
 | Trust vault | Add **master trust cash/vault** distinct from master trust **bank** |
 | Three-way recon | Formal monthly workflow with saved runs and sign-off |
@@ -210,8 +210,8 @@ HR v1 data model should **anticipate** payroll (staff id, employment start, cont
 
 | Non-goal | Reason |
 |---|---|
-| Full Odoo-style GL | Overkill for v1; practice desk meets proposal without journal complexity |
-| Chart of accounts / double-entry journals | Same |
+| Full Odoo-style GL | **Superseded in Phase 7.** Phase 6 shipped the practice desk only; Phase 7 added COA, journals, TB, P&L, and balance sheet. |
+| Chart of accounts / double-entry journals | **Superseded in Phase 7** (`docs/PHASE7_ADR.md`). |
 | Bank feeds / Open Banking | Out of product scope; manual statement balances |
 | Payment gateways | Phase 3 decision stands |
 | Payroll | Phase 6B |

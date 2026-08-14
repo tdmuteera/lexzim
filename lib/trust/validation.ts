@@ -35,6 +35,7 @@ export type TrustLedgerInput = {
   currency: string;
   occurredAt: Date;
   reference: string | null;
+  referenceNumber: string | null;
   narrative: string | null;
   /** Required for transfer: destination trust account. */
   transferToAccountId: string | null;
@@ -161,6 +162,7 @@ export function parseTrustLedgerInput(
       (defaults?.currency ? defaults.currency : "USD"),
     occurredAt: parseDate(raw.occurredAt, "Occurred at"),
     reference: trimOrNull(raw.reference),
+    referenceNumber: trimOrNull(raw.referenceNumber),
     narrative: trimOrNull(raw.narrative),
     transferToAccountId,
     adjustmentCredit: raw.adjustmentCredit === false ? false : true,

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { FinanceKpisPanel } from "@/components/finance/FinanceKpisPanel";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -150,21 +151,6 @@ export function FinanceReportsView() {
     else void loadKpis();
   }, [tab, loadWeekly, loadMonthly, loadKpis]);
 
-  function exportCsv() {
-    if (tab === "weekly") {
-      const params = new URLSearchParams({ pack: "weekly", format: "csv", asOf });
-      window.location.href = `/api/finance/reports?${params.toString()}`;
-    } else {
-      const params = new URLSearchParams({
-        pack: "monthly",
-        format: "csv",
-        year: String(periodYear),
-        month: String(periodMonth),
-      });
-      window.location.href = `/api/finance/reports?${params.toString()}`;
-    }
-  }
-
   async function lockPeriod() {
     if (!canCloseMonth || monthlyPack?.periodLock.locked) return;
     setLocking(true);
@@ -209,9 +195,23 @@ export function FinanceReportsView() {
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            <Button size="sm" variant="outline" onClick={() => exportCsv()} disabled={loading}>
-              Export CSV
-            </Button>
+            {tab === "weekly" ? (
+              <ExportMenu
+                kind="finance_weekly"
+                queryParams={{ asOf }}
+                disabled={loading}
+              />
+            ) : null}
+            {tab === "monthly" ? (
+              <ExportMenu
+                kind="finance_monthly"
+                queryParams={{
+                  year: String(periodYear),
+                  month: String(periodMonth),
+                }}
+                disabled={loading}
+              />
+            ) : null}
             <Button
               size="sm"
               variant="outline"

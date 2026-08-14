@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -105,12 +106,13 @@ export function DebtorsView() {
     return counts;
   }, [rows]);
 
-  function exportCsv() {
-    const params = new URLSearchParams({ format: "csv" });
-    if (bucket) params.set("bucket", bucket);
-    if (matterId) params.set("matterId", matterId);
-    window.location.href = `/api/finance/debtors?${params.toString()}`;
-  }
+  const exportQuery = useMemo(
+    () => ({
+      bucket: bucket || undefined,
+      matterId: matterId || undefined,
+    }),
+    [bucket, matterId],
+  );
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Debtors">
@@ -123,9 +125,7 @@ export function DebtorsView() {
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            <Button size="sm" variant="outline" onClick={() => exportCsv()} disabled={loading}>
-              Export CSV
-            </Button>
+            <ExportMenu kind="debtors" queryParams={exportQuery} disabled={loading} />
             <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
               Refresh
             </Button>

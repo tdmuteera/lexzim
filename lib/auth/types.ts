@@ -6,6 +6,8 @@ export type AuthSessionUser = {
   email: string;
   fullName: string;
   isActive: boolean;
+  /** P7-11: temp password issued; prompt the user to change it. */
+  mustChangePassword: boolean;
   lastLoginAt: Date | null;
   firm: {
     id: string;

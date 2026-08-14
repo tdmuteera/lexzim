@@ -18,6 +18,7 @@ import {
   unique,
   uuid,
   vector,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /** Gemini text-embedding-004 default size (documented in docs/AI.md). */
@@ -106,6 +107,8 @@ export const users = pgTable(
       .notNull()
       .references(() => roles.id),
     isActive: boolean("is_active").notNull().default(true),
+    /** P7-11: force a password change on next login (temp password issued). */
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -113,6 +116,33 @@ export const users = pgTable(
   (t) => [
     index("users_firm_id_idx").on(t.firmId),
     index("users_role_id_idx").on(t.roleId),
+  ],
+);
+
+/**
+ * P7-11: approval-gated password resets. A user requests a reset from the login
+ * screen (no self-service email link); a Managing Partner / users.manage admin
+ * approves and issues a temp password. Never store the password here.
+ */
+export const passwordResetRequests = pgTable(
+  "password_reset_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id").references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Email as typed at request time (helps triage unknown/foreign emails). */
+    email: text("email").notNull(),
+    /** pending | approved | rejected | cancelled */
+    status: text("status").notNull().default("pending"),
+    note: text("note"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    ipOrUserAgent: text("ip_or_user_agent"),
+  },
+  (t) => [
+    index("password_reset_requests_firm_idx").on(t.firmId, t.status),
+    index("password_reset_requests_user_idx").on(t.userId),
   ],
 );
 
@@ -158,17 +188,49 @@ export const clients = pgTable(
     firmId: uuid("firm_id")
       .notNull()
       .references(() => firms.id, { onDelete: "cascade" }),
-    clientType: text("client_type").notNull(), // individual | company
+    /** CL0001 per firm; immutable after assign */
+    clientNumber: text("client_number").notNull(),
+    /** individual | corporate | partnership | trust (legacy company → corporate) */
+    clientType: text("client_type").notNull(),
+    firstName: text("first_name"),
+    surname: text("surname"),
+    otherNames: text("other_names"),
+    maidenName: text("maiden_name"),
+    dateOfBirth: timestamp("date_of_birth", { withTimezone: true }),
+    nationality: text("nationality"),
+    idNumber: text("id_number"),
     fullName: text("full_name"),
     legalName: text("legal_name"),
+    registeredName: text("registered_name"),
     tradingName: text("trading_name"),
     nationalIdOrRegNumber: text("national_id_or_reg_number"),
+    regTaxNumber: text("reg_tax_number"),
     taxNumber: text("tax_number"),
+    incorporationDate: timestamp("incorporation_date", { withTimezone: true }),
+    incorporationCountry: text("incorporation_country"),
     email: text("email"),
     phone: text("phone"),
+    whatsapp: text("whatsapp"),
     altPhone: text("alt_phone"),
+    residentialAddress: text("residential_address"),
+    registeredAddress: text("registered_address"),
+    businessAddress: text("business_address"),
     physicalAddress: text("physical_address"),
     postalAddress: text("postal_address"),
+    occupation: text("occupation"),
+    employer: text("employer"),
+    industry: text("industry"),
+    pepStatus: boolean("pep_status").notNull().default(false),
+    pepDetails: text("pep_details"),
+    uboJson: jsonb("ubo_json").notNull().default([]),
+    matterScopePurpose: text("matter_scope_purpose"),
+    sourceOfFunds: text("source_of_funds"),
+    sourceOfFundsOther: text("source_of_funds_other"),
+    kycDocumentsJson: jsonb("kyc_documents_json").notNull().default({}),
+    declarationSignedAt: timestamp("declaration_signed_at", { withTimezone: true }),
+    declarationSignatory: text("declaration_signatory"),
+    /** draft | complete | review_due */
+    kycStatus: text("kyc_status").notNull().default("draft"),
     kycNotes: text("kyc_notes"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -176,9 +238,12 @@ export const clients = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (t) => [
+    unique("clients_firm_client_number_uid").on(t.firmId, t.clientNumber),
     index("clients_firm_id_idx").on(t.firmId),
     index("clients_firm_archived_idx").on(t.firmId, t.archivedAt),
     index("clients_firm_type_idx").on(t.firmId, t.clientType),
+    index("clients_firm_id_number_idx").on(t.firmId, t.idNumber),
+    index("clients_firm_whatsapp_idx").on(t.firmId, t.whatsapp),
   ],
 );
 
@@ -588,6 +653,7 @@ export const calendarEvents = pgTable(
       .notNull()
       .references(() => firms.id, { onDelete: "cascade" }),
     matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     /** hearing | appointment | filing | deadline | other */
     eventType: text("event_type").notNull().default("appointment"),
     title: text("title").notNull(),
@@ -604,6 +670,7 @@ export const calendarEvents = pgTable(
     index("calendar_events_firm_id_idx").on(t.firmId),
     index("calendar_events_firm_starts_idx").on(t.firmId, t.startsAt),
     index("calendar_events_matter_id_idx").on(t.matterId),
+    index("calendar_events_client_id_idx").on(t.firmId, t.clientId),
   ],
 );
 
@@ -711,6 +778,9 @@ export const disbursements = pgTable(
     incurredAt: timestamp("incurred_at", { withTimezone: true }).notNull(),
     billable: boolean("billable").notNull().default(true),
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    /** operating | trust */
+    paidFrom: text("paid_from").notNull().default("operating"),
+    glPostedAt: timestamp("gl_posted_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -740,6 +810,9 @@ export const invoices = pgTable(
     subtotalCents: integer("subtotal_cents").notNull().default(0),
     taxCents: integer("tax_cents").notNull().default(0),
     totalCents: integer("total_cents").notNull().default(0),
+    discountCents: integer("discount_cents").notNull().default(0),
+    discountPct: real("discount_pct"),
+    retainerAppliedCents: integer("retainer_applied_cents").notNull().default(0),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -770,6 +843,12 @@ export const invoiceLines = pgTable(
     unitAmountCents: integer("unit_amount_cents").notNull().default(0),
     amountCents: integer("amount_cents").notNull().default(0),
     sourceId: uuid("source_id"),
+    firmServiceId: uuid("firm_service_id").references(() => firmServices.id, {
+      onDelete: "set null",
+    }),
+    revenueGlAccountId: uuid("revenue_gl_account_id").references(() => glAccounts.id, {
+      onDelete: "set null",
+    }),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -796,6 +875,7 @@ export const feePayments = pgTable(
     method: text("method"),
     reference: text("reference"),
     notes: text("notes"),
+    receiptNumber: text("receipt_number"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -851,6 +931,7 @@ export const trustLedgerEntries = pgTable(
     currency: text("currency").notNull().default("USD"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     reference: text("reference"),
+    referenceNumber: text("reference_number"),
     narrative: text("narrative"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1346,6 +1427,11 @@ export const firmExpenses = pgTable(
     matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
     paymentMethod: text("payment_method"),
     notes: text("notes"),
+    glAccountId: uuid("gl_account_id").references(() => glAccounts.id, { onDelete: "set null" }),
+    /** cash | ap | petty */
+    paymentSource: text("payment_source").notNull().default("cash"),
+    creditorInvoiceId: uuid("creditor_invoice_id"),
+    budgetMonth: text("budget_month"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1383,6 +1469,144 @@ export const businessCashbookEntries = pgTable(
     index("business_cashbook_firm_date_idx").on(t.firmId, t.entryDate),
     index("business_cashbook_firm_type_idx").on(t.firmId, t.entryType),
   ],
+);
+
+/** Petty cash float (Phase 7 P7-07). */
+export const pettyCashFloats = pgTable(
+  "petty_cash_floats",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    openingDate: timestamp("opening_date", { withTimezone: true }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    /** open | closed */
+    status: text("status").notNull().default("open"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("petty_cash_floats_firm_status_idx").on(t.firmId, t.status)],
+);
+
+/** Petty cash movements: vault_to_petty | petty_spend | petty_return */
+export const pettyCashMovements = pgTable(
+  "petty_cash_movements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    floatId: uuid("float_id")
+      .notNull()
+      .references(() => pettyCashFloats.id, { onDelete: "cascade" }),
+    movementType: text("movement_type").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    movementDate: timestamp("movement_date", { withTimezone: true }).notNull(),
+    expenseGlAccountId: uuid("expense_gl_account_id").references(() => glAccounts.id, {
+      onDelete: "set null",
+    }),
+    reference: text("reference"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("petty_cash_movements_firm_float_idx").on(t.firmId, t.floatId)],
+);
+
+/** Accounts payable suppliers (Phase 7). */
+export const creditors = pgTable(
+  "creditors",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    contactEmail: text("contact_email"),
+    contactPhone: text("contact_phone"),
+    defaultExpenseAccountId: uuid("default_expense_account_id").references(() => glAccounts.id, {
+      onDelete: "set null",
+    }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("creditors_firm_active_idx").on(t.firmId, t.isActive)],
+);
+
+export const creditorInvoices = pgTable(
+  "creditor_invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    creditorId: uuid("creditor_id")
+      .notNull()
+      .references(() => creditors.id, { onDelete: "cascade" }),
+    invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    reference: text("reference"),
+    /** open | paid | void */
+    status: text("status").notNull().default("open"),
+    expenseAccountId: uuid("expense_account_id").references(() => glAccounts.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("creditor_invoices_firm_creditor_idx").on(t.firmId, t.creditorId),
+    index("creditor_invoices_firm_due_idx").on(t.firmId, t.dueDate),
+  ],
+);
+
+export const creditorPayments = pgTable(
+  "creditor_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    creditorInvoiceId: uuid("creditor_invoice_id")
+      .notNull()
+      .references(() => creditorInvoices.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+    paymentMethod: text("payment_method"),
+    reference: text("reference"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("creditor_payments_firm_invoice_idx").on(t.firmId, t.creditorInvoiceId)],
+);
+
+/** Firm public holidays for CRM desk (Phase 7 P7-08). */
+export const firmHolidays = pgTable(
+  "firm_holidays",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    holidayDate: timestamp("holiday_date", { withTimezone: true }).notNull(),
+    name: text("name").notNull(),
+    country: text("country").notNull().default("ZW"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("firm_holidays_firm_date_idx").on(t.firmId, t.holidayDate)],
 );
 
 /** Month-end period lock for finance postings (UTC year-month). */
@@ -1544,6 +1768,175 @@ export const hrLeaveRequests = pgTable(
   ],
 );
 
+/** General ledger chart of accounts (Phase 7). */
+export const glAccounts = pgTable(
+  "gl_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    /** asset | liability | equity | revenue | direct_cost | expense */
+    type: text("type").notNull(),
+    parentId: uuid("parent_id").references((): AnyPgColumn => glAccounts.id, {
+      onDelete: "set null",
+    }),
+    isActive: boolean("is_active").notNull().default(true),
+    isSystem: boolean("is_system").notNull().default(false),
+    /** debit | credit */
+    normalBalance: text("normal_balance").notNull(),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("gl_accounts_firm_code_uid").on(t.firmId, t.code),
+    index("gl_accounts_firm_type_idx").on(t.firmId, t.type),
+    index("gl_accounts_firm_parent_idx").on(t.firmId, t.parentId),
+  ],
+);
+
+/** Posted GL journal entry header. */
+export const glJournalEntries = pgTable(
+  "gl_journal_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    entryDate: timestamp("entry_date", { withTimezone: true }).notNull(),
+    reference: text("reference"),
+    memo: text("memo"),
+    /** manual | invoice | payment | trust | expense | quote | opening */
+    sourceType: text("source_type").notNull().default("manual"),
+    sourceId: uuid("source_id"),
+    postedBy: uuid("posted_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    postedAt: timestamp("posted_at", { withTimezone: true }).defaultNow().notNull(),
+    reversedByEntryId: uuid("reversed_by_entry_id").references(
+      (): AnyPgColumn => glJournalEntries.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("gl_journal_entries_firm_date_idx").on(t.firmId, t.entryDate),
+    index("gl_journal_entries_firm_source_idx").on(t.firmId, t.sourceType, t.sourceId),
+  ],
+);
+
+/** GL journal entry lines (balanced debits/credits). */
+export const glJournalLines = pgTable(
+  "gl_journal_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => glJournalEntries.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => glAccounts.id, { onDelete: "restrict" }),
+    debitCents: integer("debit_cents").notNull().default(0),
+    creditCents: integer("credit_cents").notNull().default(0),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    currency: text("currency").notNull().default("USD"),
+    lineMemo: text("line_memo"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("gl_journal_lines_firm_entry_idx").on(t.firmId, t.entryId),
+    index("gl_journal_lines_firm_account_idx").on(t.firmId, t.accountId),
+  ],
+);
+
+/** Firm service catalogue / price list (Phase 7). */
+export const firmServices = pgTable(
+  "firm_services",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    defaultPriceCents: integer("default_price_cents").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    revenueGlAccountId: uuid("revenue_gl_account_id").references(() => glAccounts.id, {
+      onDelete: "set null",
+    }),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("firm_services_firm_code_uid").on(t.firmId, t.code),
+    index("firm_services_firm_active_idx").on(t.firmId, t.isActive),
+  ],
+);
+
+/** Client quotations (Phase 7). No GL posting until invoice. */
+export const quotations = pgTable(
+  "quotations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    quoteNumber: text("quote_number").notNull(),
+    /** draft | sent | accepted | declined | expired */
+    status: text("status").notNull().default("draft"),
+    currency: text("currency").notNull().default("USD"),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    discountCents: integer("discount_cents").notNull().default(0),
+    discountPct: real("discount_pct"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("quotations_firm_quote_number_uid").on(t.firmId, t.quoteNumber),
+    index("quotations_firm_status_idx").on(t.firmId, t.status),
+    index("quotations_firm_client_idx").on(t.firmId, t.clientId),
+  ],
+);
+
+export const quotationLines = pgTable(
+  "quotation_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    quotationId: uuid("quotation_id")
+      .notNull()
+      .references(() => quotations.id, { onDelete: "cascade" }),
+    firmServiceId: uuid("firm_service_id").references(() => firmServices.id, {
+      onDelete: "set null",
+    }),
+    description: text("description").notNull(),
+    qty: real("qty").notNull().default(1),
+    unitPriceCents: integer("unit_price_cents").notNull().default(0),
+    lineTotalCents: integer("line_total_cents").notNull().default(0),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("quotation_lines_firm_quote_idx").on(t.firmId, t.quotationId)],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -1603,4 +1996,17 @@ export const schema = {
   hrContracts,
   hrLeaveTypes,
   hrLeaveRequests,
+  glAccounts,
+  glJournalEntries,
+  glJournalLines,
+  firmServices,
+  quotations,
+  quotationLines,
+  pettyCashFloats,
+  pettyCashMovements,
+  creditors,
+  creditorInvoices,
+  creditorPayments,
+  firmHolidays,
+  passwordResetRequests,
 };

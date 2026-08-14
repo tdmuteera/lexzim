@@ -6,12 +6,14 @@
 import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type {
   CreateInvoiceInput,
+  CreateServiceInvoiceInput,
   DisbursementInput,
   FeePaymentInput,
   InvoiceStatusValue,
   TimeEntryInput,
 } from "@/lib/billing/validation";
 import { assertInvoiceStatusTransition } from "@/lib/billing/validation";
+import { postDisbursementGl } from "@/lib/gl/posting-disbursements";
 import { describeTimeLine } from "@/lib/billing/serialize";
 import { timeEntryAmountCents } from "@/lib/billing/money";
 import { AuthError } from "@/lib/auth/types";
@@ -20,6 +22,7 @@ import {
   clients,
   disbursements,
   feePayments,
+  firmServices,
   invoiceLines,
   invoices,
   matters,
@@ -27,7 +30,19 @@ import {
   users,
 } from "@/lib/db/schema";
 import {
+  postFeePaymentGl,
+  postInvoiceSentGl,
+  reverseInvoiceSentGl,
+} from "@/lib/gl/posting-invoices";
+import { lineTotalCents } from "@/lib/quotes/validation";
+import {
+  quotationDiscountCents,
+  quotationSubtotalCents,
+  quotationTotalCents,
+} from "@/lib/quotes/totals";
+import {
   allocateInvoiceNumber,
+  allocateReceiptNumber,
   getInvoiceDueDays,
 } from "@/lib/repos/firm-settings";
 
@@ -220,10 +235,15 @@ export async function createDisbursement(
       currency: input.currency,
       incurredAt: input.incurredAt,
       billable: input.billable,
+      paidFrom: input.paidFrom,
       createdBy: userId,
     })
     .returning();
-  return rows[0]!;
+  const row = rows[0]!;
+  if (row.billable) {
+    await postDisbursementGl(firmId, userId, row.id);
+  }
+  return row;
 }
 
 export async function updateDisbursement(
@@ -249,6 +269,7 @@ export async function updateDisbursement(
       currency: input.currency,
       incurredAt: input.incurredAt,
       billable: input.billable,
+      paidFrom: input.paidFrom,
     })
     .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, id)))
     .returning();
@@ -333,6 +354,7 @@ export async function listInvoices(
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
       clientType: clients.clientType,
+      clientNumber: clients.clientNumber,
     })
     .from(invoices)
     .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
@@ -352,6 +374,7 @@ export async function getInvoice(firmId: string, invoiceId: string) {
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
       clientType: clients.clientType,
+      clientNumber: clients.clientNumber,
     })
     .from(invoices)
     .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
@@ -621,14 +644,123 @@ export async function createInvoiceFromUnbilled(
   return invoice!;
 }
 
+/** Create draft invoice from service catalogue lines (Phase 7). */
+export async function createInvoiceFromServices(
+  firmId: string,
+  userId: string,
+  input: CreateServiceInvoiceInput,
+  defaults: { currency: string },
+) {
+  const db = getDb();
+  const client = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), eq(clients.id, input.clientId)))
+    .limit(1);
+  if (!client[0]) throw new AuthError("not_found", "Client not found.");
+
+  const matter = await db
+    .select({ id: matters.id, clientId: matters.clientId })
+    .from(matters)
+    .where(and(eq(matters.firmId, firmId), eq(matters.id, input.matterId)))
+    .limit(1);
+  if (!matter[0]) throw new AuthError("not_found", "Matter not found.");
+  if (matter[0].clientId !== input.clientId) {
+    throw new AuthError("validation", "Matter does not belong to this client.");
+  }
+
+  const serviceIds = input.lines
+    .map((l) => l.firmServiceId)
+    .filter(Boolean) as string[];
+  const serviceGlById = new Map<string, string>();
+  if (serviceIds.length) {
+    const rows = await db
+      .select({
+        id: firmServices.id,
+        revenueGlAccountId: firmServices.revenueGlAccountId,
+      })
+      .from(firmServices)
+      .where(and(eq(firmServices.firmId, firmId)));
+    for (const s of rows) {
+      if (s.revenueGlAccountId) serviceGlById.set(s.id, s.revenueGlAccountId);
+    }
+  }
+
+  const lineAmounts = input.lines.map((line) =>
+    lineTotalCents(line.qty, line.unitPriceCents),
+  );
+  const subtotalCents = quotationSubtotalCents(
+    lineAmounts.map((lineTotalCents) => ({ lineTotalCents })),
+  );
+  const discountApplied = quotationDiscountCents(
+    subtotalCents,
+    input.discountCents ?? 0,
+    input.discountPct,
+  );
+  const totalCents = quotationTotalCents(
+    subtotalCents,
+    input.discountCents ?? 0,
+    input.discountPct,
+  );
+  const invoiceNumber = await allocateInvoiceNumber(firmId);
+  const currency = input.currency ?? defaults.currency;
+
+  return db.transaction(async (tx) => {
+    const [invoice] = await tx
+      .insert(invoices)
+      .values({
+        firmId,
+        matterId: input.matterId,
+        clientId: input.clientId,
+        invoiceNumber,
+        status: "draft",
+        currency,
+        subtotalCents,
+        discountCents: input.discountCents ?? 0,
+        discountPct: input.discountPct ?? null,
+        taxCents: 0,
+        totalCents,
+        notes: input.notes ?? null,
+        createdBy: userId,
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    let sortOrder = 0;
+    for (let i = 0; i < input.lines.length; i++) {
+      const line = input.lines[i]!;
+      const amountCents = lineAmounts[i]!;
+      const revenueGlAccountId =
+        line.revenueGlAccountId ??
+        (line.firmServiceId ? (serviceGlById.get(line.firmServiceId) ?? null) : null);
+      await tx.insert(invoiceLines).values({
+        firmId,
+        invoiceId: invoice!.id,
+        lineType: "fee",
+        description: line.description,
+        quantity: line.qty,
+        unitAmountCents: line.unitPriceCents,
+        amountCents,
+        firmServiceId: line.firmServiceId ?? null,
+        revenueGlAccountId,
+        sortOrder: sortOrder++,
+      });
+    }
+
+    return invoice!;
+  });
+}
+
 export async function updateInvoiceStatus(
   firmId: string,
   invoiceId: string,
   status: InvoiceStatusValue,
+  userId?: string,
 ) {
   const full = await getInvoice(firmId, invoiceId);
   if (!full) return null;
-  assertInvoiceStatusTransition(full.invoice.status, status);
+  const previousStatus = full.invoice.status;
+  assertInvoiceStatusTransition(previousStatus, status);
 
   const patch: {
     status: string;
@@ -667,7 +799,18 @@ export async function updateInvoiceStatus(
     .set(patch)
     .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)))
     .returning();
-  return rows[0] ?? null;
+  const updated = rows[0] ?? null;
+
+  if (updated && userId) {
+    if (status === "sent" && previousStatus === "draft") {
+      await postInvoiceSentGl(firmId, userId, invoiceId);
+    }
+    if (status === "void" && previousStatus !== "draft") {
+      await reverseInvoiceSentGl(firmId, userId, invoiceId);
+    }
+  }
+
+  return updated;
 }
 
 export async function createFeePayment(
@@ -687,12 +830,14 @@ export async function createFeePayment(
     );
   }
 
+  const receiptNumber = await allocateReceiptNumber(firmId);
   const db = getDb();
   const [payment] = await db
     .insert(feePayments)
     .values({
       firmId,
       invoiceId,
+      receiptNumber,
       amountCents: input.amountCents,
       currency: input.currency || full.invoice.currency,
       paidAt: input.paidAt,
@@ -702,6 +847,8 @@ export async function createFeePayment(
       createdBy: userId,
     })
     .returning();
+
+  await postFeePaymentGl(firmId, userId, payment!.id);
 
   const paid = await sumFeePayments(firmId, invoiceId);
   if (paid >= full.invoice.totalCents && full.invoice.status !== "paid") {

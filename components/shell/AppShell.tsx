@@ -1,10 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PasswordChangePrompt } from "@/components/auth/PasswordChangePrompt";
 import { RouteGuard } from "@/components/auth/RouteGuard";
 import { BrowserNotifications } from "@/components/reminders/BrowserNotifications";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { AppTopbar } from "@/components/shell/AppTopbar";
+import { PageMotion } from "@/components/shell/PageMotion";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useUiStore } from "@/lib/store";
 
@@ -26,8 +28,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AppSidebar />
         <div className="main">
           <AppTopbar />
+          <PasswordChangePrompt />
           <div className="content">
-            <RouteGuard>{children}</RouteGuard>
+            <RouteGuard>
+              <PageMotion>{children}</PageMotion>
+            </RouteGuard>
           </div>
         </div>
       </div>

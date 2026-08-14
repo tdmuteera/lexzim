@@ -64,7 +64,45 @@ Server helpers:
 
 Client registry remains firm-wide for anyone with `clients.view`. Matter lists/counts on a client detail respect assignment for non–`view_all` users.
 
+## Lawyer performance scoping (P7-10)
+
+`canViewAllLawyerPerformance(session)` in `lib/rbac/permissions.ts`:
+
+| Who | Scope |
+|---|---|
+| Managing Partner | All lawyers |
+| `finance.view` | All lawyers |
+| `matters.view_all` | All lawyers |
+| Everyone else | Self only (matters where they are responsible lawyer) |
+
+Revenue figures on the dashboard are omitted unless the session also has `billing.view`, `reports.view`, or `finance.view`.
+
 Templates are firm-wide (permission-gated). Party search and client party lists hide matter-linked rows the user cannot access.
+
+## Email + user security (P7-11)
+
+**Outbound email**
+
+| Route | Permission | Notes |
+|---|---|---|
+| `/api/settings/email` (GET/PUT) | `settings.manage` | SMTP host/port/creds + sender identity. Password encrypted; never returned to browser. |
+| `/api/settings/email/test` (POST) | `settings.manage` | Test send. |
+| `/api/email/send` (POST) | `billing.view` | Email quotation/invoice/receipt as PDF attachment. Firm-scoped entity lookup. |
+| `/api/email/compose` (POST) | `users.manage` **or** `billing.manage` | Generic notification to a client's email. |
+
+SMTP secrets stay server-side (encrypted in `firm_settings`, stripped from firm exports). Every send audits `email.sent` with recipient, template type, and entity id.
+
+**User provisioning + password reset**
+
+- Only `users.manage` (Managing Partner) can create users (`/api/staff`). A blank password auto-generates a temp password, shown once, and sets `must_change_password`.
+- Password reset is **approval-gated**. There is no self-service email reset link.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `/api/auth/reset-request` (POST) | Public | User requests a reset from login. Generic response (no email enumeration). Creates a pending `password_reset_requests` row. |
+| `/api/security/reset-requests` (GET) | `users.manage` | Firm queue of pending requests. |
+| `/api/security/reset-requests` (POST) | `users.manage` | Approve → issues a temp password (shown once), forces change; or reject. Audited `security.password_reset_approved` / `_rejected`. |
+| `/api/auth/change-password` (POST) | Any signed-in user | Self-service change; clears `must_change_password`. |
 
 ## Phase 1 protected routes
 
@@ -95,7 +133,7 @@ Templates are firm-wide (permission-gated). Party search and client party lists 
 | Trust accounts | `/api/trust/accounts*` | `trust.view` / `trust.manage` | `firm_id` |
 | Trust ledger | `/api/trust/ledger` | `trust.view` / `trust.manage` | `firm_id`; matter access when `matterId` set |
 | Trust statement | `/api/trust/clients/[id]/statement` | `trust.view` | client must belong to firm |
-| Reports | `/api/reports/[type]` | `reports.view` | `firm_id`; fee vs trust report types labeled |
+| Reports | `/api/reports/[type]`, `/api/reports/lawyer-performance` | `reports.view` | `firm_id`; lawyer performance scoped (see below) |
 | Calendar / reminders | `/api/calendar*`, `/api/reminders` | `calendar.view` / `calendar.manage` | matter access when !view_all |
 
 Dashboard money widgets never return invoice or trust payloads without `billing.view` / `trust.view`.

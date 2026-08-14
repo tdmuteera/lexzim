@@ -20,12 +20,18 @@ export async function GET(request: Request) {
     const rows = await listClients(firmId, {
       q,
       clientType:
-        clientType === "individual" || clientType === "company" ? clientType : undefined,
+        clientType === "individual" ||
+        clientType === "corporate" ||
+        clientType === "partnership" ||
+        clientType === "trust" ||
+        clientType === "company"
+          ? clientType
+          : undefined,
       archived:
         archived === "active" || archived === "archived" || archived === "all"
           ? archived
           : "active",
-      sort: sort === "created" || sort === "updated" || sort === "name" ? sort : "name",
+      sort: sort === "created" || sort === "updated" || sort === "name" || sort === "number" ? sort : "name",
       sortDir: sortDir === "desc" ? "desc" : "asc",
     });
 
@@ -42,7 +48,7 @@ export async function POST(request: Request) {
     const session = await requirePermission("clients.create");
     const firmId = tenantFirmId(session);
     const body = await request.json();
-    const input = parseClientInput(body);
+    const input = parseClientInput(body, { requireKycCore: true });
 
     const row = await createClient(firmId, session.id, input);
 
@@ -54,6 +60,7 @@ export async function POST(request: Request) {
       entityId: row.id,
       metadata: {
         clientType: row.clientType,
+        clientNumber: row.clientNumber,
         displayName: serializeClient(row).displayName,
       },
       ipOrUserAgent: clientInfo(request),

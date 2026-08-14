@@ -181,9 +181,14 @@ export function BillingListView() {
             <p className="panel-subtitle muted">Fee notes · firm revenue · not trust</p>
           </div>
           <Can permission="billing.manage">
-            <Button size="sm" onClick={() => setCreating(true)}>
-              New from unbilled
-            </Button>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Link href="/finance/invoicing/new" className="btn btn-primary btn-sm">
+                New invoice
+              </Link>
+              <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                From unbilled
+              </Button>
+            </div>
           </Can>
         </div>
         <div className="panel-body">

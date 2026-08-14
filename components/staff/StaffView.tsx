@@ -49,6 +49,9 @@ export function StaffView() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [roleCode, setRoleCode] = useState("junior_associate");
+  const [issuedTemp, setIssuedTemp] = useState<{ email: string; tempPassword: string } | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,17 +101,22 @@ export function StaffView() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, fullName, password, roleCode }),
+        body: JSON.stringify({ email, fullName, password: password.trim() || undefined, roleCode }),
       });
       const body = (await res.json()) as {
         ok: boolean;
+        data?: { tempPassword?: string | null; user?: { email: string } };
         error?: { message: string; code?: string };
       };
       if (!res.ok || !body.ok) {
         setError(body.error?.message ?? "Could not invite user.");
         return;
       }
-      toast("User invited.");
+      if (body.data?.tempPassword && body.data.user?.email) {
+        setIssuedTemp({ email: body.data.user.email, tempPassword: body.data.tempPassword });
+      } else {
+        toast("User invited.");
+      }
       setEmail("");
       setFullName("");
       setPassword("");
@@ -230,6 +238,34 @@ export function StaffView() {
           <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>{error}</p>
         ) : null}
 
+        {issuedTemp ? (
+          <div className="panel" style={{ marginBottom: "1rem", borderColor: "var(--gold, #b8860b)" }}>
+            <div className="panel-body" style={{ display: "grid", gap: "0.4rem" }}>
+              <strong>Temporary password for {issuedTemp.email}</strong>
+              <p className="muted" style={{ margin: 0, fontSize: "0.82rem" }}>
+                Share this securely with the new user. It is shown only once and they must change it
+                on first login.
+              </p>
+              <code
+                style={{
+                  fontSize: "1.05rem",
+                  padding: "0.5rem 0.75rem",
+                  background: "rgba(0,0,0,0.05)",
+                  borderRadius: "6px",
+                  userSelect: "all",
+                }}
+              >
+                {issuedTemp.tempPassword}
+              </code>
+              <div>
+                <Button size="sm" variant="outline" onClick={() => setIssuedTemp(null)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="panel" style={{ marginBottom: "1rem" }}>
           <div className="panel-body" style={{ display: "grid", gap: "0.65rem", maxWidth: "28rem" }}>
             <strong>Invite user</strong>
@@ -256,12 +292,14 @@ export function StaffView() {
             </label>
             <label>
               <div className="muted" style={{ fontSize: "0.8rem" }}>
-                Temporary password (min 10 chars)
+                Temporary password (leave blank to auto-generate)
               </div>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Auto-generated if blank"
+                autoComplete="new-password"
                 style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
               />
             </label>

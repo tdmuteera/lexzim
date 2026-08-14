@@ -1,21 +1,27 @@
-# Finance desk quickstart (Phase 6)
+# Finance desk quickstart (Phase 6 + Phase 7 GL)
 
-LexZim **Finance** is the practice money desk: fee invoicing, debtors, client trust, reconciliations, firm expenses, business cashbook, and management reports. **Trust and fees stay separate.**
+LexZim **Finance** is the practice money desk: fee invoicing, debtors, client trust, reconciliations, firm expenses, business cashbook, quotations, petty cash, creditors, and a **double-entry general ledger**. **Trust and fees stay separate.**
 
-Payroll is **not** in Phase 6. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
+Payroll is **not** in Phase 6 or Phase 7. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
+
+Phase 6 deferred a full GL. **Phase 7 supersedes that**: chart of accounts, journals, trial balance, P&L, and balance sheet are live. See `Finance_Phase7_Guide.md` and `docs/PHASE7_ADR.md`.
 
 ## Finance menu map
 
 | Section | Path | What it is |
 |---------|------|------------|
 | Invoicing | `/finance/invoicing` (alias `/billing`) | Fee notes, time, disbursements, **fee payments** |
+| Quotations | `/finance/quotations` | Service catalogue, quotes, convert to invoice |
 | Debtors | `/finance/debtors` | Outstanding fee invoices with **due-date ageing** |
-| Trust | `/finance/trust` (alias `/trust`) | Client trust ledgers, vault, statements |
+| Trust | `/finance/trust` (alias `/trust`) | Client trust ledgers, vault, statements, reference numbers |
 | Reconciliations | `/finance/reconciliations` | Trust three-way and business bank recon |
 | Expenses & cashbook | `/finance/expenses` | Firm operating costs and business bank cashbook |
-| Finance reports | `/finance/reports` | Weekly pack, monthly close, P&L, KPIs |
+| Petty cash | `/finance/petty-cash` | Float, vault transfers, spends |
+| Creditors | `/finance/creditors` | Supplier bills, payments, AP ageing |
+| General ledger | `/finance/gl` | COA, journals, trial balance, P&L, balance sheet |
+| Finance reports | `/finance/reports` | Weekly pack, monthly close, cash P&L, KPIs |
 
-Operational reports (time, workload) remain under **Reports** (`/reports`) for permitted roles.
+Operational reports (time, workload, lawyer performance) remain under **Reports** (`/reports`) for permitted roles.
 
 ## Fees vs trust (always)
 
@@ -74,7 +80,7 @@ Locked finance months block new expenses and cashbook entries dated in that mont
 
 Managing Partners with finance access also see a compact KPI strip on the **Dashboard**.
 
-CSV export on weekly and monthly packs.
+CSV export on weekly and monthly packs. GL statements export as PDF, Word, and Excel (`Finance_Phase7_Guide.md`).
 
 ## Permissions (typical)
 
@@ -86,6 +92,8 @@ CSV export on weekly and monthly packs.
 | `finance.post` | Expenses and cashbook entries |
 | `finance.reconcile` | Reconciliation workflows |
 | `finance.close_month` | Lock accounting period |
+| `finance.gl.view` / `finance.gl.post` | Chart of accounts, journals, financial statements |
+| `finance.quote.manage` | Quotations and service catalogue |
 
 Accounts and Managing Partner usually hold finance permissions. Lawyers typically see matters and documents without full finance menus.
 
@@ -100,6 +108,7 @@ See `HR_Quickstart.md`.
 - `Billing_Trust_Quickstart.md`
 - `Finance_Trust_Quickstart.md`
 - `Finance_Trust_Recon_SOP.md`
-- `REPORTS.md`
+- `Finance_Phase7_Guide.md` (quotes, GL, creditors, petty cash)
+- `Email_Setup.md`
 - `Admin_Guide.md` (month-end checklist)
 - `FINANCE_HR_ADR.md` (architecture)

@@ -4,11 +4,24 @@ For Managing Partners and staff with firm administration permissions.
 
 ## Users and roles
 
-Open **User access** (`/staff`). This is **platform access** (logins, roles, seats), not HR employment records.
+Open **User access** (`/staff`). This is **platform access** (logins, roles, seats), not HR employment records. Only Managing Partners (permission `users.manage`) can create users.
 
-- Invite a user with email, full name, temporary password, and role.
+- Invite a user with email, full name, role, and (optionally) a temporary password.
+- **Leave the password blank to auto-generate a temporary password.** It is shown **once** in a callout after you create the user. Copy it and share it securely (never by unencrypted email if you can avoid it). It cannot be retrieved again.
+- New users are flagged to **change their password on first login**. A prompt appears in the app until they set a new one.
 - Seat limits come from your **licence edition**. If seats are full, deactivate someone or ask LexZim ops to raise seats.
 - Solo edition often has one seat. You do not need to invite others.
+
+### Password resets (approval-gated)
+
+There is **no self-service email reset link**. Resets are approved by an admin so that account recovery stays under firm control.
+
+1. On the login screen the user clicks **Forgot / request password reset** and submits their email. The screen always shows a generic confirmation (it never reveals whether the email exists).
+2. This creates a **pending request** in **Settings → Security**.
+3. A Managing Partner opens **Settings → Security**, reviews the request, and clicks **Approve & issue**. LexZim generates a new temporary password, shows it **once**, and forces the user to change it on next login.
+4. Share the temporary password securely with the user. Use **Reject** for requests you do not recognise (for example an unknown email).
+
+Every request, approval, and rejection is written to the audit log.
 
 **HR staff records** (`/hr/staff`) are separate: employment profiles for everyone who works at the firm, including people without a LexZim login. Link a profile to a user when someone both works at the firm and uses LexZim. See `HR_Quickstart.md`.
 
@@ -36,16 +49,19 @@ Lawyers usually keep matters and documents without full finance menus.
 
 Complete in order near calendar month-end:
 
-1. **Debtors** — `/finance/debtors`: review ageing; chase overdue fee notes.
-2. **Outstanding invoices** — `/finance/reports` weekly pack or invoicing list.
-3. **Trust three-way recon** — `/finance/reconciliations`: trust bank run for the month; variance zero before complete (or documented MP override).
+1. **Debtors** — `/finance/debtors`: review ageing; chase overdue fee notes. Export if needed.
+2. **Invoice send** — `/finance/invoicing`: mark remaining drafts **sent**; email PDFs from the invoice page once SMTP is configured (`Email_Setup.md`).
+3. **Trust three-way recon** — `/finance/reconciliations`: trust bank run for the month; variance zero before complete (or documented MP override). Confirm trust receipt **reference numbers** match the bank.
 4. **Vault** — if the firm holds trust cash: vault count recon for the month.
 5. **Business bank recon** — business operating account vs statement (`/finance/expenses` or reconciliations).
-6. **Expenses posted** — all firm costs for the month in `/finance/expenses`.
-7. **Cashbook** — business bank movements match bank statement where applicable.
-8. **Monthly P&L** — `/finance/reports` → Monthly close: review income (payments received) and expenses.
-9. **Lock period** — same screen: **Lock period** when satisfied (`finance.close_month`). Locked months block new expenses and cashbook entries dated in that month.
-10. **HR** — leave approved; contracts current for key staff (optional but recommended).
+6. **AP ageing** — `/finance/creditors`: unpaid supplier bills; pay or note disputes.
+7. **Petty cash** — `/finance/petty-cash`: float still open; transfers and spends posted.
+8. **Expenses posted** — all firm costs for the month in `/finance/expenses`.
+9. **Cashbook** — business bank movements match bank statement where applicable.
+10. **GL trial balance** — `/finance/gl` (or trial balance report): debits equal credits as of month-end. Export PDF/Excel for the bookkeeper.
+11. **P&L and balance sheet** — same GL desk; review gross profit and equity. Compare to cash P&L on **Finance → Reports** if you still use that pack.
+12. **Lock period** — **Finance → Reports → Monthly close → Lock period** (`finance.close_month`). Locked months block new expenses and cashbook entries dated in that month.
+13. **HR** — leave approved; contracts current for key staff (optional but recommended). Payroll remains Phase 6B.
 
 Reopen a locked period is not in self-service UI v1; contact LexZim support if a correction is required (audited).
 
@@ -86,6 +102,26 @@ Saving the profile marks the onboarding “firm profile” step complete. It doe
 - Export works even when the licence is expired.
 
 Schedule a regular export (for example weekly) as part of firm risk management.
+
+## Email (outbound)
+
+**Settings → Email** (permission `settings.manage`).
+
+Configure your firm SMTP server so LexZim can email documents to clients:
+
+- **SMTP server**: host, port (587 for STARTTLS, 465 for SSL/TLS), username, password.
+- **Sender identity**: from name, from email, and optional reply-to.
+- The SMTP **password is stored encrypted** and is never sent back to the browser. Leaving the password blank on save keeps the existing one.
+- Use **Send test email** to confirm the settings work before sending real documents.
+
+Once configured, you can send documents as **PDF attachments**:
+
+- **Quotation, invoice, receipt** detail pages have a **Send email** action. It defaults to the client's email on file; you can override the recipient and add a short note.
+- **Client profile** has an **Email client** button (Managing Partner or accounts) for a generic notification to the client's email.
+
+Every send is written to the audit log as `email.sent` with the recipient, template type, and entity id. SMTP secrets are never exposed to the browser or included in firm exports.
+
+If no firm SMTP is configured, a managed relay may be used when the deployment provides `SMTP_HOST` / `SMTP_FROM` server env. Firm SMTP always wins over the server relay.
 
 ## AI settings
 

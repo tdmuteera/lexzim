@@ -50,6 +50,8 @@ Mark each set in **Production** (and Staging separately).
 | `ANTHROPIC_API_KEY` | Managed Claude (optional) |
 | `OPENAI_API_KEY` | Managed OpenAI (optional) |
 | `AI_VAULT_SECRET` | Optional BYO key encryption (else `AUTH_SECRET`) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | Optional shared email relay (firm BYO SMTP in Settings wins) |
+| `EMAIL_MOCK` | `1` in CI to skip real SMTP (jsonTransport) |
 | `AI_PROXY_URL` | Optional standalone proxy base URL |
 | `AI_PROXY_TOKEN_PEPPER` | Optional proxy token hash pepper |
 | `SUPABASE_STORAGE_BUCKET` | Optional; default `firm-files` |

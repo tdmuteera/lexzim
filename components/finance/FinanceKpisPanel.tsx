@@ -44,25 +44,16 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
 
   if (compact) {
     return (
-      <div className="finance-kpis-strip panel" style={{ marginBottom: "1rem" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "0.75rem",
-            marginBottom: "0.75rem",
-            flexWrap: "wrap",
-          }}
-        >
+      <div className="finance-kpis-strip panel motion-kpis-strip">
+        <div className="finance-kpis-strip-head">
           <div>
             <strong>Finance KPIs</strong>
-            <span className="muted" style={{ marginLeft: "0.5rem", fontSize: "0.9rem" }}>
+            <span className="muted">
               {kpis.periodLabel}
             </span>
           </div>
-          <Link href="/finance/reports" className="muted" style={{ fontSize: "0.85rem" }}>
-            Full finance reports →
+          <Link href="/finance/reports" className="muted finance-kpis-strip-link">
+            Full finance reports
           </Link>
         </div>
         <div className="trust-overview-cards finance-kpis-strip-cards">

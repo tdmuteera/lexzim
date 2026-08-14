@@ -5,7 +5,10 @@ import type {
   invoices,
   timeEntries,
 } from "@/lib/db/schema";
-import { formatMinutes, timeEntryAmountCents } from "@/lib/billing/money";
+import { formatMinutes, centsToDisplay, timeEntryAmountCents } from "@/lib/billing/money";
+import {
+  quotationDiscountCents,
+} from "@/lib/quotes/totals";
 
 type TimeEntryRow = typeof timeEntries.$inferSelect;
 type DisbursementRow = typeof disbursements.$inferSelect;
@@ -64,18 +67,26 @@ export function serializeInvoice(
     matterTitle?: string | null;
     matterNumber?: string | null;
     clientDisplayName?: string | null;
+    clientNumber?: string | null;
     paidCents?: number;
     now?: Date;
   },
 ) {
   const now = opts?.now ?? new Date();
   const paidCents = opts?.paidCents ?? 0;
-  const balanceCents = Math.max(0, row.totalCents - paidCents);
+  const retainerAppliedCents = row.retainerAppliedCents ?? 0;
+  const balanceCents = Math.max(0, row.totalCents - paidCents - retainerAppliedCents);
   const displayOverdue =
     (row.status === "sent" || row.status === "overdue") &&
     Boolean(row.dueDate) &&
     row.dueDate!.getTime() < now.getTime() &&
     balanceCents > 0;
+
+  const discountAppliedCents = quotationDiscountCents(
+    row.subtotalCents,
+    row.discountCents,
+    row.discountPct,
+  );
 
   return {
     id: row.id,
@@ -88,8 +99,13 @@ export function serializeInvoice(
     issueDate: row.issueDate ? row.issueDate.toISOString() : null,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     subtotalCents: row.subtotalCents,
+    discountCents: row.discountCents,
+    discountPct: row.discountPct,
+    discountAppliedCents,
+    discountDisplay: centsToDisplay(discountAppliedCents, row.currency),
     taxCents: row.taxCents,
     totalCents: row.totalCents,
+    retainerAppliedCents: row.retainerAppliedCents,
     notes: row.notes,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
@@ -97,6 +113,7 @@ export function serializeInvoice(
     matterTitle: opts?.matterTitle ?? null,
     matterNumber: opts?.matterNumber ?? null,
     clientDisplayName: opts?.clientDisplayName ?? null,
+    clientNumber: opts?.clientNumber ?? null,
     paidCents,
     balanceCents,
     displayOverdue,
@@ -114,22 +131,26 @@ export function serializeInvoiceLine(row: InvoiceLineRow) {
     unitAmountCents: row.unitAmountCents,
     amountCents: row.amountCents,
     sourceId: row.sourceId,
+    firmServiceId: row.firmServiceId,
+    revenueGlAccountId: row.revenueGlAccountId,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-export function serializeFeePayment(row: FeePaymentRow) {
+export function serializeFeePayment(row: FeePaymentRow, opts?: { balanceCents?: number }) {
   return {
     id: row.id,
     firmId: row.firmId,
     invoiceId: row.invoiceId,
+    receiptNumber: row.receiptNumber,
     amountCents: row.amountCents,
     currency: row.currency,
     paidAt: row.paidAt.toISOString(),
     method: row.method,
     reference: row.reference,
     notes: row.notes,
+    balanceCents: opts?.balanceCents,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
   };

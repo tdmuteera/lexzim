@@ -21,6 +21,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
       email: users.email,
       fullName: users.fullName,
       isActive: users.isActive,
+      mustChangePassword: users.mustChangePassword,
       lastLoginAt: users.lastLoginAt,
       firmId: firms.id,
       firmName: firms.name,
@@ -52,6 +53,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
     email: row.email,
     fullName: row.fullName,
     isActive: row.isActive,
+    mustChangePassword: row.mustChangePassword,
     lastLoginAt: row.lastLoginAt,
     firm: {
       id: row.firmId,

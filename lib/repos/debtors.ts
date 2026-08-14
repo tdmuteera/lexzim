@@ -18,7 +18,7 @@ import {
   daysBetween,
   type ArAgingBucket,
 } from "@/lib/billing/aging";
-import { clientDisplayName } from "@/lib/clients/display";
+import { clientDisplayLabel } from "@/lib/clients/display";
 import { getDb } from "@/lib/db";
 import {
   clients,
@@ -104,8 +104,12 @@ export async function listDebtors(
       matterTitle: matters.title,
       matterNumber: matters.matterNumber,
       clientFullName: clients.fullName,
+      clientFirstName: clients.firstName,
+      clientSurname: clients.surname,
       clientLegalName: clients.legalName,
+      clientRegisteredName: clients.registeredName,
       clientTradingName: clients.tradingName,
+      clientNumber: clients.clientNumber,
       clientType: clients.clientType,
       paidCents: sql<number>`coalesce((
         select sum(${feePayments.amountCents}) from ${feePayments}
@@ -137,10 +141,14 @@ export async function listDebtors(
     if (filters.bucket && bucket !== filters.bucket) continue;
 
     const clientName = r.clientType
-      ? clientDisplayName({
+      ? clientDisplayLabel({
+          clientNumber: r.clientNumber,
           clientType: r.clientType,
           fullName: r.clientFullName,
+          firstName: r.clientFirstName,
+          surname: r.clientSurname,
           legalName: r.clientLegalName,
+          registeredName: r.clientRegisteredName,
           tradingName: r.clientTradingName,
         })
       : "n/a";

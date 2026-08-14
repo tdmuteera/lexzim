@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Can } from "@/components/auth/Can";
+import { ExportMenu } from "@/components/export/ExportMenu";
+import { SendDocumentButton } from "@/components/email/SendDocumentButton";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -27,6 +29,10 @@ type Invoice = {
   matterTitle: string | null;
   matterNumber: string | null;
   clientDisplayName: string | null;
+  clientNumber: string | null;
+  discountAppliedCents?: number;
+  discountDisplay?: string;
+  retainerAppliedCents?: number;
   paidCents: number;
   balanceCents: number;
   displayOverdue: boolean;
@@ -43,11 +49,13 @@ type Line = {
 
 type Payment = {
   id: string;
+  receiptNumber: string | null;
   amountCents: number;
   currency: string;
   paidAt: string;
   method: string | null;
   reference: string | null;
+  balanceCents?: number | null;
 };
 
 type InvoiceDetailViewProps = {
@@ -87,6 +95,10 @@ export function InvoiceDetailView({
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
   const [payError, setPayError] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<"invoice" | "receipts">("invoice");
+  const [retainerOpen, setRetainerOpen] = useState(false);
+  const [retainerDollars, setRetainerDollars] = useState("");
+  const [retainerError, setRetainerError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -180,6 +192,34 @@ export function InvoiceDetailView({
     }
   }
 
+  async function onApplyRetainer(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setRetainerError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/apply-retainer`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountDollars: retainerDollars }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setRetainerError(body.error?.message ?? "Could not apply retainer.");
+        return;
+      }
+      setRetainerOpen(false);
+      await load();
+    } catch {
+      setRetainerError("Could not apply retainer.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading && !invoice) {
     return (
       <section className="view active scrollable">
@@ -217,7 +257,16 @@ export function InvoiceDetailView({
             <h3>{invoice.invoiceNumber}</h3>
             <p className="panel-subtitle muted">Fee note · firm revenue</p>
           </div>
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+            <ExportMenu
+              kind="invoice"
+              queryParams={{ id: invoiceId }}
+              formats={["pdf", "docx", "xlsx"]}
+              disabled={loading}
+            />
+            <Can permission="billing.view">
+              <SendDocumentButton kind="invoice" id={invoiceId} />
+            </Can>
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               Print
             </Button>
@@ -265,9 +314,19 @@ export function InvoiceDetailView({
               ) : null}
               {(invoice.status === "sent" || invoice.status === "overdue") &&
               invoice.balanceCents > 0 ? (
-                <Button size="sm" disabled={busy} onClick={() => setPayOpen(true)}>
-                  Record fee payment
-                </Button>
+                <>
+                  <Button size="sm" disabled={busy} onClick={() => setPayOpen(true)}>
+                    Record fee payment
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setRetainerOpen(true)}
+                  >
+                    Apply retainer
+                  </Button>
+                </>
               ) : null}
               {invoice.status !== "void" && invoice.status !== "paid" ? (
                 <Button
@@ -364,9 +423,120 @@ export function InvoiceDetailView({
               </div>
             </form>
           ) : null}
+
+          {retainerOpen ? (
+            <form
+              onSubmit={onApplyRetainer}
+              className="panel"
+              style={{ padding: "1rem", marginBottom: "1rem" }}
+            >
+              <h4 style={{ marginTop: 0 }}>Apply retainer to invoice</h4>
+              <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                Posts Dr Trust liability, Cr AR. Revenue was recognized when the invoice was sent.
+              </p>
+              {retainerError ? (
+                <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+                  {retainerError}
+                </p>
+              ) : null}
+              <div className="form-group">
+                <label htmlFor="retainer-amt">Amount ({invoice.currency})</label>
+                <input
+                  id="retainer-amt"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  value={retainerDollars}
+                  onChange={(e) => setRetainerDollars(e.target.value)}
+                  required
+                />
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <Button type="submit" size="sm" disabled={busy}>
+                  {busy ? "Applying…" : "Apply retainer"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setRetainerOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : null}
+
+          <div className="tabs" style={{ marginBottom: "1rem" }}>
+            <button
+              type="button"
+              className={["tab", detailTab === "invoice" ? "active" : ""].filter(Boolean).join(" ")}
+              onClick={() => setDetailTab("invoice")}
+            >
+              Invoice
+            </button>
+            <button
+              type="button"
+              className={["tab", detailTab === "receipts" ? "active" : ""].filter(Boolean).join(" ")}
+              onClick={() => setDetailTab("receipts")}
+            >
+              Receipts ({payments.length})
+            </button>
+          </div>
         </div>
       </div>
 
+      {detailTab === "receipts" ? (
+        <div className="panel">
+          <div className="panel-body">
+            {payments.length === 0 ? (
+              <p className="muted">No fee receipts yet.</p>
+            ) : (
+              <table className="data data-dense">
+                <thead>
+                  <tr>
+                    <th>Receipt #</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                    <th>Balance after</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.receiptNumber ?? "n/a"}</td>
+                      <td>{new Date(p.paidAt).toLocaleDateString()}</td>
+                      <td>{centsToDisplay(p.amountCents, p.currency)}</td>
+                      <td>{p.method ?? "n/a"}</td>
+                      <td>{p.reference ?? "n/a"}</td>
+                      <td>
+                        {p.balanceCents != null
+                          ? centsToDisplay(p.balanceCents, p.currency)
+                          : "n/a"}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+                          <ExportMenu
+                            kind="receipt"
+                            queryParams={{ id: p.id }}
+                            formats={["pdf", "docx", "xlsx"]}
+                            label="Download"
+                          />
+                          <SendDocumentButton kind="receipt" id={p.id} label="Email" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      ) : (
       <div className="panel invoice-sheet">
         <div className="panel-body">
           <div
@@ -393,6 +563,11 @@ export function InvoiceDetailView({
                   invoice.clientDisplayName ?? "n/a"
                 )}
               </div>
+              {invoice.clientNumber ? (
+                <div>
+                  <strong>Client #:</strong> {invoice.clientNumber}
+                </div>
+              ) : null}
               <div>
                 <strong>Matter:</strong>{" "}
                 <Link href={`/matters/${invoice.matterId}`}>
@@ -435,6 +610,11 @@ export function InvoiceDetailView({
 
           <div className="finance-invoice-totals">
             <div>Subtotal: {centsToDisplay(invoice.subtotalCents, invoice.currency)}</div>
+            {invoice.discountAppliedCents && invoice.discountAppliedCents > 0 ? (
+              <div>
+                Discount: {invoice.discountDisplay ?? centsToDisplay(invoice.discountAppliedCents, invoice.currency)}
+              </div>
+            ) : null}
             {invoice.taxCents ? (
               <div>Tax: {centsToDisplay(invoice.taxCents, invoice.currency)}</div>
             ) : null}
@@ -442,6 +622,11 @@ export function InvoiceDetailView({
               Total: {centsToDisplay(invoice.totalCents, invoice.currency)}
             </div>
             <div>Paid: {centsToDisplay(invoice.paidCents, invoice.currency)}</div>
+            {invoice.retainerAppliedCents ? (
+              <div>
+                Retainer applied: {centsToDisplay(invoice.retainerAppliedCents, invoice.currency)}
+              </div>
+            ) : null}
             <div className={invoice.balanceCents > 0 ? "finance-balance-outstanding" : ""}>
               Balance: {centsToDisplay(invoice.balanceCents, invoice.currency)}
             </div>
@@ -453,38 +638,13 @@ export function InvoiceDetailView({
             </p>
           ) : null}
 
-          {payments.length ? (
-            <div style={{ marginTop: "1.25rem" }}>
-              <h4>Fee payments</h4>
-              <table className="data data-dense">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Method</th>
-                    <th>Reference</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((p) => (
-                    <tr key={p.id}>
-                      <td>{new Date(p.paidAt).toLocaleDateString()}</td>
-                      <td>{centsToDisplay(p.amountCents, p.currency)}</td>
-                      <td>{p.method ?? "n/a"}</td>
-                      <td>{p.reference ?? "n/a"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
           <p className="muted" style={{ marginTop: "1.5rem", fontSize: "0.75rem" }}>
-            Fee money (firm). Payments here are fee receipts only and are not posted to the
-            trust ledger.
+            Fee money (firm). GL posts when sent (Dr AR, Cr revenue) and on fee payment (Dr
+            cash, Cr AR). Trust retainer lines credit liability 2100, not revenue, until earned.
           </p>
         </div>
       </div>
+      )}
     </section>
   );
 }

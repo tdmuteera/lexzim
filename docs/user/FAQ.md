@@ -7,10 +7,10 @@ Short answers for Zimbabwe pilot users.
 LexZim uses email and password sign-in (Supabase Auth).
 
 - If you know your password but cannot sign in, confirm you are on the correct firm URL.
-- If you forgot your password, ask your **Managing Partner** or LexZim ops to issue a new temporary password (admin invite or auth reset flow your host supports).
-- Passwords must meet the firm minimum length (at least 10 characters).
+- If you forgot your password, click **Forgot / request password reset** on the login screen. A **Managing Partner** approves the request in **Settings → Security** and issues a temporary password (shown once). There is no automatic reset email.
+- Passwords must be at least 10 characters. Change a temporary password when the app prompts you.
 
-Never send passwords through public chat channels.
+Never send passwords through public chat channels. Full policy: `Security_Password_Policy.md`.
 
 ## I cannot see a menu item
 

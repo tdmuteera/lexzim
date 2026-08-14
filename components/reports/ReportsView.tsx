@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { ReportType } from "@/lib/reports/types";
 import { centsToDisplay, formatMinutes } from "@/lib/billing/money";
 import { Button } from "@/components/ui/Button";
+import { ExportMenu } from "@/components/export/ExportMenu";
 
 const REPORTS: Array<{ id: ReportType; label: string }> = [
   { id: "ar-aging", label: "AR aging" },
@@ -128,31 +130,6 @@ export function ReportsView() {
     void load();
   }, [load]);
 
-  async function downloadCsv() {
-    setError(null);
-    try {
-      const res = await fetch(`/api/reports/${type}?${queryString}&format=csv`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as {
-          error?: { message: string };
-        } | null;
-        setError(body?.error?.message ?? "CSV export failed.");
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `lexzim-${type}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setError("CSV export failed.");
-    }
-  }
-
   return (
     <section className="view active scrollable" aria-label="Reports">
       <div className="panel">
@@ -160,12 +137,26 @@ export function ReportsView() {
           <div>
             <h3>Reports</h3>
             <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              Firm-scoped. Fee AR and Trust stay separate. Requires reports.view.
+              Firm-scoped. Fee AR and Trust stay separate. Requires reports.view.{" "}
+              <Link href="/reports/lawyer-performance">Lawyer performance</Link>
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => void downloadCsv()}>
-            Download CSV
-          </Button>
+          <ExportMenu
+            kind="practice_report"
+            queryParams={{
+              type,
+              from: type !== "trust-balances" && type !== "workload" ? from : undefined,
+              to:
+                type !== "trust-balances" && type !== "workload"
+                  ? `${to}T23:59:59.999Z`
+                  : undefined,
+              lawyerId: lawyerId || undefined,
+              matterId: matterId || undefined,
+              groupBy: type === "time" ? groupBy : undefined,
+            }}
+            disabled={loading}
+            label="Download"
+          />
         </div>
         <div className="panel-body">
           <div className="toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>

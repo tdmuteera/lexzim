@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
+import { ExportMenu } from "@/components/export/ExportMenu";
 import { TrustMoneyCallout } from "@/components/trust/TrustMoneyCallout";
 import { TrustVaultPanel } from "@/components/trust/TrustVaultPanel";
 import { Badge } from "@/components/ui/Badge";
@@ -37,7 +38,7 @@ type LedgerItem = {
   runningBalanceCents?: number;
 };
 
-type ClientOption = { id: string; displayName: string };
+type ClientOption = { id: string; displayLabel: string; clientNumber: string | null };
 type MatterOption = { id: string; title: string; matterNumber: string | null };
 
 type Tab = "overview" | "vault" | "ledger" | "accounts" | "statement";
@@ -87,6 +88,10 @@ export function TrustView() {
   const [accountKind, setAccountKind] = useState<"bank" | "vault">("bank");
 
   const [statementClientId, setStatementClientId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientSearchResults, setClientSearchResults] = useState<ClientOption[]>([]);
+  const [openTrustClientId, setOpenTrustClientId] = useState("");
+  const [openTrustSearch, setOpenTrustSearch] = useState("");
   const [statement, setStatement] = useState<{
     balanceCents: number;
     currency: string;
@@ -177,13 +182,14 @@ export function TrustView() {
         ]);
         if (cRes.ok) {
           const cBody = (await cRes.json()) as {
-            data?: { items?: Array<{ id: string; displayName: string }> };
+            data?: { items?: Array<{ id: string; displayLabel: string; displayName: string; clientNumber: string | null }> };
           };
           if (!cancelled) {
             setClients(
               (cBody.data?.items ?? []).map((c) => ({
                 id: c.id,
-                displayName: c.displayName,
+                displayLabel: c.displayLabel ?? c.displayName,
+                clientNumber: c.clientNumber ?? null,
               })),
             );
           }
@@ -202,6 +208,62 @@ export function TrustView() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const query = clientSearch.trim() || openTrustSearch.trim();
+    if (!query) {
+      setClientSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetch(`/api/clients?q=${encodeURIComponent(query)}&archived=active`, {
+        credentials: "include",
+      })
+        .then((res) => res.json())
+        .then(
+          (body: {
+            ok?: boolean;
+            data?: {
+              items?: Array<{
+                id: string;
+                displayLabel: string;
+                displayName: string;
+                clientNumber: string | null;
+              }>;
+            };
+          }) => {
+            if (cancelled || !body.ok || !body.data?.items) return;
+            setClientSearchResults(
+              body.data.items.map((c) => ({
+                id: c.id,
+                displayLabel: c.displayLabel ?? c.displayName,
+                clientNumber: c.clientNumber ?? null,
+              })),
+            );
+          },
+        )
+        .catch(() => {
+          /* ignore */
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [clientSearch, openTrustSearch]);
+
+  function clientLabel(c: ClientOption) {
+    return c.clientNumber ? `${c.clientNumber} · ${c.displayLabel}` : c.displayLabel;
+  }
+
+  function startTrustForClient(id: string) {
+    setClientId(id);
+    setOpenTrustClientId(id);
+    setEntryType("receipt");
+    setPostOpen(true);
+    setTab("ledger");
+  }
 
   async function createAccount(e: FormEvent) {
     e.preventDefault();
@@ -549,19 +611,43 @@ export function TrustView() {
               <div className="grid-2">
                 <div className="form-group">
                   <label htmlFor="te-client">Client</label>
-                  <select
-                    id="te-client"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    required={entryType !== "transfer"}
-                  >
-                    <option value="">Select client</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.displayName}
-                      </option>
-                    ))}
-                  </select>
+                  {entryType !== "transfer" ? (
+                    <>
+                      <input
+                        id="te-client-search"
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        placeholder="Search CL number or name"
+                      />
+                      <select
+                        id="te-client"
+                        value={clientId}
+                        onChange={(e) => setClientId(e.target.value)}
+                        required
+                        style={{ marginTop: "0.35rem" }}
+                      >
+                        <option value="">Select client</option>
+                        {(clientSearch.trim() ? clientSearchResults : clients).map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {clientLabel(c)}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <select
+                      id="te-client"
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                    >
+                      <option value="">Optional for transfer</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {clientLabel(c)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="form-group">
                   <label htmlFor="te-matter">Matter (optional)</label>
@@ -616,12 +702,26 @@ export function TrustView() {
                 </div>
               ) : null}
               <div className="form-group">
-                <label htmlFor="te-ref">Reference</label>
+                <label htmlFor="te-ref">
+                  Reference number
+                  {entryType === "receipt" || entryType === "disbursement" ? " *" : ""}
+                </label>
                 <input
                   id="te-ref"
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
+                  placeholder={
+                    entryType === "receipt" || entryType === "disbursement"
+                      ? "Cheque no. or leave blank for TR-0001"
+                      : "Optional"
+                  }
+                  required={entryType === "receipt" || entryType === "disbursement" ? false : false}
                 />
+                {entryType === "receipt" || entryType === "disbursement" ? (
+                  <p className="muted" style={{ fontSize: "0.72rem", margin: "0.25rem 0 0" }}>
+                    Leave blank to auto allocate TR-0001 style reference. GL mirrors to 1210/2100.
+                  </p>
+                ) : null}
               </div>
               <div className="form-group">
                 <label htmlFor="te-narr">Narrative</label>
@@ -664,6 +764,53 @@ export function TrustView() {
 
           {tab === "overview" && overview ? (
             <>
+              <div className="panel" style={{ padding: "1rem", marginBottom: "1rem" }}>
+                <h4 style={{ marginTop: 0 }}>Open trust for client</h4>
+                <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                  Search by client name or CL number, then record a trust receipt or disbursement.
+                </p>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label htmlFor="open-trust-search">Search client</label>
+                    <input
+                      id="open-trust-search"
+                      value={openTrustSearch}
+                      onChange={(e) => setOpenTrustSearch(e.target.value)}
+                      placeholder="CL0001 or client name"
+                    />
+                    {openTrustSearch.trim() ? (
+                      <div className="panel" style={{ marginTop: "0.35rem", padding: "0.35rem" }}>
+                        {clientSearchResults.slice(0, 8).map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ display: "block", width: "100%", textAlign: "left" }}
+                              onClick={() => {
+                                setOpenTrustClientId(c.id);
+                                setOpenTrustSearch(clientLabel(c));
+                              }}
+                            >
+                              {clientLabel(c)}
+                            </button>
+                          ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="form-group" style={{ alignSelf: "end" }}>
+                    <Can permission="trust.manage">
+                      <Button
+                        size="sm"
+                        disabled={!openTrustClientId}
+                        onClick={() => startTrustForClient(openTrustClientId)}
+                      >
+                        Record trust movement
+                      </Button>
+                    </Can>
+                  </div>
+                </div>
+              </div>
+
               <div className="trust-overview-cards">
                 {bankAccounts.map((account) => (
                   <div key={account.id} className="trust-overview-card panel">
@@ -813,7 +960,7 @@ export function TrustView() {
                   <option value="">All clients</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.displayName}
+                      {c.displayLabel}
                     </option>
                   ))}
                 </select>
@@ -902,7 +1049,7 @@ export function TrustView() {
                   <option value="">Select client</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.displayName}
+                      {c.displayLabel}
                     </option>
                   ))}
                 </select>
@@ -915,17 +1062,14 @@ export function TrustView() {
                 </Button>
                 {statement ? (
                   <>
+                    <ExportMenu
+                      kind="trust_statement"
+                      queryParams={{ clientId: statementClientId }}
+                      formats={["pdf", "docx", "xlsx"]}
+                      disabled={!statementClientId}
+                    />
                     <Button size="sm" variant="outline" onClick={() => window.print()}>
                       Print
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        window.location.href = `/api/trust/clients/${statementClientId}/statement?format=csv`;
-                      }}
-                    >
-                      Export CSV
                     </Button>
                   </>
                 ) : null}

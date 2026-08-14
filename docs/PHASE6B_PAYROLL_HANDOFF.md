@@ -15,7 +15,7 @@ Phase 6B should deliver:
 
 - Payslip generation per pay run
 - Statutory deductions and employer contributions where applicable
-- Payroll period close aligned with finance month-end (coordination, not full GL)
+- Payroll period close aligned with finance month-end (coordination with the Phase 7 GL is welcome but payroll engines are still out of Phase 7)
 - Export for bank payment files (format TBD with firm accountant)
 
 ---
@@ -71,8 +71,8 @@ Phase 6 **firm finance** covers:
 Phase 6B payroll should:
 
 - Post **net pay** and **statutory liabilities** in a way that does not break trust/fee separation
-- Prefer **additive** payroll tables and optional cashbook links (salary payment out) rather than rewriting P&L from scratch
-- **Not** require full double-entry GL unless partners explicitly reopen that scope
+- Prefer **additive** payroll tables and optional cashbook / GL salary expense posts rather than rewriting P&L from scratch
+- **May** post to the Phase 7 general ledger (expense + PAYE/NSSA liabilities). Do not start that work until Phase 6B is scoped with the accountant.
 
 ---
 
@@ -84,7 +84,7 @@ Phase 6B payroll should:
 | Contracts storage | Done (`/hr/contracts` + document upload) |
 | Leave requests / approval | Done (`/hr/leave`) |
 | Fee vs trust wall | Done (enforce in payroll: salaries are firm, not trust) |
-| Full Odoo GL | Still out of scope unless new phase |
+| Full Odoo GL | **Shipped in Phase 7.** Payroll should attach to existing COA rather than invent a second ledger. |
 | Bank feeds | Out of scope |
 | Marketing | Out of scope |
 

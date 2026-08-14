@@ -6,11 +6,13 @@ import { and, asc, eq, gte, inArray, isNotNull, lt, lte, or } from "drizzle-orm"
 import { getDb } from "@/lib/db";
 import {
   calendarEvents,
+  clients,
   matterDeadlines,
   matterTeam,
   matters,
   pendingProcedures,
 } from "@/lib/db/schema";
+import { clientDisplayName } from "@/lib/clients/display";
 import { serializeMatterDeadline } from "@/lib/deadlines/serialize";
 import { serializeProcedure } from "@/lib/procedures/serialize";
 
@@ -39,20 +41,23 @@ export type ReminderBuckets = {
   generatedAt: string;
   dueSoonDays: number;
   hearingHorizonDays: number;
+  meetingHorizonDays: number;
   counts: {
     overdue: number;
     dueSoon: number;
     hearings: number;
+    meetings: number;
     total: number;
   };
   overdue: ReminderItem[];
   dueSoon: ReminderItem[];
   hearings: ReminderItem[];
+  meetings: ReminderItem[];
 };
 
 export type ReminderItem = {
   id: string;
-  kind: "procedure" | "deadline" | "hearing" | "calendar_hearing";
+  kind: "procedure" | "deadline" | "hearing" | "calendar_hearing" | "meeting";
   title: string;
   dueAt: string;
   matterId: string | null;
@@ -72,6 +77,7 @@ export async function getReminders(input: {
 }): Promise<ReminderBuckets> {
   const dueSoonDays = input.dueSoonDays ?? 7;
   const hearingHorizonDays = input.hearingHorizonDays ?? 60;
+  const meetingHorizonDays = 7;
   const limit = input.limitPerBucket ?? 25;
   const now = new Date();
   const soonEnd = new Date(now.getTime() + dueSoonDays * DAY_MS);
@@ -86,6 +92,7 @@ export async function getReminders(input: {
     dueSoonDeadlines,
     overdueHearings,
     hearings,
+    meetings,
   ] = await Promise.all([
     listProcedureReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
     listProcedureReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
@@ -104,6 +111,12 @@ export async function getReminders(input: {
       soonEnd: hearingEnd,
       limit,
     }),
+    listMeetingReminders({
+      ...input,
+      now,
+      soonEnd,
+      limit,
+    }),
   ]);
 
   const overdue = [...overdueProcedures, ...overdueDeadlines, ...overdueHearings].sort((a, b) =>
@@ -117,17 +130,20 @@ export async function getReminders(input: {
     overdue: overdue.length,
     dueSoon: dueSoon.length,
     hearings: hearings.length,
-    total: overdue.length + dueSoon.length + hearings.length,
+    meetings: meetings.length,
+    total: overdue.length + dueSoon.length + hearings.length + meetings.length,
   };
 
   return {
     generatedAt: now.toISOString(),
     dueSoonDays,
     hearingHorizonDays,
+    meetingHorizonDays,
     counts,
     overdue: overdue.slice(0, limit),
     dueSoon: dueSoon.slice(0, limit),
     hearings: hearings.slice(0, limit),
+    meetings: meetings.slice(0, limit),
   };
 }
 
@@ -352,4 +368,94 @@ async function listHearingReminders(input: {
     merged.push(item);
   }
   return merged.slice(0, input.limit);
+}
+
+async function listMeetingReminders(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  now: Date;
+  soonEnd: Date;
+  limit: number;
+}): Promise<ReminderItem[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      event: calendarEvents,
+      matterTitle: matters.title,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+    })
+    .from(calendarEvents)
+    .leftJoin(
+      matters,
+      and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, input.firmId)),
+    )
+    .leftJoin(
+      clients,
+      and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, input.firmId)),
+    )
+    .where(
+      and(
+        eq(calendarEvents.firmId, input.firmId),
+        eq(calendarEvents.eventType, "appointment"),
+        gte(calendarEvents.startsAt, input.now),
+        lte(calendarEvents.startsAt, input.soonEnd),
+      ),
+    )
+    .orderBy(asc(calendarEvents.startsAt))
+    .limit(input.limit * 2);
+
+  let allowedMatterIds: Set<string> | null = null;
+  if (!input.viewAll) {
+    const allowed = await db
+      .select({ id: matters.id })
+      .from(matters)
+      .where(
+        and(
+          eq(matters.firmId, input.firmId),
+          or(
+            eq(matters.responsibleLawyerId, input.userId),
+            inArray(matters.id, accessibleMatterIdsSubquery(input.firmId, input.userId)),
+          ),
+        ),
+      );
+    allowedMatterIds = new Set(allowed.map((r) => r.id));
+  }
+
+  return rows
+    .filter((row) => {
+      if (!allowedMatterIds) return true;
+      if (!row.event.matterId) return true;
+      return allowedMatterIds.has(row.event.matterId);
+    })
+    .slice(0, input.limit)
+    .map((row) => {
+      const clientLabel =
+        row.clientType != null
+          ? clientDisplayName({
+              clientType: row.clientType,
+              fullName: row.clientFullName,
+              legalName: row.clientLegalName,
+              tradingName: row.clientTradingName,
+            })
+          : null;
+      return {
+        id: `meeting:${row.event.id}`,
+        kind: "meeting" as const,
+        title: row.event.title,
+        dueAt: row.event.startsAt.toISOString(),
+        matterId: row.event.matterId,
+        matterTitle: row.matterTitle ?? clientLabel,
+        href: row.event.matterId
+          ? `/matters/${row.event.matterId}`
+          : row.event.clientId
+            ? `/clients/${row.event.clientId}`
+            : "/calendar",
+        isOverdue: false,
+        meta: row.event.location ?? "Client meeting",
+      };
+    });
 }

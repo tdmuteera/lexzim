@@ -122,7 +122,7 @@ export function AnimatedBarChart({
   bars,
   formatValue,
 }: {
-  bars: Array<{ key: string; label: string; value: number }>;
+  bars: Array<{ key: string; label: string; value: number; title?: string }>;
   formatValue?: (n: number) => string;
 }) {
   const [progress, setProgress] = useState(0);
@@ -164,20 +164,26 @@ export function AnimatedBarChart({
         <div className="dash-bars-cols">
           {bars.map((b, i) => {
             const h = (b.value / max) * 100 * progress;
+            const shown = formatValue ? formatValue(b.value) : String(Math.round(b.value));
             return (
               <div
                 key={b.key}
                 className="dash-bar-col"
-                style={{ animationDelay: `${i * 0.06}s` }}
+                style={{ animationDelay: `${i * 0.08}s` }}
               >
-                <div className="dash-bar-track">
-                  <div
-                    className="dash-bar-fill"
-                    style={{ height: `${h}%` }}
-                    title={formatValue ? formatValue(b.value) : String(b.value)}
-                  />
+                <div className="dash-bar-stack">
+                  <span className="dash-bar-value">{shown}</span>
+                  <div className="dash-bar-track">
+                    <div
+                      className="dash-bar-fill"
+                      style={{ height: `${h}%` }}
+                      title={shown}
+                    />
+                  </div>
                 </div>
-                <span className="dash-bar-label">{b.label}</span>
+                <span className="dash-bar-label" title={b.title ?? b.label}>
+                  {b.label}
+                </span>
               </div>
             );
           })}

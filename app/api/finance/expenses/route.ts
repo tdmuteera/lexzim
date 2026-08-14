@@ -2,7 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { parseExpenseInput } from "@/lib/finance/firm-finance-validation";
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from "@/lib/finance/expense-categories";
+import { legacyCategoryLabel, listExpenseGlOptions } from "@/lib/finance/expense-gl-tree";
 import { createFirmExpense, getFirmExpense, listFirmExpenses } from "@/lib/repos/firm-finance";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -28,7 +28,7 @@ function serializeExpense(row: {
     id: row.expense.id,
     expenseDate: row.expense.expenseDate.toISOString(),
     category: row.expense.category,
-    categoryLabel: EXPENSE_CATEGORY_LABELS[row.expense.category as keyof typeof EXPENSE_CATEGORY_LABELS] ?? row.expense.category,
+    categoryLabel: legacyCategoryLabel(row.expense.category),
     payee: row.expense.payee,
     amountCents: row.expense.amountCents,
     currency: row.expense.currency,
@@ -50,10 +50,12 @@ export async function GET(request: Request) {
     const category = url.searchParams.get("category")?.trim() || undefined;
 
     const rows = await listFirmExpenses(firmId, { category });
+    const glOptions = await listExpenseGlOptions(firmId);
     return jsonOk({
-      categories: EXPENSE_CATEGORIES.map((c) => ({
-        id: c,
-        label: EXPENSE_CATEGORY_LABELS[c],
+      categories: glOptions.map((o) => ({
+        id: o.code,
+        label: o.label,
+        glAccountId: o.glAccountId ?? null,
       })),
       items: rows.map(serializeExpense),
     });
