@@ -1,12 +1,8 @@
 # Production secrets & domain (P4-09)
 
-**No real secrets belong in this file.** Use Render (or Railway) environment variables and Supabase dashboards only.
+**No real secrets belong in this file.** Use Railway Variables and Supabase dashboards only.
 
-LexZim is same-origin Next.js + Supabase Auth cookies. Pilots may stay on `*.onrender.com` or `*.up.railway.app`; custom domain is optional polish.
-
-## Custom domain + SSL (Render)
-
-See `docs/RENDER.md`. Service → Settings → Custom Domains, then set `NEXT_PUBLIC_APP_URL` and Supabase Site URL to the HTTPS origin.
+LexZim is same-origin Next.js + Supabase Auth cookies. Pilots may stay on `*.up.railway.app`; custom domain is optional polish.
 
 ## Custom domain + SSL (Railway)
 

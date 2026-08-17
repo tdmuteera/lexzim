@@ -1,12 +1,14 @@
-# LexZim hosting — Render or Railway + Supabase
+# LexZim hosting — Railway + Supabase
 
-LexZim is a **hosted Next.js web app**. Current target:
+LexZim is a **hosted Next.js web app**. Stack:
 
 | Piece | Provider | Notes |
 |---|---|---|
-| App (frontend + API) | **Render** (or Railway) | Deploy from GitHub. Render steps: `docs/RENDER.md` |
-| Postgres, Auth, Storage | **Supabase** (Free tier OK for early testing) | Multi-tenant data |
+| App (frontend + API) | **Railway** | Deploy from GitHub (`railway.toml`) |
+| Postgres, Auth, Storage | **Supabase** | Free tier OK for early testing |
 | Vercel | **Not required** | Optional later if you split frontend |
+
+Full Railway runbook: **`docs/RAILWAY.md`**.
 
 ## 1. Create a Supabase project (Free)
 
@@ -16,10 +18,10 @@ LexZim is a **hosted Next.js web app**. Current target:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` `public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server only)
-4. Open **Settings → Database** and copy the connection string:
-   - Prefer **Pooler / Transaction** mode URI for the running app → `DATABASE_URL`
-   - Keep the **direct** URI handy for migrations (P0-05 may use `DIRECT_URL`)
-5. For Phase 2 AI testing, add **`GEMINI_API_KEY`** (Google AI Studio). Server only. Never commit it.
+4. Open **Settings → Database** (or **Connect**) and copy the connection string:
+   - **Transaction** pooler, port **6543** → `DATABASE_URL` (app runtime)
+   - **Session** pooler, port **5432** → `DIRECT_URL` (migrations)
+5. For AI testing, add **`GEMINI_API_KEY`** (Google AI Studio). Server only. Never commit it.
 
 ### Database connectivity (permanent fixes)
 
@@ -27,14 +29,14 @@ LexZim is a **hosted Next.js web app**. Current target:
 
 | Permanent approach | When to use |
 |--------------------|-------------|
-| **Deploy app near the DB** (Render or Railway in the same region as Supabase) | Production and stable pilots. Server-to-server usually works even when home ISP fails. |
+| **Deploy app near the DB** (Railway in the same region as Supabase) | Production and stable pilots. Server-to-server usually works even when home ISP fails. |
 | **VPN with clean egress** (or hotspot that does not reset TLS on 5432/6543) | Local `npm run dev` from restricted networks. |
 | **Re-copy Connect strings** from Supabase → Connect → Transaction (`DATABASE_URL`, port **6543**) and Session (`DIRECT_URL`, port **5432**) | After password rotate or wrong host (`aws-0` vs `aws-1`). Encode `@` in passwords as `%40`. |
-| **Session pooler as `DATABASE_URL` for local Next** (port **5432**) | Long-lived `next dev` on one machine; keep Transaction 6543 for serverless if you use it. |
+| **Session pooler as `DATABASE_URL` for local Next** (port **5432**) | Long-lived `next dev` on one machine; keep Transaction 6543 for Railway runtime. |
 | **IPv4 add-on** (paid) for `db.<ref>.supabase.co` | Only if you must use the direct host from IPv4-only environments. Pooler is already IPv4. |
 | **Local Postgres / Supabase CLI for development** | Fully offline local work; still point Auth/Storage at the cloud project if needed. |
 
-There is no app code change that creates a TCP path through a firewall that resets Postgres TLS. The app now shows a **Database unreachable** recovery page instead of a raw Next.js stack when the pooler times out.
+There is no app code change that creates a TCP path through a firewall that resets Postgres TLS. The app shows a **Database unreachable** recovery page instead of a raw Next.js stack when the pooler times out.
 
 ### Free tier honesty (~2 months testing)
 
@@ -57,22 +59,18 @@ Generate `AUTH_SECRET` (example):
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## 3. Create a Render (or Railway) project
-
-**Render (current):** see **`docs/RENDER.md`**. Blueprint file: `render.yaml`. Health check: `/api/health`. Set `NEXT_PUBLIC_APP_URL` to the `*.onrender.com` URL, then update Supabase Auth Site URL.
-
-**Railway (still supported):**
-
-## 3b. Create a Railway project
+## 3. Create a Railway project
 
 1. Sign up at [https://railway.app](https://railway.app).
-2. **New Project → Deploy from GitHub** (connect the LexZim repo).
-3. Set the same environment variables as `.env.example` in Railway **Variables**.
-4. Set `NEXT_PUBLIC_APP_URL` to your Railway public URL (e.g. `https://lexzim-production.up.railway.app`).
-5. Railway should build with `npm ci && npm run build` and start with `npm run start` (see `railway.toml` / `docs/RAILWAY.md`).
+2. **New Project → Deploy from GitHub** (connect `tdmuteera/lexzim`, branch `master`).
+3. Set the same environment variables as `.env.example` in Railway **Variables** (see `docs/PRODUCTION_SECRETS.md`).
+4. Set `NEXT_PUBLIC_APP_URL` to your Railway public URL (e.g. `https://lexzim-production.up.railway.app`, no trailing slash).
+5. Build and start are defined in `railway.toml`: `npm ci && npm run build`, then `npm run start`.
 6. Health check path: `/api/health` (restart on failure configured in `railway.toml`).
+7. After first deploy, run migrations once (Railway Shell): `npx drizzle-kit migrate` (needs `DIRECT_URL`).
+8. Update Supabase **Authentication → URL configuration** (Site URL + redirects) to match `NEXT_PUBLIC_APP_URL`.
 
-Full production runbook: **`docs/RAILWAY.md`** (staging vs production, rollback, sizing, log redaction).
+Step-by-step first deploy: **`docs/RAILWAY.md`** (staging vs production, rollback, sizing, log redaction).
 
 Phase 5 ops hub (backup drill, portal rate limits, security headers, free-tier exit): **`docs/cloud/OPS_RUNBOOK.md`**.
 
@@ -81,24 +79,22 @@ Domain, SSL, and secrets checklist: **`docs/PRODUCTION_SECRETS.md`**.
 ### Deploy flow
 
 ```text
-git push → Render (or Railway) builds Next.js → start → GET /api/health
+git push → Railway Nixpacks build → npm run start → GET /api/health
 ```
-
-Until the repo is pushed to GitHub and linked, deploy is documented but not live.
 
 ### Free / trial honesty
 
-Railway often starts with trial credits, then paid usage. Prefer Railway over “free dynos that sleep” so pilots do not see random cold starts. Budget a small monthly cost once credits end.
+Railway often starts with trial credits, then paid usage. Prefer always-on paid usage for firm pilots so users do not see cold starts. Budget a small monthly cost once credits end.
 
 ### Production / staging URL (record when live)
 
 | Environment | URL | Notes |
 |-------------|-----|-------|
 | Local | `http://localhost:3000` | Dev |
-| Staging | **TBD** | Set `SMOKE_BASE_URL` for `npm run smoke:phase4` |
-| Production | **TBD** | Also set `NEXT_PUBLIC_APP_URL`; confirm `GET /api/health` |
+| Staging | **TBD** | Set `SMOKE_BASE_URL` for smoke scripts |
+| Production | **TBD** | Set `NEXT_PUBLIC_APP_URL`; confirm `GET /api/health` |
 
-Phase 4 release smoke: `docs/PHASE4_SMOKE_TEST.md`.
+Phase 4 release smoke: `docs/PHASE4_SMOKE_TEST.md`. Phase 8: `npm run smoke:phase8`.
 
 ## 4. Verify locally
 
@@ -117,7 +113,7 @@ Expected JSON shape:
 {
   "ok": true,
   "service": "lexzim",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "env": {
     "supabaseUrl": true,
     "databaseUrl": true,
@@ -130,21 +126,7 @@ Expected JSON shape:
 
 If `configured` is `false`, fill missing vars in `.env.local` (booleans show which ones).
 
-## 5. What this step does / does not do
-
-**Does**
-
-- Scaffold Supabase browser + server + admin clients
-- Document Railway deploy
-- Expose `/api/health`
-
-**Does not (yet)**
-
-- Database schema / Drizzle migrations (P0-05)
-- Auth login UI (P0-09)
-- Real firm data
-
-## 6. Security reminders
+## 5. Security reminders
 
 - Never put `SUPABASE_SERVICE_ROLE_KEY` or `DATABASE_URL` in client code.
 - Only `NEXT_PUBLIC_*` values are visible in the browser.

@@ -14,6 +14,73 @@ Web-only SaaS deploy. No MSI/NSIS/desktop installers.
 
 Config files: `railway.toml`, `nixpacks.toml`, `.nvmrc`.
 
+## First deploy checklist (GitHub → Railway)
+
+Use this once when going live. Repo: `https://github.com/tdmuteera/lexzim.git`, branch **`master`**.
+
+### Stage 1: Supabase ready
+
+1. Project awake (Free tier: wake from dashboard if paused).
+2. Copy API keys and both pooler URIs (`DATABASE_URL` 6543, `DIRECT_URL` 5432).
+3. Generate `AUTH_SECRET` if you do not reuse local dev secret for production.
+
+### Stage 2: Railway service
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**.
+2. Authorize GitHub; select **tdmuteera/lexzim**, branch **master**.
+3. Railway detects Node and reads `railway.toml` (build, start, health check).
+4. Pick a **region close to Supabase** (same continent).
+5. Note the public URL Railway assigns (e.g. `https://lexzim-production.up.railway.app`).
+
+### Stage 3: Environment variables
+
+Railway → your service → **Variables**. Add at minimum:
+
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_APP_URL` | Railway HTTPS URL, no trailing slash |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role (server only) |
+| `DATABASE_URL` | Transaction pooler, port 6543 |
+| `DIRECT_URL` | Session pooler, port 5432 |
+| `AUTH_SECRET` | long random hex |
+| `GEMINI_API_KEY` | if using managed AI |
+| `PORTAL_ENABLED` | `1` if portal should be on |
+
+Redeploy after saving variables.
+
+### Stage 4: Migrations
+
+Railway → service → **Shell** (or run locally against production `DIRECT_URL` once):
+
+```bash
+npx drizzle-kit migrate
+```
+
+Includes Phase 8 migration `0025_phase8_diagnostics`. Schema mismatch is not connectivity; run migrate, do not only reset the DB circuit.
+
+### Stage 5: Supabase Auth URLs
+
+Supabase → **Authentication → URL configuration**:
+
+- **Site URL** = same as `NEXT_PUBLIC_APP_URL`
+- **Redirect URLs** = include that origin
+
+### Stage 6: Verify live
+
+1. `GET https://<railway-host>/api/health` → `"ok": true`, `"configured": true`
+2. `GET https://<railway-host>/api/db-status` → connected (no `postgres://` in body)
+3. Login at `/login` (Managing Partner account from your Supabase data)
+4. Optional ops: `/ops/diagnostics` (platform admin)
+
+Smoke from your PC (app must be up):
+
+```powershell
+$env:SMOKE_BASE_URL = "https://YOUR-APP.up.railway.app"
+npm run smoke:phase8
+```
+
 ## Staging vs production
 
 Practical split on one Railway project:
