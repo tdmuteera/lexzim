@@ -1,4 +1,4 @@
-﻿import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { TemplatesLibraryView } from "@/components/templates/TemplatesLibraryView";
 
 export default function DocumentsPage() {

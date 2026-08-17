@@ -1,4 +1,4 @@
-﻿import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { ReportsView } from "@/components/reports/ReportsView";
 
 export default function ReportsPage() {

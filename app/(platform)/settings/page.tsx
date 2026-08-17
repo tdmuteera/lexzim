@@ -1,4 +1,4 @@
-﻿import { Suspense } from "react";
+import { Suspense } from "react";
 import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { SettingsView } from "@/components/settings/SettingsView";
 

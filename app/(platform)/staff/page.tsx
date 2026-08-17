@@ -1,4 +1,4 @@
-﻿import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
+import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { StaffView } from "@/components/staff/StaffView";
 
 export default function StaffPage() {
