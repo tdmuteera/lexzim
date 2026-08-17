@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
-          // Safe when the app is always served over HTTPS (Railway + custom domain).
+          // Safe when the app is always served over HTTPS (Render/Railway + custom domain).
           {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",

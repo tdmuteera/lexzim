@@ -1,12 +1,12 @@
-# LexZim hosting — Railway + Supabase
+# LexZim hosting — Render or Railway + Supabase
 
-LexZim is a **hosted Next.js web app**. Phase 0 uses:
+LexZim is a **hosted Next.js web app**. Current target:
 
 | Piece | Provider | Notes |
 |---|---|---|
-| App (frontend + API) | **Railway** | Deploy from GitHub |
+| App (frontend + API) | **Render** (or Railway) | Deploy from GitHub. Render steps: `docs/RENDER.md` |
 | Postgres, Auth, Storage | **Supabase** (Free tier OK for early testing) | Multi-tenant data |
-| Vercel | **Not required** for Phase 0 | Optional later if you split frontend |
+| Vercel | **Not required** | Optional later if you split frontend |
 
 ## 1. Create a Supabase project (Free)
 
@@ -27,7 +27,7 @@ LexZim is a **hosted Next.js web app**. Phase 0 uses:
 
 | Permanent approach | When to use |
 |--------------------|-------------|
-| **Deploy app near the DB** (Railway in EU West / same region as Supabase) | Production and stable pilots. Server-to-server usually works even when home ISP fails. |
+| **Deploy app near the DB** (Render or Railway in the same region as Supabase) | Production and stable pilots. Server-to-server usually works even when home ISP fails. |
 | **VPN with clean egress** (or hotspot that does not reset TLS on 5432/6543) | Local `npm run dev` from restricted networks. |
 | **Re-copy Connect strings** from Supabase → Connect → Transaction (`DATABASE_URL`, port **6543**) and Session (`DIRECT_URL`, port **5432**) | After password rotate or wrong host (`aws-0` vs `aws-1`). Encode `@` in passwords as `%40`. |
 | **Session pooler as `DATABASE_URL` for local Next** (port **5432**) | Long-lived `next dev` on one machine; keep Transaction 6543 for serverless if you use it. |
@@ -57,7 +57,13 @@ Generate `AUTH_SECRET` (example):
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## 3. Create a Railway project
+## 3. Create a Render (or Railway) project
+
+**Render (current):** see **`docs/RENDER.md`**. Blueprint file: `render.yaml`. Health check: `/api/health`. Set `NEXT_PUBLIC_APP_URL` to the `*.onrender.com` URL, then update Supabase Auth Site URL.
+
+**Railway (still supported):**
+
+## 3b. Create a Railway project
 
 1. Sign up at [https://railway.app](https://railway.app).
 2. **New Project → Deploy from GitHub** (connect the LexZim repo).
@@ -75,10 +81,10 @@ Domain, SSL, and secrets checklist: **`docs/PRODUCTION_SECRETS.md`**.
 ### Deploy flow
 
 ```text
-git push → Railway builds Next.js → start → GET /api/health
+git push → Render (or Railway) builds Next.js → start → GET /api/health
 ```
 
-Until the repo is on GitHub and linked, deploy is documented but not live.
+Until the repo is pushed to GitHub and linked, deploy is documented but not live.
 
 ### Free / trial honesty
 
