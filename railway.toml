@@ -1,7 +1,8 @@
 [build]
 builder = "NIXPACKS"
 # Explicit Next.js production build (Nixpacks also detects npm scripts)
-buildCommand = "npm ci && npm run build"
+# Nixpacks already runs npm ci in the install phase.
+buildCommand = "npm run build"
 
 [deploy]
 # Production process: Next.js standalone-style start via next start
