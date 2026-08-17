@@ -176,6 +176,13 @@
       "when": 1786407000000,
       "tag": "0024_phase7_email_security",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786460000000,
+      "tag": "0025_phase8_diagnostics",
+      "breakpoints": true
     }
   ]
 }

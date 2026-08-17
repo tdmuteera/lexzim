@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       note: "Aggregate firm list only. Matter contents are not exposed on ops APIs.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     );
     return jsonOk(result, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -133,7 +133,7 @@ export async function PATCH(request: Request) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -164,6 +164,6 @@ export async function DELETE(request: Request) {
     });
     return jsonOk({ purged: true, ...result });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

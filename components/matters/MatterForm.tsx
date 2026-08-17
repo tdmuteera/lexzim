@@ -9,6 +9,7 @@ import {
   MATTER_STATUSES,
   statusLabel,
 } from "@/lib/matters/validation";
+import { diagnosticJson, ensureRequestId } from "@/lib/diagnostics/client";
 
 export type MatterFormValues = {
   clientId: string;
@@ -64,6 +65,7 @@ export function MatterForm({
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [lawyers, setLawyers] = useState<LawyerOption[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorRef, setErrorRef] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -106,7 +108,9 @@ export function MatterForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorRef(null);
     setLoading(true);
+    ensureRequestId();
 
     const payload = {
       clientId: values.clientId || null,
@@ -126,26 +130,22 @@ export function MatterForm({
     try {
       const url = mode === "create" ? "/api/matters" : `/api/matters/${matterId}`;
       const method = mode === "create" ? "POST" : "PATCH";
-      const res = await fetch(url, {
+      const result = await diagnosticJson<{ matter: { id: string } }>(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { matter: { id: string } };
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok) {
-        setError(body.error?.message ?? "Could not save matter.");
+      if (!result.ok) {
+        setError(result.error?.message ?? "Could not save matter.");
+        setErrorRef(result.requestId);
         return;
       }
-      const id = body.data?.matter?.id ?? matterId;
+      const id = result.data?.matter?.id ?? matterId;
       router.push(id ? `/matters/${id}` : "/matters");
       router.refresh();
     } catch {
       setError("Could not save matter. Check your connection.");
+      setErrorRef(ensureRequestId());
     } finally {
       setLoading(false);
     }
@@ -154,7 +154,17 @@ export function MatterForm({
   return (
     <form onSubmit={onSubmit}>
       {error ? (
-        <p style={{ color: "var(--danger)", marginBottom: "1rem" }}>{error}</p>
+        <p style={{ color: "var(--danger)", marginBottom: "1rem" }}>
+          {error}
+          {errorRef ? (
+            <span
+              className="muted"
+              style={{ display: "block", fontSize: "0.78rem", marginTop: "0.35rem", wordBreak: "break-all" }}
+            >
+              Reference: {errorRef}
+            </span>
+          ) : null}
+        </p>
       ) : null}
 
       <div className="form-group">

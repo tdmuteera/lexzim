@@ -30,6 +30,6 @@ export async function POST(request: Request) {
         "If that account exists, a reset request has been sent to your firm administrator for approval.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

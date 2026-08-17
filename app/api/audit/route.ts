@@ -5,7 +5,7 @@ import { jsonError, jsonOk } from "@/lib/auth/http";
 import { requirePermission } from "@/lib/rbac/guards";
 
 /** Sample protected route: requires audit.view (P0-08). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("audit.view");
     const db = getDb();
@@ -31,6 +31,6 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

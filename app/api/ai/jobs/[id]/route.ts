@@ -7,7 +7,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** Staff: get one AI job (same firm) or list recent when id=recent. */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("ai.manage_settings");
     const firmId = tenantFirmId(session);
@@ -22,6 +22,6 @@ export async function GET(_request: Request, context: RouteContext) {
     if (!job) throw new AuthError("not_found", "Job not found.");
     return jsonOk({ job: serializeAiJob(job) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

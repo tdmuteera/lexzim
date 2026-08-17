@@ -7,7 +7,7 @@ import {
 import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("calendar.view");
     const firmId = tenantFirmId(session);
@@ -29,6 +29,6 @@ export async function GET() {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

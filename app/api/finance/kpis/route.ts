@@ -41,6 +41,6 @@ export async function GET(request: Request) {
 
     return jsonOk({ kpis });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

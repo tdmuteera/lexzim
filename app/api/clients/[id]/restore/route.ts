@@ -39,6 +39,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return jsonOk({ client: serializeClient(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

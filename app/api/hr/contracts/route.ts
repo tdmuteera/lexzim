@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     const rows = await listHrContracts(firmId, { staffProfileId, status });
     return jsonOk({ items: rows.map(serializeContract) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -80,6 +80,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

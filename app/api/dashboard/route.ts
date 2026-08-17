@@ -29,7 +29,7 @@ import {
 import { tenantFirmId } from "@/lib/tenant/scope";
 import { prepareDbRetry } from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     // Dashboard is high-traffic; clear stale cooldown before probing DB.
     prepareDbRetry();
@@ -203,6 +203,6 @@ export async function GET() {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

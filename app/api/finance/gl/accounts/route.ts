@@ -34,7 +34,7 @@ function serializeAccount(a: {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("finance.gl.view");
     const firmId = tenantFirmId(session);
@@ -42,7 +42,7 @@ export async function GET() {
     const accounts = await listGlAccounts(firmId);
     return jsonOk({ items: accounts.map(serializeAccount) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -81,6 +81,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ account: serializeAccount(account) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -11,13 +11,13 @@ import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** Knowledge pack status (sources, chunks, embeddings). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requirePermission("ai.manage_settings");
     const stats = await getKnowledgePackStats();
     return jsonOk(stats);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -142,8 +142,8 @@ export async function POST(request: Request) {
     return jsonOk({ mode: "all", result, stats, async: false });
   } catch (err) {
     if (err instanceof AiProviderError) {
-      return jsonError(err);
+      return jsonError(err, request);
     }
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -28,6 +28,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

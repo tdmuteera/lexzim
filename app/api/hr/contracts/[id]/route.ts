@@ -26,7 +26,7 @@ function serializeContract(row: NonNullable<Awaited<ReturnType<typeof getHrContr
   };
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("hr.view");
     const firmId = tenantFirmId(session);
@@ -37,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
     return jsonOk({ contract: serializeContract(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -70,7 +70,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const full = await getHrContract(firmId, contract.id);
     return jsonOk({ contract: full ? serializeContract(full) : null });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -96,6 +96,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

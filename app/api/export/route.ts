@@ -9,7 +9,7 @@ import {
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
@@ -24,7 +24,7 @@ export async function GET() {
       ],
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -62,6 +62,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

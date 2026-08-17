@@ -9,7 +9,7 @@ import {
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("calendar.view");
     const firmId = tenantFirmId(session);
@@ -18,7 +18,7 @@ export async function GET() {
       browserNotificationsEnabled: value === "true",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -57,6 +57,6 @@ export async function PATCH(request: Request) {
 
     return jsonOk({ browserNotificationsEnabled: enabled });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

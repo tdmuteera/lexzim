@@ -6,6 +6,7 @@ import type { ReportType } from "@/lib/reports/types";
 import { centsToDisplay, formatMinutes } from "@/lib/billing/money";
 import { Button } from "@/components/ui/Button";
 import { ExportMenu } from "@/components/export/ExportMenu";
+import { UiAnomalyProbe } from "@/components/diagnostics/UiAnomalyProbe";
 
 const REPORTS: Array<{ id: ReportType; label: string }> = [
   { id: "ar-aging", label: "AR aging" },
@@ -132,6 +133,7 @@ export function ReportsView() {
 
   return (
     <section className="view active scrollable" aria-label="Reports">
+      <UiAnomalyProbe scope="reports" />
       <div className="panel">
         <div className="panel-head">
           <div>

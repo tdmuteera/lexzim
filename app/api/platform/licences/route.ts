@@ -134,7 +134,7 @@ export async function POST(request: Request) {
       licence: serializeEffectiveLicence(licence),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -154,6 +154,6 @@ export async function GET(request: Request) {
     const licence = await getEffectiveLicence(firmId);
     return jsonOk({ licence: serializeEffectiveLicence(licence) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

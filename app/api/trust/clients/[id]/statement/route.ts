@@ -59,6 +59,6 @@ export async function GET(request: Request, context: RouteContext) {
         "Trust statement only. Fee invoices and fee payments are not included.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

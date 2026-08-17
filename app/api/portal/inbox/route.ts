@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -131,6 +131,6 @@ export async function POST(request: Request) {
 
     throw new AuthError("validation", 'action must be "accept" or "dismiss".');
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

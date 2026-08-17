@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     const rows = await listQuotations(firmId, { status, clientId, from, to });
     return jsonOk({ items: rows.map(serializeQuotationListItem) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -63,6 +63,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

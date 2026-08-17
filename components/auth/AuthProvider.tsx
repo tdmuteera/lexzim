@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { ClientAuthSession } from "@/lib/rbac/permissions";
 import { hasAllPermissions, hasAnyPermission, hasPermission } from "@/lib/rbac/permissions";
+import { installFrontendDiagnostics } from "@/lib/diagnostics/client";
+import { installUiAnomalyConsoleHook } from "@/lib/diagnostics/ui-anomalies";
 import { useAuthStore } from "@/lib/store";
 
 type AuthContextValue = {
@@ -47,6 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const disposeDiag = installFrontendDiagnostics();
+    const disposeUi = installUiAnomalyConsoleHook();
+    return () => {
+      disposeDiag();
+      disposeUi();
+    };
+  }, []);
 
   const can = useCallback((code: string) => hasPermission(session, code), [session]);
   const canAny = useCallback((codes: string[]) => hasAnyPermission(session, codes), [session]);

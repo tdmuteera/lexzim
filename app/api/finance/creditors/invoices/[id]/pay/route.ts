@@ -70,6 +70,6 @@ export async function POST(
 
     return jsonOk({ payment: { id: payment.id } }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

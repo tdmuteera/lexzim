@@ -1937,6 +1937,119 @@ export const quotationLines = pgTable(
   (t) => [index("quotation_lines_firm_quote_idx").on(t.firmId, t.quotationId)],
 );
 
+/**
+ * Phase 8 platform diagnostics (not firm audit).
+ * Never store KYC, matter titles, amounts, secrets, or document bodies.
+ * firm_id / user_id are optional UUIDs only; product rows are not copied here.
+ */
+export const diagnosticEvents = pgTable(
+  "diagnostic_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: text("request_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** api | frontend | health | worker */
+    source: text("source").notNull(),
+    /** debug | info | warn | error */
+    level: text("level").notNull(),
+    module: text("module").notNull(),
+    /** Path without query string. */
+    route: text("route"),
+    httpMethod: text("http_method"),
+    httpStatus: integer("http_status"),
+    errorCode: text("error_code"),
+    sqlstate: text("sqlstate"),
+    messageSafe: text("message_safe").notNull().default(""),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    firmId: uuid("firm_id").references(() => firms.id, { onDelete: "set null" }),
+    role: text("role"),
+    durationMs: integer("duration_ms"),
+    payloadJson: jsonb("payload_json")
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+  },
+  (t) => [
+    index("diagnostic_events_request_id_idx").on(t.requestId),
+    index("diagnostic_events_created_at_idx").on(t.createdAt),
+    index("diagnostic_events_module_idx").on(t.module),
+    index("diagnostic_events_level_idx").on(t.level),
+    index("diagnostic_events_firm_id_idx").on(t.firmId),
+  ],
+);
+
+export const diagnosticSpans = pgTable(
+  "diagnostic_spans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: text("request_id").notNull(),
+    parentSpanId: uuid("parent_span_id").references((): AnyPgColumn => diagnosticSpans.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    durationMs: integer("duration_ms"),
+    ok: boolean("ok").notNull().default(true),
+    errorCode: text("error_code"),
+  },
+  (t) => [
+    index("diagnostic_spans_request_id_idx").on(t.requestId),
+    index("diagnostic_spans_parent_idx").on(t.parentSpanId),
+  ],
+);
+
+export const diagnosticDiagnoses = pgTable(
+  "diagnostic_diagnoses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: text("request_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    summary: text("summary").notNull(),
+    likelyCause: text("likely_cause").notNull(),
+    confidence: integer("confidence").notNull().default(0),
+    alternativesJson: jsonb("alternatives_json")
+      .$type<unknown[]>()
+      .default(sql`'[]'::jsonb`),
+    evidenceJson: jsonb("evidence_json")
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+    /** none | retry | inspect_health | runtime_heal | propose_patch */
+    recommendedAction: text("recommended_action").notNull().default("none"),
+    modelId: text("model_id"),
+    /** Ops user UUID or the literal "rules". */
+    createdBy: text("created_by").notNull(),
+  },
+  (t) => [
+    index("diagnostic_diagnoses_request_id_idx").on(t.requestId),
+    index("diagnostic_diagnoses_created_at_idx").on(t.createdAt),
+  ],
+);
+
+export const diagnosticRepairActions = pgTable(
+  "diagnostic_repair_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    diagnosisId: uuid("diagnosis_id").references(() => diagnosticDiagnoses.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** runtime_heal | patch_proposal */
+    kind: text("kind").notNull(),
+    actionCode: text("action_code").notNull(),
+    /** proposed | approved | running | succeeded | failed | rolled_back | rejected */
+    status: text("status").notNull().default("proposed"),
+    requestedBy: text("requested_by"),
+    approvedBy: text("approved_by"),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    resultSafe: text("result_safe"),
+    proposalPath: text("proposal_path"),
+  },
+  (t) => [
+    index("diagnostic_repair_actions_diagnosis_idx").on(t.diagnosisId),
+    index("diagnostic_repair_actions_status_idx").on(t.status),
+    index("diagnostic_repair_actions_created_at_idx").on(t.createdAt),
+  ],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -2009,4 +2122,8 @@ export const schema = {
   creditorPayments,
   firmHolidays,
   passwordResetRequests,
+  diagnosticEvents,
+  diagnosticSpans,
+  diagnosticDiagnoses,
+  diagnosticRepairActions,
 };

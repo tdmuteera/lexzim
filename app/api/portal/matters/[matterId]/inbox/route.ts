@@ -61,6 +61,6 @@ export async function POST(request: Request, context: RouteContext) {
       note: "File received in firm inbox. It is not published until staff accept it.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -6,6 +6,6 @@ export async function POST(request: Request) {
     await authLogout({ ipOrUserAgent: clientInfo(request) });
     return jsonOk({ signedOut: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

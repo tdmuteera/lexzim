@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSql, noteDbConnectivitySuccess, prepareDbRetry } from "@/lib/db";
+import { applyRequestIdHeader, requestIdFromRequest } from "@/lib/diagnostics/request-id";
+import { getDbStatus } from "@/lib/diagnostics/health";
 
 export const dynamic = "force-dynamic";
 
@@ -7,57 +8,17 @@ export const dynamic = "force-dynamic";
  * GET /api/db-status — connection + migration readiness smoke check.
  * Does not expose connection strings or passwords.
  */
-export async function GET() {
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json(
+export async function GET(request: Request) {
+  const requestId = requestIdFromRequest(request);
+  const result = await getDbStatus();
+  return applyRequestIdHeader(
+    NextResponse.json(
+      { ...result.body, requestId },
       {
-        ok: false,
-        service: "lexzim-db",
-        connected: false,
-        error: "DATABASE_URL missing",
+        status: result.status,
+        headers: { "Cache-Control": "no-store" },
       },
-      { status: 503 },
-    );
-  }
-
-  try {
-    prepareDbRetry();
-    const sql = getSql();
-    await sql`select 1 as ok`;
-
-    const vectorRows = await sql`
-      select exists(
-        select 1 from pg_extension where extname = 'vector'
-      ) as enabled
-    `;
-    const metaRows = await sql`
-      select exists(
-        select 1 from information_schema.tables
-        where table_schema = 'public' and table_name = 'app_meta'
-      ) as present
-    `;
-
-    noteDbConnectivitySuccess();
-    return NextResponse.json({
-      ok: true,
-      service: "lexzim-db",
-      connected: true,
-      pgvector: Boolean(vectorRows[0]?.enabled),
-      appMetaTable: Boolean(metaRows[0]?.present),
-      canMigrate: true,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown database error";
-    return NextResponse.json(
-      {
-        ok: false,
-        service: "lexzim-db",
-        connected: false,
-        error: message,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 503 },
-    );
-  }
+    ),
+    requestId,
+  );
 }

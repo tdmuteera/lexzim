@@ -11,6 +11,11 @@ import {
 } from "@/components/auth/AuthChrome";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import {
+  diagnosticJson,
+  ensureRequestId,
+  rememberRequestId,
+} from "@/lib/diagnostics/client";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/firm/branding";
 
 export function LoginForm() {
@@ -19,6 +24,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorRef, setErrorRef] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
@@ -28,17 +34,17 @@ export function LoginForm() {
     setResetBusy(true);
     setResetMsg(null);
     try {
-      const res = await fetch("/api/auth/reset-request", {
+      const result = await diagnosticJson<{ message?: string }>("/api/auth/reset-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { message?: string };
-      };
+      const dataMessage =
+        result.data && typeof result.data === "object" && "message" in result.data
+          ? String((result.data as { message?: string }).message ?? "")
+          : "";
       setResetMsg(
-        body.data?.message ??
+        dataMessage ||
           "If that account exists, your firm administrator has been notified to approve a reset.",
       );
     } catch {
@@ -51,27 +57,29 @@ export function LoginForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorRef(null);
     setLoading(true);
+    ensureRequestId();
     try {
-      const res = await fetch("/api/auth/login", {
+      const result = await diagnosticJson("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok) {
-        setError(body.error?.message ?? "Invalid email or password.");
+      if (!result.ok) {
+        setError(result.error?.message ?? "Invalid email or password.");
+        setErrorRef(result.requestId);
+        if (result.requestId) rememberRequestId(result.requestId);
         return;
       }
+      if (result.requestId) rememberRequestId(result.requestId);
       await refresh();
       router.replace("/dashboard");
       router.refresh();
     } catch {
       setError("Could not sign in. Check your connection and try again.");
+      setErrorRef(ensureRequestId());
     } finally {
       setLoading(false);
     }
@@ -100,7 +108,19 @@ export function LoginForm() {
               fontSize: "0.88rem",
             }}
           >
-            {error}
+            <div>{error}</div>
+            {errorRef ? (
+              <div
+                style={{
+                  marginTop: "0.45rem",
+                  fontSize: "0.75rem",
+                  opacity: 0.85,
+                  wordBreak: "break-all",
+                }}
+              >
+                Reference: {errorRef}
+              </div>
+            ) : null}
           </div>
         )}
 

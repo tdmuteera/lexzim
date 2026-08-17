@@ -61,9 +61,9 @@ export async function GET(request: Request) {
       payload.lawyers = await listFirmLawyers(firmId);
     }
 
-    return jsonOk(payload);
+    return jsonOk(payload, { request });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -122,9 +122,9 @@ export async function POST(request: Request) {
           responsibleLawyerName: full?.responsibleLawyerName,
         }),
       },
-      { status: 201 },
+      { status: 201, request },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

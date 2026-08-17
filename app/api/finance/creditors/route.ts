@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       aging,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -65,6 +65,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ creditor: { id: creditor.id, name: creditor.name } }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

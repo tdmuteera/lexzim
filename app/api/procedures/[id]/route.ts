@@ -71,6 +71,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       }),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

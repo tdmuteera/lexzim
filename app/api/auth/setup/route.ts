@@ -25,6 +25,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ user: serializeSession(user) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

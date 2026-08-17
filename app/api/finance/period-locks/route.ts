@@ -21,7 +21,7 @@ function parsePeriod(body: { year?: number; month?: number }) {
  * GET /api/finance/period-locks
  * POST /api/finance/period-locks { year, month }
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("finance.view");
     const firmId = tenantFirmId(session);
@@ -36,7 +36,7 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -75,6 +75,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -108,6 +108,6 @@ export async function GET(request: Request) {
         "Vault cash is client trust money. Not firm petty cash or fee revenue.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

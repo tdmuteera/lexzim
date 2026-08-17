@@ -48,6 +48,6 @@ export async function GET(request: Request) {
       routingMode: settings?.routingMode === "manual" ? "manual" : "auto",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

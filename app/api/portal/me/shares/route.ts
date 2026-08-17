@@ -12,7 +12,7 @@ import {
  * Portal: list only actively shared matters/documents for the signed-in
  * portal user's firm_id + client_id. Share-nothing when empty.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (!isPortalEnabled()) {
       throw new AuthError("portal_disabled", "Client portal is disabled.");
@@ -68,6 +68,6 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

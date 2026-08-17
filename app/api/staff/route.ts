@@ -23,7 +23,7 @@ const INVITABLE_ROLES = [
 ] as const;
 
 /** List firm users + seat usage. */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("users.manage");
     const firmId = tenantFirmId(session);
@@ -60,7 +60,7 @@ export async function GET() {
       invitableRoles: INVITABLE_ROLES,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -178,6 +178,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

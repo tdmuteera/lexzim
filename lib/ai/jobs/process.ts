@@ -138,3 +138,45 @@ export async function requeueStaleRunningJobs(staleMinutes = 45) {
       ),
     );
 }
+
+/**
+ * Safe requeue by id: only failed or running jobs → pending.
+ * Does not touch trust, fees, or arbitrary SQL.
+ */
+export async function requeueAiJobById(jobId: string): Promise<{
+  ok: boolean;
+  previousStatus: string | null;
+  message: string;
+}> {
+  const id = jobId.trim();
+  if (!id) {
+    return { ok: false, previousStatus: null, message: "job_id is required." };
+  }
+  const db = getDb();
+  const rows = await db.select().from(aiJobs).where(eq(aiJobs.id, id)).limit(1);
+  const job = rows[0];
+  if (!job) {
+    return { ok: false, previousStatus: null, message: "AI job not found." };
+  }
+  if (job.status !== "failed" && job.status !== "running") {
+    return {
+      ok: false,
+      previousStatus: job.status,
+      message: `Job status ${job.status} cannot be requeued (only failed or running).`,
+    };
+  }
+  await db
+    .update(aiJobs)
+    .set({
+      status: "pending",
+      startedAt: null,
+      finishedAt: null,
+      errorMessage: "requeued_by_ops_diagnostics",
+    })
+    .where(eq(aiJobs.id, id));
+  return {
+    ok: true,
+    previousStatus: job.status,
+    message: `AI job requeued from ${job.status} to pending.`,
+  };
+}

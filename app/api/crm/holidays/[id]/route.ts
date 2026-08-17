@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -26,11 +26,11 @@ export async function DELETE(
       entityType: "firm_holiday",
       entityId: id,
       metadata: { name: deleted.name },
-      ipOrUserAgent: clientInfo(_request),
+      ipOrUserAgent: clientInfo(request),
     });
 
     return jsonOk({ deleted: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

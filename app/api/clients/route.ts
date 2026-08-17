@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       items: rows.map(serializeClient),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -68,6 +68,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ client: serializeClient(row) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

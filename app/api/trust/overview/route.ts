@@ -8,7 +8,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  * GET /api/trust/overview
  * Firm-wide trust snapshot: master accounts, per-client balances, currency totals.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("trust.view");
     const firmId = tenantFirmId(session);
@@ -22,6 +22,6 @@ export async function GET() {
         "Trust ledger only. Fee invoices and fee payments are never included.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

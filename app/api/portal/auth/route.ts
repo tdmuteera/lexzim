@@ -32,7 +32,7 @@ function assertPortalAuthRateLimit(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (!isPortalEnabled()) {
       return jsonOk({ user: null, portalEnabled: false });
@@ -43,7 +43,7 @@ export async function GET() {
       user: user ? serializePortalSession(user) : null,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -100,6 +100,6 @@ export async function POST(request: Request) {
     });
     return jsonOk({ user: serializePortalSession(user) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

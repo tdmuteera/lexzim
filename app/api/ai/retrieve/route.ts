@@ -76,6 +76,6 @@ export async function POST(request: Request) {
       diagnostic: result.diagnostic ?? null,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -14,9 +14,11 @@ import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { centsToDisplay } from "@/lib/billing/money";
 import { getModuleCache, setModuleCache } from "@/lib/client/module-cache";
+import { diagnosticJson } from "@/lib/diagnostics/client";
 import { formatDateTime } from "@/lib/format/dates";
 import type { FinanceKpis } from "@/lib/repos/finance-kpis";
 import type { NavIcon } from "@/lib/nav";
+import { UiAnomalyProbe } from "@/components/diagnostics/UiAnomalyProbe";
 
 const DASHBOARD_CACHE_KEY = "module:/api/dashboard";
 
@@ -271,30 +273,29 @@ export function DashboardView() {
   );
   const [loading, setLoading] = useState(() => !getModuleCache(DASHBOARD_CACHE_KEY));
   const [error, setError] = useState<string | null>(null);
+  const [errorRef, setErrorRef] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { background?: boolean }) => {
     const background = Boolean(opts?.background);
     if (!background) setLoading(true);
     setError(null);
+    setErrorRef(null);
     try {
-      const res = await fetch("/api/dashboard", { credentials: "include" });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: DashboardData;
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok || !body.data) {
+      const result = await diagnosticJson<DashboardData>("/api/dashboard");
+      if (!result.ok || !result.data) {
         if (!background) {
-          setError(body.error?.message ?? "Could not load dashboard.");
+          setError(result.error?.message ?? "Could not load dashboard.");
+          setErrorRef(result.requestId);
           setData(null);
         }
         return;
       }
-      setModuleCache(DASHBOARD_CACHE_KEY, body.data);
-      setData(body.data);
+      setModuleCache(DASHBOARD_CACHE_KEY, result.data);
+      setData(result.data);
     } catch {
       if (!background) {
         setError("Could not load dashboard.");
+        setErrorRef(null);
         setData(null);
       }
     } finally {
@@ -396,6 +397,11 @@ export function DashboardView() {
     return (
       <section className="view active scrollable" aria-label="Dashboard">
         <p style={{ color: "var(--danger)" }}>{error ?? "No data."}</p>
+        {errorRef ? (
+          <p className="muted" style={{ fontSize: "0.78rem", wordBreak: "break-all" }}>
+            Reference: {errorRef}
+          </p>
+        ) : null}
         <Button size="sm" variant="outline" onClick={() => void load()}>
           Retry
         </Button>
@@ -511,6 +517,7 @@ export function DashboardView() {
       aria-label="Dashboard"
       id="view-dashboard"
     >
+      <UiAnomalyProbe scope="dashboard" />
       <div className="dash-hero motion-hero">
         <div className="dash-greeting">
           <h2>

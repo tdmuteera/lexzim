@@ -50,6 +50,6 @@ export async function GET(request: Request) {
       items: [...matters, ...clients],
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

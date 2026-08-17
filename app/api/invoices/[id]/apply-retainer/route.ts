@@ -55,6 +55,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return jsonOk({ ok: true, amountCents });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

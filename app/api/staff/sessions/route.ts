@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       note: "Sessions appear after login (web). Revoke ends the registry entry and best-effort clears Supabase auth.sessions.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -164,6 +164,6 @@ export async function POST(request: Request) {
       'action must be revoke, revoke_all, deactivate, or reactivate.',
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -35,6 +35,12 @@ export function clearCachedAuthNeedsSetup() {
   globalStore.lexzimAuthNeedsSetupCache = undefined;
 }
 
+/** Flush in-process auth/RBAC caches owned by this process (P8-12). */
+export function flushAuthHotCaches() {
+  globalStore.lexzimAuthNeedsSetupCache = undefined;
+  globalStore.lexzimRolePermCache = undefined;
+}
+
 export function getCachedRolePermissionCodes(roleId: string): string[] | undefined {
   const map = globalStore.lexzimRolePermCache;
   const entry = map?.get(roleId);

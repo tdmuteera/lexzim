@@ -29,7 +29,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setItems((prev) => [...prev, { id, message }]);
     window.setTimeout(() => {
       setItems((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
+    }, message.includes("Reference:") ? 5200 : 3200);
   }, []);
 
   const value = useMemo(() => ({ toast }), [toast]);

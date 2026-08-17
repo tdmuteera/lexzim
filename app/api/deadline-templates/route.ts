@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const rows = await listDeadlineTemplates(firmId, activeOnly);
     return jsonOk({ items: rows.map(serializeDeadlineTemplate) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -46,6 +46,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ template: serializeDeadlineTemplate(row) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -48,6 +48,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return jsonOk({ payment: serializeFeePayment(payment) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

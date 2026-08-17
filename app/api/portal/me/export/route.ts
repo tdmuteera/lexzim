@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 

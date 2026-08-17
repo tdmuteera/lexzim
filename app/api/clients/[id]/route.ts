@@ -10,7 +10,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("clients.view");
     const firmId = tenantFirmId(session);
@@ -31,7 +31,7 @@ export async function GET(_request: Request, context: RouteContext) {
       matterCounts,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -68,6 +68,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return jsonOk({ client: serializeClient(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

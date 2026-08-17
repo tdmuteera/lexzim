@@ -77,6 +77,6 @@ export async function POST(request: Request, context: RouteContext) {
       }),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

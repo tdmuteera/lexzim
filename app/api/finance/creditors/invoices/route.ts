@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -109,6 +109,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ invoice: { id: invoice.id } }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

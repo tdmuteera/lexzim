@@ -34,6 +34,6 @@ export async function GET(request: Request) {
       mode,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

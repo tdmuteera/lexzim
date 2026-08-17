@@ -36,6 +36,6 @@ export async function GET(request: Request, context: RouteContext) {
       version: row.version,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

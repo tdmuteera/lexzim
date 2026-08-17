@@ -32,6 +32,6 @@ export async function POST(request: Request) {
     });
     return jsonOk(data);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

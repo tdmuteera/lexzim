@@ -130,7 +130,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -144,6 +144,6 @@ export async function POST(request: Request) {
     const run = await createReconciliationRun(firmId, session.id, input);
     return jsonOk({ run: serializeRun({ run }) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

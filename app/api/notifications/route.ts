@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       unreadCount: rows.filter((r) => !r.readAt).length,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -60,6 +60,6 @@ export async function POST(request: Request) {
     if (!row) throw new AuthError("not_found", "Notification not found.");
     return jsonOk({ id: row.id, readAt: row.readAt?.toISOString() ?? null });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -37,7 +37,7 @@ function parsePositiveCents(raw: Record<string, unknown>): number {
   return dollars;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("finance.view");
     const firmId = tenantFirmId(session);
@@ -66,7 +66,7 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -141,6 +141,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ movement: { id: movement.id } }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
 type LicenceSummary = {
   edition: string;
@@ -45,14 +46,17 @@ export function OpsConsole() {
   const [purgeFirmId, setPurgeFirmId] = useState("");
   const [purgeSlug, setPurgeSlug] = useState("");
   const [purgePhrase, setPurgePhrase] = useState("");
+  const [diagOk, setDiagOk] = useState<boolean | null>(null);
+  const [diagFailing, setDiagFailing] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [firmsRes, healthRes] = await Promise.all([
+      const [firmsRes, healthRes, diagRes] = await Promise.all([
         fetch("/api/platform/firms", { credentials: "include" }),
         fetch("/api/platform/health", { credentials: "include" }),
+        fetch("/api/ops/diagnostics/health", { credentials: "include" }),
       ]);
       const firmsBody = (await firmsRes.json()) as {
         ok: boolean;
@@ -84,6 +88,23 @@ export function OpsConsole() {
       }
       if (healthRes.ok && healthBody.ok && healthBody.data) {
         setHealth(healthBody.data);
+      }
+      try {
+        const diagBody = (await diagRes.json()) as {
+          ok: boolean;
+          data?: { ok?: boolean; checks?: Array<{ name: string; ok: boolean }> };
+        };
+        if (diagRes.ok && diagBody.ok && diagBody.data) {
+          setDiagOk(Boolean(diagBody.data.ok));
+          setDiagFailing(
+            (diagBody.data.checks ?? []).filter((c) => !c.ok).map((c) => c.name),
+          );
+        } else {
+          setDiagOk(null);
+          setDiagFailing([]);
+        }
+      } catch {
+        setDiagOk(null);
       }
     } catch {
       setError("Could not load ops console.");
@@ -223,6 +244,22 @@ export function OpsConsole() {
           >
             Refresh
           </button>
+        </div>
+      </section>
+
+      <section className="ops-card">
+        <h2>Diagnostics</h2>
+        <div className="ops-strip">
+          {diagOk == null ? (
+            <span className="ops-muted">System diagnostics not loaded.</span>
+          ) : (
+            <span className={`ops-pill ${diagOk ? "ok" : "bad"}`}>
+              {diagOk ? "Health checks passing" : `Degraded: ${diagFailing.join(", ") || "see page"}`}
+            </span>
+          )}
+          <Link href="/ops/diagnostics" className="ops-btn outline" style={{ textDecoration: "none" }}>
+            Open diagnostics
+          </Link>
         </div>
       </section>
 

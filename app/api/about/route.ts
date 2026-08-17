@@ -14,7 +14,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  * About payload for Settings: app version, edition, licence, KB.
  * No secrets. SaaS has no "update available" prompt.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
@@ -56,6 +56,6 @@ export async function GET() {
       note: "Hosted SaaS: deploys apply on Railway. There is no separate desktop updater.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

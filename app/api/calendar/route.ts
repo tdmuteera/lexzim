@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       items: rows.map((r) => serializeCalendarEventRow(r)),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -120,6 +120,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

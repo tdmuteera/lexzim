@@ -9,8 +9,8 @@ export async function POST(request: Request) {
     const user = await authLogin(body.email ?? "", body.password ?? "", {
       ipOrUserAgent: clientInfo(request),
     });
-    return jsonOk({ user: serializeSession(user) });
+    return jsonOk({ user: serializeSession(user) }, { request });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

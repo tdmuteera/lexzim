@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       disclaimer: TEMPLATE_DISCLAIMER,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -66,6 +66,6 @@ export async function POST(request: Request) {
       ),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

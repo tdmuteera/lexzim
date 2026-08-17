@@ -99,6 +99,6 @@ export async function POST(request: Request) {
       document: result.document ?? null,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

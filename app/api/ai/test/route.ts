@@ -52,6 +52,6 @@ export async function POST(request: Request) {
       errorCode: result.errorCode ?? null,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

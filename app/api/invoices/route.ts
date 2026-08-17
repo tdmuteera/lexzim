@@ -62,9 +62,9 @@ export async function GET(request: Request) {
       }),
     );
 
-    return jsonOk({ items });
+    return jsonOk({ items }, { request });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
               })
             : serializeInvoice(invoice, { paidCents: 0 }),
         },
-        { status: 201 },
+        { status: 201, request },
       );
     }
 
@@ -194,9 +194,9 @@ export async function POST(request: Request) {
             })
           : serializeInvoice(invoice, { paidCents: 0 }),
       },
-      { status: 201 },
+      { status: 201, request },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

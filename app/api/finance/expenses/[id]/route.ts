@@ -77,7 +77,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const full = await getFirmExpense(firmId, id);
     return jsonOk({ expense: full ? serializeExpense(full) : serializeExpense({ expense }) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -102,6 +102,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

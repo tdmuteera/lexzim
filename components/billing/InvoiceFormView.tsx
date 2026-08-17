@@ -8,6 +8,7 @@ import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Button } from "@/components/ui/Button";
 import { centsToDisplay, dollarsToCents } from "@/lib/billing/money";
+import { diagnosticJson } from "@/lib/diagnostics/client";
 import {
   quotationDiscountCents,
   quotationSubtotalCents,
@@ -56,6 +57,7 @@ export function InvoiceFormView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorRef, setErrorRef] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +142,7 @@ export function InvoiceFormView() {
     }
     setSaving(true);
     setError(null);
+    setErrorRef(null);
     try {
       const payload: Record<string, unknown> = {
         clientId,
@@ -158,24 +161,20 @@ export function InvoiceFormView() {
         payload.discountPct = Number(discountPct);
       }
 
-      const res = await fetch("/api/invoices", {
+      const result = await diagnosticJson<{ invoice?: { id: string } }>("/api/invoices", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { invoice?: { id: string } };
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok || !body.data?.invoice?.id) {
-        setError(body.error?.message ?? "Could not create invoice.");
+      if (!result.ok || !result.data?.invoice?.id) {
+        setError(result.error?.message ?? "Could not create invoice.");
+        setErrorRef(result.requestId);
         return;
       }
-      router.push(`/finance/invoicing/invoices/${body.data.invoice.id}`);
+      router.push(`/finance/invoicing/invoices/${result.data.invoice.id}`);
     } catch {
       setError("Could not create invoice.");
+      setErrorRef(null);
     } finally {
       setSaving(false);
     }
@@ -202,6 +201,11 @@ export function InvoiceFormView() {
         {error ? (
           <p role="alert" style={{ color: "var(--danger)" }}>
             {error}
+            {errorRef ? (
+              <span className="muted" style={{ display: "block", fontSize: "0.78rem", marginTop: "0.35rem" }}>
+                Reference: {errorRef}
+              </span>
+            ) : null}
           </p>
         ) : null}
 

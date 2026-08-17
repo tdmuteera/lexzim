@@ -99,6 +99,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ sent: true, to, document: recipient.documentLabel });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

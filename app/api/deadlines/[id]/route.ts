@@ -57,7 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return jsonOk({ deadline: serializeMatterDeadline(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -103,6 +103,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

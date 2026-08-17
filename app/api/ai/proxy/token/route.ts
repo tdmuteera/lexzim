@@ -12,7 +12,7 @@ import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** Proxy credential status (never returns raw token). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("ai.manage_settings");
     const firmId = tenantFirmId(session);
@@ -32,7 +32,7 @@ export async function GET() {
         : "Upgrade to Firm edition (ai_proxy) to use LexZim Proxy.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -98,6 +98,6 @@ export async function POST(request: Request) {
       proxy: serializeProxyStatus(await getFirmAiProxy(firmId)),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

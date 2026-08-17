@@ -74,6 +74,6 @@ export async function GET(request: Request, context: RouteContext) {
       groupBy: filters.groupBy ?? null,
     }, report: data });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

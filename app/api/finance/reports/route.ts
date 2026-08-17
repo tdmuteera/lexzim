@@ -80,6 +80,6 @@ export async function GET(request: Request) {
 
     return jsonOk({ pack: data });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     const items = await listResetRequests(firmId, status);
     return jsonOk({ items });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -112,6 +112,6 @@ export async function POST(request: Request) {
       tempPassword,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

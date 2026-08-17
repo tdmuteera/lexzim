@@ -94,10 +94,21 @@ Also see sizing notes in `docs/RAILWAY.md` and free-tier honesty in `docs/HOSTIN
 
 ```text
 GET /api/health
+GET /api/db-status
 GET /api/portal/health   (when PORTAL_ENABLED)
 ```
 
 Ops console (platform admin): `/ops` (`docs/cloud/ADMIN.md`).
+
+## Phase 8 diagnostics
+
+For request timelines, Diagnose, allowlisted runtime heal, and patch proposals, use `/ops/diagnostics` and the DevOps guide:
+
+- `docs/PHASE8_RUNBOOK.md`
+- `docs/PHASE8_RUNTIME_HEAL.md`
+- `docs/PHASE8_PATCH_PROPOSALS.md`
+
+Smoke: `npm run smoke:phase8` (app must be running).
 
 ## Related
 
@@ -105,3 +116,4 @@ Ops console (platform admin): `/ops` (`docs/cloud/ADMIN.md`).
 - `docs/BACKUP.md`, `docs/cloud/RETENTION.md`
 - `docs/cloud/THREAT_MODEL.md` (T1 rate-limit)
 - `docs/PRODUCTION_SECRETS.md`
+- `docs/PHASE8_RUNBOOK.md` (diagnostics triage)

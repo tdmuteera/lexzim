@@ -57,6 +57,6 @@ export async function POST(request: Request) {
         "Firm suspended. Staff cannot sign in. Export data first if you have not. Hard delete is ops-only.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

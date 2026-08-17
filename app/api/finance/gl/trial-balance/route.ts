@@ -23,6 +23,6 @@ export async function GET(request: Request) {
     const report = await buildTrialBalance(firmId, asOf, currency);
     return jsonOk({ report });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

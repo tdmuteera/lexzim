@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -100,6 +100,6 @@ export async function POST(request: Request) {
     const full = await getJournalEntry(firmId, entry.id);
     return jsonOk({ entry: serializeEntry(full) }, { status: 201 });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -12,14 +12,14 @@ import { userCanAccessMatter } from "@/lib/repos/matters";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** Firm memory index stats. */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("ai.use");
     const firmId = tenantFirmId(session);
     const stats = await getFirmMemoryStats(firmId);
     return jsonOk(stats);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -127,6 +127,6 @@ export async function POST(request: Request) {
       'action must be "reindex_matter" or "reindex_all".',
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

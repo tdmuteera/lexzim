@@ -33,6 +33,6 @@ export async function GET(request: Request) {
     const report = await buildProfitAndLoss(firmId, from, to, currency);
     return jsonOk({ report, kind: "pl" });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

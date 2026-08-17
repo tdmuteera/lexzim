@@ -58,7 +58,7 @@ function serializeRun(row: {
   };
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("finance.reconcile");
     const firmId = tenantFirmId(session);
@@ -67,7 +67,7 @@ export async function GET(_request: Request, context: RouteContext) {
     if (!row) throw new AuthError("not_found", "Reconciliation run not found.");
     return jsonOk({ run: serializeRun(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -116,6 +116,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     const full = await getReconciliationRun(firmId, id);
     return jsonOk({ run: full ? serializeRun(full) : serializeRun({ run }) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

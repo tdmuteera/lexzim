@@ -7,7 +7,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** Load a legal research conversation + messages for the signed-in user. */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("ai.use");
     const firmId = tenantFirmId(session);
@@ -39,6 +39,6 @@ export async function GET(_request: Request, context: RouteContext) {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

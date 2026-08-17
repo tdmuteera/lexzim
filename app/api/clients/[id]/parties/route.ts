@@ -15,7 +15,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("clients.view");
     const firmId = tenantFirmId(session);
@@ -40,7 +40,7 @@ export async function GET(_request: Request, context: RouteContext) {
       ),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -103,6 +103,6 @@ export async function POST(request: Request, context: RouteContext) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

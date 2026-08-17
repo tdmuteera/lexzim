@@ -32,7 +32,7 @@ function serializeStaff(row: NonNullable<Awaited<ReturnType<typeof getStaffProfi
   };
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("hr.view");
     const firmId = tenantFirmId(session);
@@ -43,7 +43,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
     return jsonOk({ staff: serializeStaff(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -76,6 +76,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     const full = await getStaffProfile(firmId, profile.id);
     return jsonOk({ staff: full ? serializeStaff(full) : null });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

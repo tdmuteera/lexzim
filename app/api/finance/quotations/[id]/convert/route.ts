@@ -42,6 +42,6 @@ export async function POST(request: Request, { params }: RouteParams) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

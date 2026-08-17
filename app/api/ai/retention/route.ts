@@ -10,7 +10,7 @@ import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** AI conversation retention status for this firm. */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("ai.manage_settings");
     const firmId = tenantFirmId(session);
@@ -22,7 +22,7 @@ export async function GET() {
       note: "Conversations older than the window are deleted; messages cascade. KB embeddings are not purged here.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -68,6 +68,6 @@ export async function POST(request: Request) {
     });
     return jsonOk(result);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

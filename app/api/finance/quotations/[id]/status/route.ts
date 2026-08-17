@@ -33,6 +33,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     const full = await getQuotation(firmId, id);
     return jsonOk({ quotation: full ? serializeQuotationDetail(full) : null });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

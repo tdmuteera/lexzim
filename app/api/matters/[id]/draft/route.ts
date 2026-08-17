@@ -269,6 +269,6 @@ export async function POST(request: Request, context: RouteContext) {
       'action must be "preview", "polish", or "save".',
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

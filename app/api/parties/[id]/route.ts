@@ -103,7 +103,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -147,6 +147,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true, id: row.id });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

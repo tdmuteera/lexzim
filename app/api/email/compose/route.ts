@@ -101,6 +101,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ sent: true, to });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

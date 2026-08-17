@@ -91,7 +91,7 @@ function parseMaxTokens(raw: unknown): number | undefined {
 }
 
 /** AI settings + key presence (never returns the key). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("ai.manage_settings");
     const firmId = tenantFirmId(session);
@@ -120,7 +120,7 @@ export async function GET() {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -201,6 +201,6 @@ export async function PATCH(request: Request) {
       key: await publicKeyInfo(firmId),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

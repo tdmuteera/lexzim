@@ -52,6 +52,6 @@ export async function GET(request: Request) {
 
     return jsonOk({ report });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

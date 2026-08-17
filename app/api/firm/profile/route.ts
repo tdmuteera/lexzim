@@ -8,7 +8,7 @@ import {
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
@@ -16,7 +16,7 @@ export async function GET() {
     if (!profile) throw new AuthError("not_found", "Firm not found.");
     return jsonOk(profile);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -96,6 +96,6 @@ export async function PATCH(request: Request) {
 
     return jsonOk(profile);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

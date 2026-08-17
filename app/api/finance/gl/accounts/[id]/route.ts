@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return jsonOk({ account });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -68,6 +68,6 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
     return jsonOk({ account });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

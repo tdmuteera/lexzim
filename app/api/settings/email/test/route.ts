@@ -37,6 +37,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ sent: true, to, transport: result.transport });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

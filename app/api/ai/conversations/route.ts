@@ -23,6 +23,6 @@ export async function GET(request: Request) {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

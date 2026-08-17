@@ -73,6 +73,6 @@ export async function POST(request: Request) {
       retrievalMeta: result.retrievalMeta,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

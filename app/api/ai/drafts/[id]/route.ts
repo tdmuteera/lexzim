@@ -7,7 +7,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 type PageProps = { params: Promise<{ id: string }> };
 
 /** Download a Word draft produced in chat. */
-export async function GET(_request: Request, { params }: PageProps) {
+export async function GET(request: Request, { params }: PageProps) {
   try {
     const session = await requirePermission("ai.use");
     const { id } = await params;
@@ -24,6 +24,6 @@ export async function GET(_request: Request, { params }: PageProps) {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

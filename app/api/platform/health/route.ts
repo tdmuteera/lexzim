@@ -77,6 +77,6 @@ export async function GET(request: Request) {
       note: "No matter, document, or client payloads included.",
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

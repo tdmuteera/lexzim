@@ -7,7 +7,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   try {
     const session = await requirePermission("billing.view");
     const firmId = tenantFirmId(session);
@@ -16,6 +16,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!row) throw new AuthError("not_found", "Quotation not found.");
     return jsonOk({ quotation: serializeQuotationDetail(row) });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -17,6 +17,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
         </div>
         <nav className="ops-nav">
           <Link href="/ops">Dashboard</Link>
+          <Link href="/ops/diagnostics">Diagnostics</Link>
           <Link href="/login">Staff login</Link>
         </nav>
       </header>

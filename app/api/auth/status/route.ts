@@ -5,7 +5,7 @@ import {
 import { jsonError, jsonOk, serializeSession } from "@/lib/auth/http";
 
 /** Public status: first-run flag + current session (if any). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const [needsSetup, user] = await Promise.all([authNeedsSetup(), authCurrentUser()]);
     return jsonOk({
@@ -13,6 +13,6 @@ export async function GET() {
       user: user ? serializeSession(user) : null,
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

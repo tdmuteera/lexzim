@@ -10,14 +10,14 @@ import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** GET firm SMTP config (browser-safe: no password, just passwordSet). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
     const config = await getFirmEmailConfigPublic(firmId);
     return jsonOk({ config });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -77,6 +77,6 @@ export async function PUT(request: Request) {
     const config = await getFirmEmailConfigPublic(firmId);
     return jsonOk({ config });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

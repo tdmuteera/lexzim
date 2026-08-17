@@ -32,7 +32,7 @@ async function loadAccessibleDocument(
   return row;
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("documents.view");
     const firmId = tenantFirmId(session);
@@ -47,7 +47,7 @@ export async function GET(_request: Request, context: RouteContext) {
       document: serializeDocument(row, { createdByName: row.createdByName }),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -84,7 +84,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       document: serializeDocument(full ?? row, { createdByName: full?.createdByName }),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -131,6 +131,6 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return jsonOk({ deleted: true, id: row.id });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

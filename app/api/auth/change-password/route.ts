@@ -45,6 +45,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ changed: true });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

@@ -8,7 +8,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  * GET /api/hr/leave-types
  * POST /api/hr/leave-types { code, name, isPaid }
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("hr.view");
     const firmId = tenantFirmId(session);
@@ -23,7 +23,7 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -57,6 +57,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

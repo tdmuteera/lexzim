@@ -36,6 +36,6 @@ export async function POST(request: Request) {
 
     return jsonOk({ files: extracted });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

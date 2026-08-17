@@ -10,7 +10,7 @@ import { requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** List portal users for the firm (staff). */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (!isPortalEnabled()) {
       throw new AuthError("portal_disabled", "Client portal is disabled.");
@@ -45,7 +45,7 @@ export async function GET() {
       })),
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
 
@@ -94,6 +94,6 @@ export async function POST(request: Request) {
 
     return jsonOk(result);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }

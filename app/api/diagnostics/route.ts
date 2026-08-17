@@ -17,7 +17,7 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  * Safe support diagnostics (P4-13).
  * Version, firm id, edition, env booleans. No matter contents. No secrets. No auto-upload.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
@@ -110,6 +110,6 @@ export async function GET() {
       },
     });
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, request);
   }
 }
