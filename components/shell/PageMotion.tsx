@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { pageTransitionClass } from "@/lib/motion/page-transitions";
 
 function moduleKey(path: string): string {
   const part = path.split("/").filter(Boolean)[0];
@@ -9,14 +10,17 @@ function moduleKey(path: string): string {
 }
 
 /**
- * Short fade and rise when switching Practice / Finance / HR / System modules.
- * In-module tabs (finance, HR) animate via ModuleTabMotion so the tab bar stays put.
+ * PowerPoint-style enter when switching Practice / Finance / HR / System modules.
+ * Finance and HR tab bodies use ModuleTabMotion so the tab bar stays put.
  */
 export function PageMotion({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div key={moduleKey(pathname)} className="page-motion page-motion-rise">
+    <div
+      key={moduleKey(pathname)}
+      className={`page-motion ${pageTransitionClass(pathname)}`}
+    >
       {children}
     </div>
   );

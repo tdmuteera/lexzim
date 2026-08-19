@@ -11,7 +11,7 @@ export function DidYouKnow() {
     setFact(pickDidYouKnowFact());
     const reveal = () => setShow(true);
     const off = onAuthSplashDone(reveal);
-    const fallback = window.setTimeout(reveal, 1400);
+    const fallback = window.setTimeout(reveal, 3200);
     return () => {
       off();
       window.clearTimeout(fallback);

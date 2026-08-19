@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
+import { pageTransitionClass } from "@/lib/motion/page-transitions";
 import type { NavIcon } from "@/lib/nav";
 import { AboutPanel } from "@/components/settings/AboutPanel";
 import { AiSettingsPanel } from "@/components/settings/AiSettingsPanel";
@@ -101,7 +102,10 @@ export function SettingsView() {
           <div className="panel-head">
             <h3>{activeLabel}</h3>
           </div>
-          <div key={section} className="panel-body settings-main-body enter-motion">
+          <div
+            key={section}
+            className={`panel-body settings-main-body enter-motion ${pageTransitionClass(section)}`}
+          >
             {section === "about" ? (
               <AboutPanel />
             ) : section === "firm" ? (

@@ -156,42 +156,43 @@ a { color: var(--gold); text-decoration: none; }
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(201,168,108,0.22), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(201,168,108,0.28), transparent 55%),
     linear-gradient(165deg, #14161C 0%, #1C1F27 50%, #12141A 100%);
-  animation: loginSplashOut 0.35s var(--ease) 0.75s forwards;
+  animation: loginSplashOut 0.5s var(--ease) 2.5s forwards;
 }
-.login-splash-short {
-  animation: loginSplashOut 0.28s var(--ease) forwards;
-  pointer-events: none;
-}
-.login-splash-inner { text-align: center; }
-.login-splash-mark {
-  display: inline-flex;
-  width: 72px;
-  height: 72px;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid #C9A86C;
-  font-family: var(--font-brand);
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #E0C48A;
-  letter-spacing: 0.04em;
-  margin-bottom: 1.1rem;
-  animation: loginSplashIn 0.45s var(--ease);
-}
+.login-splash-inner { text-align: center; overflow: visible; }
 .login-splash-title {
-  font-family: var(--font-brand);
-  font-size: 2.7rem;
-  font-weight: 600;
-  color: #F3F1EC;
-  letter-spacing: 0.02em;
-  animation: loginSplashIn 0.5s var(--ease) 0.08s both;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
 }
-.login-splash-title span { color: #C9A86C; }
-@keyframes loginSplashIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: none; }
+.login-splash-brand,
+.login-splash-practice {
+  display: block;
+  font-family: var(--font-brand);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: loginSplashBounce 1.8s ease both;
+}
+.login-splash-brand {
+  font-size: clamp(2.6rem, 7vw, 4.4rem);
+  color: #F3F1EC;
+}
+.login-splash-practice {
+  font-size: clamp(1.7rem, 4.5vw, 2.8rem);
+  color: #C9A86C;
+  animation-delay: 0.18s;
+}
+@keyframes loginSplashBounce {
+  0% { opacity: 0; transform: translateY(-80px) scale(0.4); }
+  28% { opacity: 1; transform: translateY(22px) scale(1.18); }
+  44% { transform: translateY(-16px) scale(0.92); }
+  58% { transform: translateY(10px) scale(1.08); }
+  72% { transform: translateY(-6px) scale(0.97); }
+  86% { transform: translateY(3px) scale(1.02); }
+  100% { opacity: 1; transform: none; }
 }
 @keyframes loginSplashOut {
   to { opacity: 0; visibility: hidden; }
@@ -658,7 +659,26 @@ input.input:focus, select.input:focus, textarea.input:focus {
   pointer-events: none;
 }
 .page-motion-rise { animation: motionRiseSoft 0.42s var(--ease) both; }
-.enter-motion { animation: motionRiseSoft 0.38s var(--ease) both; }
+.enter-motion { min-width: 0; }
+
+.ppt-in {
+  animation-duration: 0.65s;
+  animation-timing-function: var(--ease);
+  animation-fill-mode: both;
+  transform-origin: center center;
+}
+.ppt-fade { animation-name: pptFade; }
+.ppt-wipe { animation-name: pptWipe; }
+.ppt-wipeup { animation-name: pptWipeUp; }
+.ppt-push { animation-name: pptPush; }
+.ppt-cover { animation-name: pptCover; }
+.ppt-zoom { animation-name: pptZoom; animation-timing-function: var(--ease-spring); }
+.ppt-fan { animation-name: pptFan; transform-origin: left center; perspective: 900px; }
+.ppt-roll { animation-name: pptRoll; transform-origin: top center; }
+.ppt-flip { animation-name: pptFlip; transform-origin: center center; }
+.ppt-dissolve { animation-name: pptDissolve; }
+.ppt-split { animation-name: pptSplit; }
+.ppt-bounce { animation-name: pptBounce; animation-timing-function: var(--ease-spring); }
 .page-motion .view {
   animation: none;
 }
@@ -1951,6 +1971,55 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   from { opacity: 0; transform: translateY(22px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes pptFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pptWipe {
+  from { opacity: 0.35; clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+@keyframes pptWipeUp {
+  from { opacity: 0.35; clip-path: inset(100% 0 0 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+@keyframes pptPush {
+  from { opacity: 0; transform: translateX(56px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptCover {
+  from { opacity: 0; transform: translateY(-40px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptZoom {
+  from { opacity: 0; transform: scale(0.86); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptFan {
+  from { opacity: 0; transform: perspective(900px) rotateY(-55deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptRoll {
+  from { opacity: 0; transform: scaleY(0.08); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptFlip {
+  from { opacity: 0; transform: perspective(1000px) rotateX(18deg) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pptDissolve {
+  from { opacity: 0; filter: blur(10px); }
+  to { opacity: 1; filter: none; }
+}
+@keyframes pptSplit {
+  from { opacity: 0; clip-path: inset(0 42% 0 42%); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+@keyframes pptBounce {
+  0% { opacity: 0; transform: translateY(28px) scale(0.94); }
+  62% { opacity: 1; transform: translateY(-8px) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
 @keyframes motionRiseSoft {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
@@ -2038,6 +2107,7 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   .page-motion,
   .page-motion-accent,
   .enter-motion,
+  .ppt-in,
   .view,
   .panel,
   .stat-card,
