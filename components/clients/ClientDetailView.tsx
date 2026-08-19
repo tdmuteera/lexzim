@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ClientEmailButton } from "@/components/email/ClientEmailButton";
 import { ClientDocumentsPanel } from "@/components/clients/ClientDocumentsPanel";
+import { RelatedPartiesPanel } from "@/components/parties/RelatedPartiesPanel";
 import {
   KYC_STATUS_OPTIONS,
   SOURCE_OF_FUNDS_OPTIONS,

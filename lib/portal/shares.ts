@@ -157,6 +157,12 @@ export async function upsertDocumentPortalShare(input: {
     .limit(1);
   const doc = docs[0];
   if (!doc) throw new AuthError("not_found", "Document not found in this firm.");
+  if (!doc.matterId) {
+    throw new AuthError(
+      "validation",
+      "Only matter documents can be shared on the client portal.",
+    );
+  }
 
   await assertMatterBelongsToClient(input.firmId, doc.matterId, input.clientId);
   const permission = input.permission ?? "read";
