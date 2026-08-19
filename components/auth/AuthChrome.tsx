@@ -42,7 +42,7 @@ export function AuthVisualPanel({ variant = "login" }: AuthVisualPanelProps) {
           <Icon name="robot" />
           <div>
             <strong>Zimbabwe-grounded AI</strong>
-            <span>RAG research with citations — lawyer in the loop (Phase 2)</span>
+            <span>Ask, research, and draft. A lawyer stays in control.</span>
           </div>
         </div>
       </div>
