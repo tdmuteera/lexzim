@@ -1,9 +1,7 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
-import { AuthError } from "@/lib/auth/types";
+import { loadAccessibleDocument } from "@/lib/documents/access";
 import { createSignedDownloadUrl } from "@/lib/storage/firm-files";
-import { getDocumentById } from "@/lib/repos/documents";
-import { userCanAccessMatter } from "@/lib/repos/matters";
 import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -15,20 +13,12 @@ export async function GET(request: Request, context: RouteContext) {
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
 
-    const row = await getDocumentById(firmId, id);
-    if (!row) {
-      throw new AuthError("not_found", "Document not found.");
-    }
-
-    const allowed = await userCanAccessMatter(
+    const row = await loadAccessibleDocument(
       firmId,
-      row.matterId,
+      id,
       session.id,
       canViewAllMatters(session),
     );
-    if (!allowed) {
-      throw new AuthError("forbidden", "You do not have access to this matter.");
-    }
 
     const url = new URL(request.url);
     const expiresIn = Math.min(

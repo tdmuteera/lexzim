@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Modal } from "@/components/ui/Modal";
 import type { CalendarEventType } from "@/lib/db/ops-types";
 import { CALENDAR_EVENT_TYPES } from "@/lib/calendar/validation";
 
@@ -178,6 +179,7 @@ export function CalendarView() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const range = useMemo(() => {
     if (viewMode === "agenda") {
@@ -285,11 +287,17 @@ export function CalendarView() {
 
   const selected = items.find((e) => e.id === selectedId) ?? null;
 
-  function openCreate(day?: Date) {
+  function closeForm() {
+    setFormOpen(false);
+    setEditingId(null);
+    setFormError(null);
+  }
+
+  function openCreate(opts?: { day?: Date; eventType?: CalendarEventType }) {
     if (!canManage) return;
     const defaults: Partial<FormState> = {};
-    if (day) {
-      const start = new Date(day);
+    if (opts?.day) {
+      const start = new Date(opts.day);
       start.setHours(9, 0, 0, 0);
       const end = new Date(start);
       end.setHours(10, 0, 0, 0);
@@ -297,8 +305,15 @@ export function CalendarView() {
       defaults.endsAt = toLocalInputValue(end);
     }
     if (matterFilter) defaults.matterId = matterFilter;
-    if (categoryFilter === "meetings") defaults.eventType = "appointment";
-    if (categoryFilter === "hearings") defaults.eventType = "hearing";
+    if (opts?.eventType) {
+      defaults.eventType = opts.eventType;
+    } else if (categoryFilter === "meetings") {
+      defaults.eventType = "appointment";
+    } else if (categoryFilter === "hearings") {
+      defaults.eventType = "hearing";
+    } else {
+      defaults.eventType = "other";
+    }
     setEditingId(null);
     setForm(emptyForm(defaults));
     setFormError(null);
@@ -306,9 +321,14 @@ export function CalendarView() {
   }
 
   function openCreateMeeting(day?: Date) {
-    openCreate(day);
-    setForm((f) => ({ ...f, eventType: "appointment" }));
+    openCreate({ day, eventType: "appointment" });
   }
+
+  useEffect(() => {
+    if (!formOpen) return;
+    const t = window.setTimeout(() => titleInputRef.current?.focus(), 40);
+    return () => window.clearTimeout(t);
+  }, [formOpen]);
 
   const filteredMatters = useMemo(() => {
     if (!form.clientId) return matters;
@@ -359,8 +379,7 @@ export function CalendarView() {
         setFormError(body.error?.message ?? "Could not save event.");
         return;
       }
-      setFormOpen(false);
-      setEditingId(null);
+      closeForm();
       if (body.data?.event) setSelectedId(body.data.event.id);
       await load();
     } catch {
@@ -397,6 +416,13 @@ export function CalendarView() {
 
   const monthLabel = cursor.toLocaleString(undefined, { month: "long", year: "numeric" });
   const todayKey = toDateKey(new Date());
+  const formTitle = editingId
+    ? form.eventType === "appointment"
+      ? "Edit meeting"
+      : "Edit event"
+    : form.eventType === "appointment"
+      ? "New meeting"
+      : "New event";
 
   return (
     <section className="view active scrollable" aria-label="Court Calendar">
@@ -531,7 +557,7 @@ export function CalendarView() {
                   <div
                     key={key}
                     className={`cal-day${inMonth ? "" : " muted"}${isToday ? " today" : ""}`}
-                    onDoubleClick={() => openCreate(date)}
+                    onDoubleClick={() => openCreate({ day: date })}
                   >
                     <div className="cal-day-num">{date.getDate()}</div>
                     {dayEvents.slice(0, 3).map((ev) => (
@@ -684,177 +710,162 @@ export function CalendarView() {
           ) : null}
 
           {formOpen ? (
-            <div className="panel" style={{ marginTop: "1rem" }}>
-              <div className="panel-head">
-                <h3>
-                  {editingId
-                    ? form.eventType === "appointment"
-                      ? "Edit meeting"
-                      : "Edit event"
-                    : form.eventType === "appointment"
-                      ? "New meeting"
-                      : "New event"}
-                </h3>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setFormOpen(false);
-                    setEditingId(null);
-                    setFormError(null);
-                  }}
-                >
+            <Modal open={formOpen} title={formTitle} onClose={closeForm}>
+              {formError ? (
+                <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+                  {formError}
+                </p>
+              ) : null}
+              <div className="form-group">
+                <label htmlFor="cal-title">Title</label>
+                <input
+                  id="cal-title"
+                  ref={titleInputRef}
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  required
+                />
+              </div>
+              {form.eventType === "appointment" ? (
+                <div className="form-group">
+                  <ClientSearchPicker
+                    value={form.clientId}
+                    onChange={(id) =>
+                      setForm((f) => ({
+                        ...f,
+                        clientId: id,
+                        matterId:
+                          f.matterId &&
+                          matters.find((m) => m.id === f.matterId)?.clientId !== id
+                            ? ""
+                            : f.matterId,
+                      }))
+                    }
+                    label="Client"
+                    placeholder="Search client for this meeting…"
+                  />
+                </div>
+              ) : null}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label htmlFor="cal-type">Type</label>
+                  <select
+                    id="cal-type"
+                    value={form.eventType}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        eventType: e.target.value as CalendarEventType,
+                        clientId: e.target.value === "appointment" ? f.clientId : "",
+                      }))
+                    }
+                  >
+                    {CALENDAR_EVENT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {EVENT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="cal-matter">Matter (optional)</label>
+                  <select
+                    id="cal-matter"
+                    value={form.matterId}
+                    onChange={(e) => {
+                      const matterId = e.target.value;
+                      const matter = matters.find((m) => m.id === matterId);
+                      setForm((f) => ({
+                        ...f,
+                        matterId,
+                        clientId:
+                          matter?.clientId ??
+                          (f.eventType === "appointment" ? f.clientId : ""),
+                      }));
+                    }}
+                  >
+                    <option value="">No matter</option>
+                    {filteredMatters.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label htmlFor="cal-start">Starts</label>
+                  <input
+                    id="cal-start"
+                    type="datetime-local"
+                    value={form.startsAt}
+                    onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="cal-end">Ends</label>
+                  <input
+                    id="cal-end"
+                    type="datetime-local"
+                    value={form.endsAt}
+                    onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))}
+                    disabled={form.allDay}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={form.allDay}
+                    onChange={(e) => setForm((f) => ({ ...f, allDay: e.target.checked }))}
+                  />
+                  All day
+                </label>
+              </div>
+              <div className="form-group">
+                <label htmlFor="cal-location">Location</label>
+                <input
+                  id="cal-location"
+                  value={form.location}
+                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                  placeholder="Court, chambers, Zoom…"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="cal-desc">Notes</label>
+                <textarea
+                  id="cal-desc"
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <Button onClick={saveEvent} disabled={saving || !form.title.trim()}>
+                  {saving
+                    ? "Saving…"
+                    : editingId
+                      ? "Save changes"
+                      : form.eventType === "appointment"
+                        ? "Create meeting"
+                        : "Create event"}
+                </Button>
+                {editingId ? (
+                  <Button
+                    variant="danger"
+                    disabled={saving}
+                    onClick={() => removeEvent(editingId)}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+                <Button variant="ghost" disabled={saving} onClick={closeForm}>
                   Cancel
                 </Button>
               </div>
-              <div className="panel-body">
-                {formError ? (
-                  <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-                    {formError}
-                  </p>
-                ) : null}
-                <div className="form-group">
-                  <label htmlFor="cal-title">Title</label>
-                  <input
-                    id="cal-title"
-                    value={form.title}
-                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                    required
-                  />
-                </div>
-                {form.eventType === "appointment" ? (
-                  <div className="form-group">
-                    <ClientSearchPicker
-                      value={form.clientId}
-                      onChange={(id) =>
-                        setForm((f) => ({
-                          ...f,
-                          clientId: id,
-                          matterId:
-                            f.matterId &&
-                            matters.find((m) => m.id === f.matterId)?.clientId !== id
-                              ? ""
-                              : f.matterId,
-                        }))
-                      }
-                      label="Client"
-                      placeholder="Search client for this meeting…"
-                    />
-                  </div>
-                ) : null}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <div className="form-group">
-                    <label htmlFor="cal-type">Type</label>
-                    <select
-                      id="cal-type"
-                      value={form.eventType}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          eventType: e.target.value as CalendarEventType,
-                          clientId:
-                            e.target.value === "appointment" ? f.clientId : "",
-                        }))
-                      }
-                    >
-                      {CALENDAR_EVENT_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {EVENT_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="cal-matter">Matter (optional)</label>
-                    <select
-                      id="cal-matter"
-                      value={form.matterId}
-                      onChange={(e) => {
-                        const matterId = e.target.value;
-                        const matter = matters.find((m) => m.id === matterId);
-                        setForm((f) => ({
-                          ...f,
-                          matterId,
-                          clientId:
-                            matter?.clientId ??
-                            (f.eventType === "appointment" ? f.clientId : ""),
-                        }));
-                      }}
-                    >
-                      <option value="">No matter</option>
-                      {filteredMatters.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <div className="form-group">
-                    <label htmlFor="cal-start">Starts</label>
-                    <input
-                      id="cal-start"
-                      type="datetime-local"
-                      value={form.startsAt}
-                      onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="cal-end">Ends</label>
-                    <input
-                      id="cal-end"
-                      type="datetime-local"
-                      value={form.endsAt}
-                      onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))}
-                      disabled={form.allDay}
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={form.allDay}
-                      onChange={(e) => setForm((f) => ({ ...f, allDay: e.target.checked }))}
-                    />
-                    All day
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="cal-location">Location</label>
-                  <input
-                    id="cal-location"
-                    value={form.location}
-                    onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                    placeholder="Court, chambers, Zoom…"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="cal-desc">Notes</label>
-                  <textarea
-                    id="cal-desc"
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <Button onClick={saveEvent} disabled={saving || !form.title.trim()}>
-                    {saving ? "Saving…" : editingId ? "Save changes" : "Create event"}
-                  </Button>
-                  {editingId ? (
-                    <Button
-                      variant="danger"
-                      disabled={saving}
-                      onClick={() => removeEvent(editingId)}
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+            </Modal>
           ) : null}
         </div>
       </div>

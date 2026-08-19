@@ -28,7 +28,7 @@ export const LICENCE_FEATURE_KEYS: LicenceFeatureKey[] = [
 ];
 
 export const DEFAULT_SEATS: Record<LicenceEdition, number> = {
-  trial: 3,
+  trial: 10,
   solo: 2,
   firm: 15,
 };

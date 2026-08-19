@@ -105,16 +105,103 @@ a { color: var(--gold); text-decoration: none; }
   animation: markPulse 3.2s var(--ease) infinite;
 }
 .login-brand h1 {
-  font-family: var(--font-brand); font-size: 2.4rem; font-weight: 600;
-  color: var(--text); letter-spacing: 0.02em; margin-bottom: 0.35rem;
+  font-family: var(--font-brand); font-size: 2.9rem; font-weight: 600;
+  color: var(--text); letter-spacing: 0.02em; margin-bottom: 0.45rem;
 }
 .login-brand h1 span { color: var(--gold); }
 .login-tagline {
   font-family: var(--font-brand); font-style: italic;
-  color: var(--gold-2); font-size: 1.05rem; margin-bottom: 1rem;
+  color: var(--gold-2); font-size: 2rem; margin-bottom: 1.35rem;
+  line-height: 1.25;
 }
 .login-brand > p {
-  color: var(--text-2); max-width: 28rem; font-size: 0.92rem; line-height: 1.6;
+  color: var(--text-2); max-width: 36rem; font-size: 0.92rem; line-height: 1.6;
+}
+.login-didyouknow {
+  max-width: 36rem;
+  margin-top: 0.5rem;
+  min-height: 5.5rem;
+}
+.login-didyouknow-label {
+  font-size: 1.12rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+  font-weight: 700;
+  margin-bottom: 0.7rem;
+  font-style: normal;
+  font-family: var(--font-ui);
+  animation: loginDidYouKnowBounce 0.7s var(--ease-spring) both;
+}
+.login-didyouknow-body {
+  color: #F3F1EC;
+  font-size: 1.55rem;
+  line-height: 1.55;
+  font-style: normal;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  animation: loginDidYouKnowBounce 0.85s var(--ease-spring) 0.08s both;
+}
+@keyframes loginDidYouKnowBounce {
+  0% { opacity: 0; transform: translateY(36px) scale(0.82); }
+  58% { opacity: 1; transform: translateY(-12px) scale(1.08); }
+  78% { transform: translateY(5px) scale(0.97); }
+  100% { opacity: 1; transform: none; }
+}
+.login-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(201,168,108,0.22), transparent 55%),
+    linear-gradient(165deg, #14161C 0%, #1C1F27 50%, #12141A 100%);
+  animation: loginSplashOut 0.35s var(--ease) 0.75s forwards;
+}
+.login-splash-short {
+  animation: loginSplashOut 0.28s var(--ease) forwards;
+  pointer-events: none;
+}
+.login-splash-inner { text-align: center; }
+.login-splash-mark {
+  display: inline-flex;
+  width: 72px;
+  height: 72px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #C9A86C;
+  font-family: var(--font-brand);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #E0C48A;
+  letter-spacing: 0.04em;
+  margin-bottom: 1.1rem;
+  animation: loginSplashIn 0.45s var(--ease);
+}
+.login-splash-title {
+  font-family: var(--font-brand);
+  font-size: 2.7rem;
+  font-weight: 600;
+  color: #F3F1EC;
+  letter-spacing: 0.02em;
+  animation: loginSplashIn 0.5s var(--ease) 0.08s both;
+}
+.login-splash-title span { color: #C9A86C; }
+@keyframes loginSplashIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes loginSplashOut {
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-splash { display: none !important; }
+  .login-didyouknow-label,
+  .login-didyouknow-body {
+    animation: none !important;
+  }
 }
 .login-pillars { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1rem; }
 .login-pillar {
@@ -123,9 +210,9 @@ a { color: var(--gold); text-decoration: none; }
   border: 1px solid var(--border); border-radius: var(--radius);
   backdrop-filter: blur(8px);
 }
-.login-pillar .ico { color: var(--gold); width: 1.35rem; height: 1.35rem; margin-top: 0.1rem; }
-.login-pillar strong { display: block; font-size: 0.88rem; margin-bottom: 0.15rem; color: #F3F1EC; }
-.login-pillar span { font-size: 0.78rem; color: var(--text-3); }
+.login-pillar .ico { color: var(--gold); width: 1.5rem; height: 1.5rem; margin-top: 0.1rem; }
+.login-pillar strong { display: block; font-size: 1.08rem; margin-bottom: 0.2rem; color: #F3F1EC; }
+.login-pillar span { font-size: 0.98rem; color: var(--text-3); line-height: 1.45; }
 .login-mobile-brand {
   display: none;
   text-align: center;
@@ -138,11 +225,11 @@ a { color: var(--gold); text-decoration: none; }
 .login-mobile-brand strong {
   display: block;
   font-family: var(--font-brand);
-  font-size: 1.25rem;
+  font-size: 1.65rem;
   color: var(--text);
 }
 .login-mobile-brand span {
-  font-size: 0.78rem;
+  font-size: 1.3rem;
   color: var(--gold);
   font-style: italic;
   font-family: var(--font-brand);
@@ -152,19 +239,19 @@ a { color: var(--gold); text-decoration: none; }
   padding: 2rem; background: var(--bg-0);
 }
 .login-card {
-  width: 100%; max-width: 410px;
+  width: 100%; max-width: 480px;
   background: var(--bg-2); border: 1px solid var(--border-2);
-  border-radius: 16px; padding: 2.1rem; box-shadow: var(--shadow-lg);
+  border-radius: 16px; padding: 2.35rem; box-shadow: var(--shadow-lg);
   animation: fadeUp 0.55s var(--ease);
 }
 .eyebrow {
-  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.14em;
-  color: var(--gold); font-weight: 600; margin-bottom: 0.5rem;
+  font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--gold); font-weight: 600; margin-bottom: 0.55rem;
 }
 .login-card h2 {
-  font-family: var(--font-brand); font-size: 1.85rem; font-weight: 600; margin-bottom: 0.35rem;
+  font-family: var(--font-brand); font-size: 2.45rem; font-weight: 600; margin-bottom: 0.4rem;
 }
-.login-card .sub { color: var(--text-3); font-size: 0.92rem; margin-bottom: 1.5rem; }
+.login-card .sub { color: var(--text-3); font-size: 1.15rem; margin-bottom: 1.6rem; }
 .form-group { margin-bottom: 1rem; }
 .form-group label {
   display: block; font-size: 0.75rem; color: var(--text-3);
@@ -200,6 +287,37 @@ input.input:focus, select.input:focus, textarea.input:focus {
 .demo-hint { margin-top: 1rem; font-size: 0.75rem; color: var(--text-3); }
 .demo-hint code {
   background: var(--gold-dim); padding: 0.1rem 0.35rem; border-radius: 3px; color: var(--gold-2);
+}
+
+/* Login page type only (do not change the rest of the app). */
+#login-screen .form-group label {
+  font-size: 1rem;
+  margin-bottom: 0.45rem;
+}
+#login-screen .form-group input,
+#login-screen .form-group select,
+#login-screen .form-group textarea {
+  font-size: 1.12rem;
+  padding: 0.85rem 1rem;
+}
+#login-screen .login-row,
+#login-screen .login-row .btn,
+#login-screen .login-row button {
+  font-size: 1.02rem;
+}
+#login-screen .btn {
+  font-size: 1.12rem;
+  padding: 0.85rem 1.25rem;
+}
+#login-screen .login-security {
+  font-size: 0.98rem;
+}
+#login-screen .auth-error {
+  font-size: 1.02rem !important;
+}
+#login-screen .muted,
+#login-screen .settings-hint {
+  font-size: 1rem !important;
 }
 
 /* ===== BUTTONS ===== */
@@ -539,18 +657,8 @@ input.input:focus, select.input:focus, textarea.input:focus {
   background: linear-gradient(90deg, transparent, var(--gold-bright), var(--gold), transparent);
   pointer-events: none;
 }
-.page-motion-rise { animation: motionRise 0.55s var(--ease) both; }
-.page-motion-slide { animation: motionSlide 0.55s var(--ease) both; }
-.page-motion-scale { animation: motionScale 0.5s var(--ease-spring) both; }
-.page-motion-blur { animation: motionBlur 0.6s var(--ease) both; }
-.page-motion-sweep { animation: motionSweep 0.55s var(--ease) both; }
-.page-motion-rise .page-motion-accent,
-.page-motion-slide .page-motion-accent,
-.page-motion-scale .page-motion-accent,
-.page-motion-blur .page-motion-accent,
-.page-motion-sweep .page-motion-accent {
-  animation: motionInk 0.7s var(--ease) 0.08s both;
-}
+.page-motion-rise { animation: motionRiseSoft 0.42s var(--ease) both; }
+.enter-motion { animation: motionRiseSoft 0.38s var(--ease) both; }
 .page-motion .view {
   animation: none;
 }
@@ -979,7 +1087,16 @@ input.input:focus, select.input:focus, textarea.input:focus {
   flex-shrink: 0;
 }
 .module-with-tabs > .view,
-.module-with-tabs > .view.scrollable {
+.module-with-tabs > .view.scrollable,
+.module-with-tabs > .enter-motion {
+  flex: 0 0 auto;
+  min-height: min-content;
+  height: auto;
+  overflow: visible;
+  min-width: 0;
+}
+.module-with-tabs > .enter-motion > .view,
+.module-with-tabs > .enter-motion > .view.scrollable {
   flex: 0 0 auto;
   min-height: min-content;
   height: auto;
@@ -1834,6 +1951,10 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   from { opacity: 0; transform: translateY(22px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes motionRiseSoft {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
 @keyframes motionRise {
   from { opacity: 0; transform: translateY(28px); }
   to { opacity: 1; transform: none; }
@@ -1916,6 +2037,7 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
 @media (prefers-reduced-motion: reduce) {
   .page-motion,
   .page-motion-accent,
+  .enter-motion,
   .view,
   .panel,
   .stat-card,

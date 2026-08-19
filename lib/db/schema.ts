@@ -103,6 +103,8 @@ export const users = pgTable(
       .references(() => firms.id, { onDelete: "cascade" }),
     email: text("email").notNull().unique(),
     fullName: text("full_name").notNull(),
+    /** Free-text title on the login (e.g. Associate, Accounts). Not a custom role. */
+    jobTitle: text("job_title"),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
@@ -116,6 +118,29 @@ export const users = pgTable(
   (t) => [
     index("users_firm_id_idx").on(t.firmId),
     index("users_role_id_idx").on(t.roleId),
+  ],
+);
+
+/**
+ * Per-person grants (P9-05). When a user has rows here, these codes are the
+ * source of truth. Empty set falls back to role_permissions.
+ */
+export const userPermissions = pgTable(
+  "user_permissions",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permissions.id, { onDelete: "cascade" }),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.permissionId] }),
+    index("user_permissions_firm_user_idx").on(t.firmId, t.userId),
   ],
 );
 
@@ -438,9 +463,9 @@ export const documents = pgTable(
     firmId: uuid("firm_id")
       .notNull()
       .references(() => firms.id, { onDelete: "cascade" }),
-    matterId: uuid("matter_id")
-      .notNull()
-      .references(() => matters.id, { onDelete: "cascade" }),
+    matterId: uuid("matter_id").references(() => matters.id, {
+      onDelete: "cascade",
+    }),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     fileName: text("file_name").notNull(),
@@ -456,6 +481,7 @@ export const documents = pgTable(
   (t) => [
     index("documents_firm_id_idx").on(t.firmId),
     index("documents_firm_matter_idx").on(t.firmId, t.matterId),
+    index("documents_firm_client_idx").on(t.firmId, t.clientId),
     index("documents_matter_id_idx").on(t.matterId),
   ],
 );
@@ -1011,7 +1037,7 @@ export const firmLicences = pgTable("firm_licences", {
     .references(() => firms.id, { onDelete: "cascade" }),
   /** trial | solo | firm */
   edition: text("edition").notNull().default("trial"),
-  seats: integer("seats").notNull().default(3),
+  seats: integer("seats").notNull().default(10),
   featuresJson: jsonb("features_json")
     .$type<Record<string, unknown>>()
     .notNull()

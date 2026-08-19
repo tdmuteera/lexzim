@@ -7,7 +7,7 @@ Web session and user admin for Managing Partners (`users.manage`). Replaces the 
 On **Lawyers & Staff** (`/staff`):
 
 1. List firm users and seat usage (Phase 4 licence seats)
-2. Invite users (seat-gated)
+2. Create users (seat-gated) and tick the modules they may use
 3. **Deactivate** / **Reactivate** users (cannot deactivate yourself; reactivate re-checks seats)
 4. List **active web sessions** (registered on login)
 5. **Revoke** one session or all sessions for a user
@@ -40,7 +40,8 @@ Reactivate clears the ban (best-effort) and requires an available seat.
 
 ## Audit
 
-- `users.invite`
+- `users.create`
+- `users.access_update`
 - `users.deactivate` / `users.reactivate`
 - `users.session_revoke` / `users.session_revoke_all`
 - `auth.login` / `auth.logout` (existing)

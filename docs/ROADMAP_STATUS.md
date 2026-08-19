@@ -1,9 +1,9 @@
 # LexZim web phase roadmap status
 
-Status of the hosted LexZim SaaS roadmap (Phases 0 to 8). Desktop / Tauri / SQLite paths are cancelled and out of scope.
+Status of the hosted LexZim SaaS roadmap (Phases 0 to 9). Desktop / Tauri / SQLite paths are cancelled and out of scope.
 
 **App version:** see `package.json` / Settings → About  
-**Last roadmap closeout:** Phase 8 (P8-14)  
+**Last roadmap closeout:** Phase 9 (P9-06)  
 **Next product track:** **Phase 6B payroll** (deferred) unless partners define otherwise.
 
 ## Phase summary
@@ -20,6 +20,7 @@ Status of the hosted LexZim SaaS roadmap (Phases 0 to 8). Desktop / Tauri / SQLi
 | 6B | Payroll (PAYE/NSSA, payslips) | **DEFERRED** |
 | 7 | Practice Suite: full GL, KYC, quotes, CRM, exports, email, security | **COMPLETE** |
 | 8 | Diagnostics, observability, controlled self-healing | **COMPLETE** |
+| 9 | Practice polish, login, calendar modal, motion, per-person access | **COMPLETE** |
 
 ## Phase 7 deliverables (shipped)
 
@@ -77,7 +78,7 @@ Phase 6 explicitly deferred **full double-entry GL**. Phase 7 **supersedes** tha
 - **Payroll** → Phase 6B (`docs/PHASE6B_PAYROLL_HANDOFF.md`)
 - Full GL → **shipped in Phase 7** (no longer a non-goal)
 
-## Phase 8 (in progress)
+## Phase 8 (complete)
 
 Source: `docs/PHASE8_ADR.md`. Extend health/ops/logging. Do not rebuild product modules.
 
@@ -100,12 +101,30 @@ Source: `docs/PHASE8_ADR.md`. Extend health/ops/logging. Do not rebuild product 
 
 **Payroll remains Phase 6B.** Phase 8 does not start PAYE/NSSA or payslips.
 
+## Phase 9 (complete)
+
+Source: `docs/PHASE9_ADR.md`. Practice polish and per-person access. No named custom roles.
+
+| Prompt | Task | Status |
+|--------|------|--------|
+| P9-01 | Login tagline, Did you know (50), splash | **DONE** |
+| P9-02 | Documents helper removed; templates + client documents | **DONE** |
+| P9-03 | Calendar New meeting / New event modal | **DONE** |
+| P9-04 | Dashboard number motion + tab enter | **DONE** |
+| P9-05 | Create user + per-person module ticks | **DONE** |
+| P9-06 | Docs, smoke, closeout | **DONE** |
+
+Trial seats: **10** (was 3). Hosting files (`railway.toml`, `Dockerfile`) unchanged. No new env vars.
+
 ## What comes next
 
 **Phase 6B payroll** stays deferred until partners reopen it. No new LexZim product phase is queued beyond that unless partners define otherwise.
 
 ## Related
 
+- `docs/PHASE9_ADR.md` ← Phase 9 architecture and access model
+- `docs/PHASE9_SMOKE_TEST.md` ← closeout smoke
+- `docs/PHASE9_DID_YOU_KNOW.md` ← 50 login facts
 - `docs/PHASE8_ADR.md` ← Phase 8 architecture
 - `docs/PHASE8_RUNBOOK.md` ← DevOps diagnostics triage (P8-14)
 - `docs/PHASE8_SCHEMA.md` ← diagnostic tables (P8-02)
@@ -135,3 +154,5 @@ Source: `docs/PHASE8_ADR.md`. Extend health/ops/logging. Do not rebuild product 
 **PHASE 7 COMPLETE — full accounting and practice suite shipped; payroll still deferred to Phase 6B**
 
 **PHASE 8 COMPLETE — diagnostics, observability, controlled self-healing shipped; next remains Phase 6B payroll unless partners say otherwise**
+
+**PHASE 9 COMPLETE — practice polish and per-person access shipped; named custom roles rejected for v1; next remains Phase 6B payroll unless partners say otherwise**

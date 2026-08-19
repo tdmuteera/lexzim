@@ -7,7 +7,7 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ClientEmailButton } from "@/components/email/ClientEmailButton";
-import { RelatedPartiesPanel } from "@/components/parties/RelatedPartiesPanel";
+import { ClientDocumentsPanel } from "@/components/clients/ClientDocumentsPanel";
 import {
   KYC_STATUS_OPTIONS,
   SOURCE_OF_FUNDS_OPTIONS,
@@ -80,12 +80,13 @@ type MatterSummary = {
   matterNumber: string | null;
 };
 
-type Tab = "overview" | "kyc" | "matters" | "billing" | "trust";
+type Tab = "overview" | "kyc" | "matters" | "documents" | "billing" | "trust";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "kyc", label: "KYC" },
   { id: "matters", label: "Matters" },
+  { id: "documents", label: "Documents" },
   { id: "billing", label: "Billing" },
   { id: "trust", label: "Trust" },
 ];
@@ -329,6 +330,8 @@ export function ClientDetailView({
               )}
             </>
           ) : null}
+
+          {tab === "documents" ? <ClientDocumentsPanel clientId={client.id} /> : null}
 
           {tab === "billing" ? (
             <div className="client-link-panel">

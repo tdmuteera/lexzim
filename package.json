@@ -33,6 +33,8 @@
     "smoke:phase5": "tsx scripts/phase5-smoke.ts",
     "smoke:phase7": "tsx scripts/smoke-phase7.ts",
     "smoke:phase8": "tsx scripts/smoke-phase8.ts",
+    "smoke:phase9": "tsx scripts/smoke-phase9.ts",
+    "smoke:phase9-staff": "tsx scripts/smoke-phase9-staff.ts",
     "smoke:portal-shares": "tsx scripts/portal-share-isolation-smoke.ts",
     "jobs:ai": "tsx scripts/process-ai-jobs.ts",
     "jobs:ai:loop": "tsx scripts/process-ai-jobs.ts --loop",

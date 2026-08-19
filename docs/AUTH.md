@@ -6,7 +6,7 @@ Supabase Auth (email/password) linked to app `users` + `firms`. Login UI is **P0
 
 - `auth.users.id` === `public.users.id` (UUID)
 - Each app user belongs to one `firm_id` (tenant workspace)
-- Session DTO includes firm (name, status, `is_demo`, logo URL), role, and permission codes
+- Session DTO includes firm (name, status, `is_demo`, logo URL), role, job title, and **effective** permission codes (per-person grants when present, otherwise the role matrix). See Phase 9 access in `docs/PHASE9_ADR.md`.
 - Passwords never appear in audit logs or API error payloads
 
 ## Bootstrap vs platform growth

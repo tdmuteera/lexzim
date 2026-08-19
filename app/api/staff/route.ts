@@ -11,18 +11,29 @@ import {
   getLicenceUsage,
 } from "@/lib/licensing/policy";
 import { requirePermission } from "@/lib/rbac/guards";
+import {
+  copyRolePermissionsToUser,
+  getEffectivePermissionCodes,
+  replaceUserPermissionCodes,
+} from "@/lib/rbac/repository";
+import {
+  expandAccessTicks,
+  navTicksFromGrants,
+} from "@/lib/rbac/access-ticks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-const INVITABLE_ROLES = [
-  "managing_partner",
-  "senior_associate",
-  "junior_associate",
-  "secretary",
-  "accounts",
-] as const;
+const DEFAULT_ROLE = "junior_associate";
 
-/** List firm users + seat usage. */
+function parseTickCodes(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) {
+    throw new AuthError("validation", "permissionCodes must be an array of tick codes.");
+  }
+  return raw.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+}
+
+/** List firm users + seat usage + current access ticks. */
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("users.manage");
@@ -34,9 +45,11 @@ export async function GET(request: Request) {
         id: users.id,
         email: users.email,
         fullName: users.fullName,
+        jobTitle: users.jobTitle,
         isActive: users.isActive,
         roleCode: roles.code,
         roleName: roles.name,
+        roleId: roles.id,
         lastLoginAt: users.lastLoginAt,
       })
       .from(users)
@@ -45,19 +58,36 @@ export async function GET(request: Request) {
       .orderBy(users.fullName);
 
     const usage = await getLicenceUsage(firmId);
+    const items = await Promise.all(
+      rows.map(async (row) => {
+        const grants = await getEffectivePermissionCodes({
+          userId: row.id,
+          roleId: row.roleId,
+          roleCode: row.roleCode,
+        });
+        return {
+          id: row.id,
+          email: row.email,
+          fullName: row.fullName,
+          jobTitle: row.jobTitle,
+          isActive: row.isActive,
+          roleCode: row.roleCode,
+          roleName: row.roleName,
+          lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
+          permissionCodes: navTicksFromGrants(grants),
+          isProtectedMp: row.roleCode === "managing_partner",
+        };
+      }),
+    );
 
     return jsonOk({
-      items: rows.map((row) => ({
-        ...row,
-        lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
-      })),
+      items,
       seats: {
         limit: usage.seats,
         used: usage.seatsUsed,
         remaining: usage.seatsRemaining,
         edition: usage.edition,
       },
-      invitableRoles: INVITABLE_ROLES,
     });
   } catch (err) {
     return jsonError(err, request);
@@ -65,8 +95,8 @@ export async function GET(request: Request) {
 }
 
 /**
- * Invite / create a firm user (seat-limited).
- * Body: { email, fullName, password, roleCode }
+ * Create a firm user (seat-limited).
+ * Body: { email, fullName, password?, jobTitle?, permissionCodes? }
  */
 export async function POST(request: Request) {
   try {
@@ -76,6 +106,8 @@ export async function POST(request: Request) {
       email?: string;
       fullName?: string;
       password?: string;
+      jobTitle?: string;
+      permissionCodes?: unknown;
       roleCode?: string;
       forceChange?: boolean;
     };
@@ -83,28 +115,24 @@ export async function POST(request: Request) {
     const email = validateEmail(body.email ?? "");
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     if (!fullName) throw new AuthError("validation", "fullName is required.");
+    const jobTitle =
+      typeof body.jobTitle === "string" && body.jobTitle.trim()
+        ? body.jobTitle.trim()
+        : null;
 
-    // System-generated temp password when the creator leaves it blank.
     const providedPassword = typeof body.password === "string" ? body.password.trim() : "";
     const generatedTemp = providedPassword ? null : generateTempPassword();
     const password = providedPassword || generatedTemp!;
     validatePassword(password);
-    // Force change on first login by default; explicit false keeps it off.
     const forceChange = body.forceChange !== false;
-    const roleCode = (body.roleCode ?? "junior_associate").trim();
-    if (!(INVITABLE_ROLES as readonly string[]).includes(roleCode)) {
-      throw new AuthError(
-        "validation",
-        `roleCode must be one of: ${INVITABLE_ROLES.join(", ")}.`,
-      );
-    }
+    const tickCodes = parseTickCodes(body.permissionCodes);
 
     await assertSeatAvailable(firmId);
 
     const db = getDb();
-    const roleRows = await db.select().from(roles).where(eq(roles.code, roleCode)).limit(1);
+    const roleRows = await db.select().from(roles).where(eq(roles.code, DEFAULT_ROLE)).limit(1);
     const role = roleRows[0];
-    if (!role) throw new AuthError("validation", "Role not found.");
+    if (!role) throw new AuthError("validation", "Default staff role is missing. Seed RBAC.");
 
     const existing = await db
       .select({ id: users.id, firmId: users.firmId })
@@ -137,22 +165,43 @@ export async function POST(request: Request) {
         firmId,
         email,
         fullName,
+        jobTitle,
         roleId: role.id,
         isActive: true,
         mustChangePassword: forceChange,
       });
+
+      if (tickCodes) {
+        const expanded = expandAccessTicks(tickCodes);
+        await replaceUserPermissionCodes({
+          userId: created.user.id,
+          firmId,
+          codes: expanded,
+          actorUserId: session.id,
+          targetRoleCode: DEFAULT_ROLE,
+        });
+      } else {
+        await copyRolePermissionsToUser(created.user.id, firmId, role.id);
+      }
     } catch (err) {
       await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
       throw err;
     }
 
     await writeAuditLog({
-      action: "users.invite",
+      action: "users.create",
       firmId,
       userId: session.id,
       entityType: "user",
       entityId: created.user.id,
-      metadata: { email, roleCode, fullName, tempPasswordGenerated: Boolean(generatedTemp), forceChange },
+      metadata: {
+        email,
+        fullName,
+        jobTitle,
+        tempPasswordGenerated: Boolean(generatedTemp),
+        forceChange,
+        permissionCodes: tickCodes,
+      },
       ipOrUserAgent: clientInfo(request),
     });
 
@@ -163,11 +212,11 @@ export async function POST(request: Request) {
           id: created.user.id,
           email,
           fullName,
-          roleCode,
+          jobTitle,
+          roleCode: DEFAULT_ROLE,
           isActive: true,
           mustChangePassword: forceChange,
         },
-        // Shown ONCE to the creator. Never persisted or returned again.
         tempPassword: generatedTemp ?? null,
         seats: {
           limit: usage.seats,

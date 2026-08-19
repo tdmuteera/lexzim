@@ -19,7 +19,7 @@ Included in a normal subscription conversation:
 
 | Edition | Best for | Seats (default) | Matter cap | List price |
 |---------|----------|-----------------|------------|------------|
-| Trial | Evaluation | 3 | 25 total | Free for agreed trial days (default 30) |
+| Trial | Evaluation | 10 | 25 total | Free for agreed trial days (default 30) |
 | Solo | Very small practice | 2 | Unlimited | **[TBD]** / month or year |
 | Firm | Multi-lawyer practice | 15 (customisable) | Unlimited | **[TBD]** / month or year |
 

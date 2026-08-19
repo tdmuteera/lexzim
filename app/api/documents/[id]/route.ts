@@ -1,10 +1,10 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
+import { loadAccessibleDocument } from "@/lib/documents/access";
 import { serializeDocument } from "@/lib/documents/serialize";
 import { deleteFirmFile } from "@/lib/storage/firm-files";
 import { createMatterEvent } from "@/lib/repos/timeline";
-import { userCanAccessMatter } from "@/lib/repos/matters";
 import {
   deleteDocumentRecord,
   getDocumentById,
@@ -14,23 +14,6 @@ import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-async function loadAccessibleDocument(
-  firmId: string,
-  documentId: string,
-  userId: string,
-  viewAll: boolean,
-) {
-  const row = await getDocumentById(firmId, documentId);
-  if (!row) {
-    throw new AuthError("not_found", "Document not found.");
-  }
-  const allowed = await userCanAccessMatter(firmId, row.matterId, userId, viewAll);
-  if (!allowed) {
-    throw new AuthError("forbidden", "You do not have access to this matter.");
-  }
-  return row;
-}
 
 export async function GET(request: Request, context: RouteContext) {
   try {
@@ -106,14 +89,16 @@ export async function DELETE(request: Request, context: RouteContext) {
       throw new AuthError("not_found", "Document not found.");
     }
 
-    await createMatterEvent({
-      firmId,
-      matterId: row.matterId,
-      eventType: "document",
-      title: `Document deleted: ${row.title}`,
-      body: row.fileName,
-      createdBy: session.id,
-    });
+    if (row.matterId) {
+      await createMatterEvent({
+        firmId,
+        matterId: row.matterId,
+        eventType: "document",
+        title: `Document deleted: ${row.title}`,
+        body: row.fileName,
+        createdBy: session.id,
+      });
+    }
 
     await writeAuditLog({
       action: "documents.delete",

@@ -48,6 +48,7 @@ export type AppUser = {
   firmId: string;
   email: string;
   fullName: string;
+  jobTitle: string | null;
   roleId: string;
   isActive: boolean;
   createdAt: Date;

@@ -27,6 +27,15 @@ export function sanitizeFileName(name: string): string {
   return base.slice(0, 180);
 }
 
+export function clientDocumentStoragePath(input: {
+  firmId: string;
+  clientId: string;
+  documentId: string;
+  fileName: string;
+}): string {
+  return `${firmStoragePrefix(input.firmId)}/clients/${input.clientId}/documents/${input.documentId}/${sanitizeFileName(input.fileName)}`;
+}
+
 export function matterDocumentStoragePath(input: {
   firmId: string;
   matterId: string;

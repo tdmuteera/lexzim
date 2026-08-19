@@ -1,6 +1,11 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { DidYouKnow } from "@/components/auth/DidYouKnow";
+import { LoginSplash } from "@/components/auth/LoginSplash";
 import { Icon } from "@/components/ui/Icon";
+import { AUTH_TAGLINE } from "@/lib/auth/did-you-know";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/firm/branding";
 
 type AuthVisualPanelProps = {
@@ -15,11 +20,8 @@ export function AuthVisualPanel({ variant = "login" }: AuthVisualPanelProps) {
         <h1>
           {PLATFORM_PRODUCT_NAME} <span>Legal Practice</span>
         </h1>
-        <p className="login-tagline">Your Confidence To Proceed</p>
-        <p>
-          Multi-tenant practice management for Zimbabwe law firms. Hosted securely on LexZim cloud
-          (Supabase + Railway). Each firm gets a private workspace on one shared platform.
-        </p>
+        <p className="login-tagline">{AUTH_TAGLINE}</p>
+        <DidYouKnow />
       </div>
       <div className="login-pillars">
         <div className="login-pillar">
@@ -45,7 +47,7 @@ export function AuthVisualPanel({ variant = "login" }: AuthVisualPanelProps) {
         </div>
       </div>
       {variant === "setup" && (
-        <p style={{ position: "relative", zIndex: 1, fontSize: "0.8rem", color: "var(--text-3)" }}>
+        <p style={{ position: "relative", zIndex: 1, fontSize: "1.05rem", color: "var(--text-3)" }}>
           First-run setup creates your firm as tenant #1 on this LexZim instance.
         </p>
       )}
@@ -56,6 +58,7 @@ export function AuthVisualPanel({ variant = "login" }: AuthVisualPanelProps) {
 export function AuthScreen({ children }: { children: ReactNode }) {
   return (
     <section id="login-screen" aria-label="Authentication">
+      <LoginSplash />
       {children}
     </section>
   );
@@ -74,7 +77,7 @@ export function AuthMobileBrand() {
     <div className="login-mobile-brand">
       <BrandMark initials="LZ" size="sm" />
       <strong>{PLATFORM_PRODUCT_NAME}</strong>
-      <span>Your Confidence To Proceed</span>
+      <span>{AUTH_TAGLINE}</span>
     </div>
   );
 }

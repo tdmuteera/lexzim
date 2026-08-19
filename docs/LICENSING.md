@@ -14,7 +14,7 @@ Hosted LexZim uses **per-firm SaaS licences**, not desktop signed licence files.
 
 Table: `firm_licences` (one row per firm).
 
-Default seats: trial 3, solo 2, firm 15. Default trial length: **30 days**.
+Default seats: trial 10, solo 2, firm 15. Default trial length: **30 days**.
 
 ## Expiry policy (no data hostage)
 

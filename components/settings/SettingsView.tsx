@@ -101,7 +101,7 @@ export function SettingsView() {
           <div className="panel-head">
             <h3>{activeLabel}</h3>
           </div>
-          <div className="panel-body settings-main-body">
+          <div key={section} className="panel-body settings-main-body enter-motion">
             {section === "about" ? (
               <AboutPanel />
             ) : section === "firm" ? (

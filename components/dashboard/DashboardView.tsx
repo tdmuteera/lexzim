@@ -6,11 +6,11 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   AnimatedBarChart,
   AnimatedDonutChart,
-  useCountUp,
 } from "@/components/dashboard/DashboardCharts";
 import { FinanceKpisPanel } from "@/components/finance/FinanceKpisPanel";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { Icon } from "@/components/ui/Icon";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { Button } from "@/components/ui/Button";
 import { centsToDisplay } from "@/lib/billing/money";
 import { getModuleCache, setModuleCache } from "@/lib/client/module-cache";
@@ -225,25 +225,25 @@ function KpiCard({
   value,
   hint,
   delay,
+  format,
 }: {
   href?: string;
   icon: NavIcon;
   label: string;
-  value: number | string;
+  value: number;
   hint: string;
   delay: number;
+  format?: (n: number) => string;
 }) {
-  const numeric = typeof value === "number" ? value : null;
-  const counted = useCountUp(numeric ?? 0, 900 + delay * 80);
-  const display = numeric == null ? value : counted;
-
   const inner = (
     <>
       <div className="stat-icon">
         <Icon name={icon} />
       </div>
       <div className="stat-label">{label}</div>
-      <div className="stat-value">{display}</div>
+      <div className="stat-value">
+        <AnimatedNumber value={value} durationMs={700 + delay * 90} format={format} />
+      </div>
       <div className="stat-hint">{hint}</div>
     </>
   );
@@ -548,7 +548,8 @@ export function DashboardView() {
             className={`alert-pill ${commandKpis.hearingsThisWeek ? "crit" : "ok"}`}
           >
             <Icon name="calendar" />
-            {commandKpis.hearingsThisWeek} hearings this week
+            <AnimatedNumber value={commandKpis.hearingsThisWeek} durationMs={700} /> hearings
+            this week
           </Link>
         ) : null}
         {permissions.billing ? (
@@ -557,7 +558,8 @@ export function DashboardView() {
             className={`alert-pill ${overdueInvCount ? "crit" : "ok"}`}
           >
             <Icon name="invoice" />
-            {overdueInvCount} overdue fee note{overdueInvCount === 1 ? "" : "s"}
+            <AnimatedNumber value={overdueInvCount} durationMs={750} /> overdue fee note
+            {overdueInvCount === 1 ? "" : "s"}
           </Link>
         ) : null}
         <Link
@@ -565,7 +567,7 @@ export function DashboardView() {
           className={`alert-pill ${deadlinesDue ? "warn" : "ok"}`}
         >
           <Icon name="bell" />
-          {deadlinesDue} deadlines due
+          <AnimatedNumber value={deadlinesDue} durationMs={800} /> deadlines due
         </Link>
         {permissions.trust ? (
           <Link
@@ -575,7 +577,15 @@ export function DashboardView() {
             <Icon name="shield" />
             {trustOk
               ? "Trust ledger balanced"
-              : `${data.trustAttention?.attentionCount ?? 0} trust attention`}
+              : (
+                <>
+                  <AnimatedNumber
+                    value={data.trustAttention?.attentionCount ?? 0}
+                    durationMs={800}
+                  />{" "}
+                  trust attention
+                </>
+              )}
           </Link>
         ) : null}
       </div>
@@ -620,10 +630,8 @@ export function DashboardView() {
             href="/billing"
             icon="invoice"
             label="Outstanding fees"
-            value={centsToDisplay(
-              commandKpis.outstandingFeesCents,
-              commandKpis.outstandingCurrency,
-            )}
+            value={commandKpis.outstandingFeesCents}
+            format={(n) => centsToDisplay(n, commandKpis.outstandingCurrency)}
             hint={`${overdueInvCount} overdue`}
             delay={3}
           />
@@ -823,7 +831,8 @@ export function DashboardView() {
             <div className="panel-head">
               <h3>Caseload by lawyer</h3>
               <span className="muted">
-                {lp.viewAll ? "Open matters" : "Your open matters"} · {lp.totals.openMatters}
+                {lp.viewAll ? "Open matters" : "Your open matters"} ·{" "}
+                <AnimatedNumber value={lp.totals.openMatters} durationMs={900} />
               </span>
             </div>
             <div className="panel-body">

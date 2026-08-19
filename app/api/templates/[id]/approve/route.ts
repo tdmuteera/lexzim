@@ -6,18 +6,18 @@ import {
   approveTemplate,
   getTemplateById,
 } from "@/lib/repos/templates";
-import { requirePermission } from "@/lib/rbac/guards";
+import { canApproveTemplates, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("templates.manage");
-    if (session.role.code !== "managing_partner") {
+    const session = await requirePermission("templates.view");
+    if (!canApproveTemplates(session)) {
       throw new AuthError(
         "forbidden",
-        "Only a Managing Partner can approve templates.",
+        "A Managing Partner or lawyer must approve templates.",
       );
     }
 

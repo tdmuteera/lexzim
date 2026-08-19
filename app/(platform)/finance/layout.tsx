@@ -1,4 +1,5 @@
 import { FinanceModuleNav } from "@/components/finance/FinanceModuleNav";
+import { ModuleTabMotion } from "@/components/shell/ModuleTabMotion";
 import { UiAnomalyProbe } from "@/components/diagnostics/UiAnomalyProbe";
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
@@ -6,7 +7,7 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
     <div className="module-with-tabs">
       <UiAnomalyProbe scope="finance" />
       <FinanceModuleNav />
-      {children}
+      <ModuleTabMotion>{children}</ModuleTabMotion>
     </div>
   );
 }

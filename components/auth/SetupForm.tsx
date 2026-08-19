@@ -129,6 +129,7 @@ export function SetupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
+              suppressHydrationWarning
             />
           </div>
           <div className="form-group">
@@ -142,6 +143,7 @@ export function SetupForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              suppressHydrationWarning
             />
           </div>
           <div className="form-group">
@@ -155,6 +157,7 @@ export function SetupForm() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
+              suppressHydrationWarning
             />
           </div>
 

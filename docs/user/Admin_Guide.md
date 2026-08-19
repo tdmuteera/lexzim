@@ -2,15 +2,16 @@
 
 For Managing Partners and staff with firm administration permissions.
 
-## Users and roles
+## Users and access ticks
 
-Open **User access** (`/staff`). This is **platform access** (logins, roles, seats), not HR employment records. Only Managing Partners (permission `users.manage`) can create users.
+Open **User access** (`/staff`). This is **platform access** (logins, module ticks, seats), not HR employment records. Only people with **User access** (`users.manage`) can create users.
 
-- Invite a user with email, full name, role, and (optionally) a temporary password.
-- **Leave the password blank to auto-generate a temporary password.** It is shown **once** in a callout after you create the user. Copy it and share it securely (never by unencrypted email if you can avoid it). It cannot be retrieved again.
-- New users are flagged to **change their password on first login**. A prompt appears in the app until they set a new one.
+- **Create user** with full name, email, job title (free text), and (optionally) a temporary password.
+- Tick the **modules** that person may see. Calendar and Reminders share one tick. Invoicing and Debtors share one tick. Help needs no tick.
+- **Leave the password blank to auto-generate a temporary password.** It is shown **once** after you create the user. Copy it and share it securely. It cannot be retrieved again.
+- New users are flagged to **change their password on first login**.
 - Seat limits come from your **licence edition**. If seats are full, deactivate someone or ask LexZim ops to raise seats.
-- Solo edition often has one seat. You do not need to invite others.
+- The firm's Managing Partner always keeps User access and Dashboard. You cannot save a tick set that removes your own User access.
 
 ### Password resets (approval-gated)
 
@@ -25,7 +26,7 @@ Every request, approval, and rejection is written to the audit log.
 
 **HR staff records** (`/hr/staff`) are separate: employment profiles for everyone who works at the firm, including people without a LexZim login. Link a profile to a user when someone both works at the firm and uses LexZim. See `HR_Quickstart.md`.
 
-Roles control what appears in the menu. Do not share Managing Partner accounts.
+Ticks on **User access** control what appears in the menu. Do not share Managing Partner accounts.
 
 ## HR administration
 

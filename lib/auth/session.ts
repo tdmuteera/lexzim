@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDb, noteDbConnectivityFailure, noteDbConnectivitySuccess } from "@/lib/db";
 import { asDatabaseUnavailable } from "@/lib/db/connectivity";
 import { firms, roles, users } from "@/lib/db/schema";
-import { getPermissionCodesForRole } from "@/lib/rbac/repository";
+import { getEffectivePermissionCodes } from "@/lib/rbac/repository";
 import { AuthError, type AuthSessionUser } from "@/lib/auth/types";
 import {
   decodeAccessTokenClaims,
@@ -22,6 +22,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
       fullName: users.fullName,
       isActive: users.isActive,
       mustChangePassword: users.mustChangePassword,
+      jobTitle: users.jobTitle,
       lastLoginAt: users.lastLoginAt,
       firmId: firms.id,
       firmName: firms.name,
@@ -46,12 +47,17 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
     return null;
   }
 
-  const permissions = await getPermissionCodesForRole(row.roleId);
+  const permissions = await getEffectivePermissionCodes({
+    userId: row.id,
+    roleId: row.roleId,
+    roleCode: row.roleCode,
+  });
 
   return {
     id: row.id,
     email: row.email,
     fullName: row.fullName,
+    jobTitle: row.jobTitle,
     isActive: row.isActive,
     mustChangePassword: row.mustChangePassword,
     lastLoginAt: row.lastLoginAt,

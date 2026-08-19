@@ -9,6 +9,24 @@ export type DocumentListRow = typeof documents.$inferSelect & {
   createdByName: string | null;
 };
 
+export async function listDocumentsForClient(firmId: string, clientId: string) {
+  const db = getDb();
+  const rows = await db
+    .select({
+      document: documents,
+      createdByName: users.fullName,
+    })
+    .from(documents)
+    .leftJoin(users, eq(users.id, documents.createdBy))
+    .where(and(eq(documents.firmId, firmId), eq(documents.clientId, clientId)))
+    .orderBy(desc(documents.createdAt));
+
+  return rows.map((row) => ({
+    ...row.document,
+    createdByName: row.createdByName ?? null,
+  }));
+}
+
 export async function listDocumentsForMatter(firmId: string, matterId: string) {
   const db = getDb();
   const rows = await db
@@ -50,7 +68,7 @@ export async function getDocumentById(firmId: string, documentId: string) {
 export async function createDocumentRecord(input: {
   id: string;
   firmId: string;
-  matterId: string;
+  matterId: string | null;
   clientId: string | null;
   title: string;
   fileName: string;

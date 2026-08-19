@@ -105,7 +105,6 @@ export function LoginForm() {
               background: "rgba(168,83,69,0.08)",
               border: "1px solid rgba(168,83,69,0.25)",
               color: "var(--danger)",
-              fontSize: "0.88rem",
             }}
           >
             <div>{error}</div>
@@ -113,7 +112,6 @@ export function LoginForm() {
               <div
                 style={{
                   marginTop: "0.45rem",
-                  fontSize: "0.75rem",
                   opacity: 0.85,
                   wordBreak: "break-all",
                 }}
@@ -135,6 +133,7 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
+              suppressHydrationWarning
             />
           </div>
           <div className="form-group">
@@ -147,13 +146,13 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              suppressHydrationWarning
             />
           </div>
           <div className="login-row">
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              style={{ padding: 0, fontSize: "0.82rem" }}
               onClick={() => {
                 setResetOpen((v) => !v);
                 setResetMsg(null);
@@ -179,12 +178,12 @@ export function LoginForm() {
               background: "rgba(0,0,0,0.02)",
             }}
           >
-            <p className="muted" style={{ margin: "0 0 0.5rem", fontSize: "0.82rem" }}>
+            <p className="muted" style={{ margin: "0 0 0.5rem" }}>
               Enter your email above, then request a reset. There is no automatic email link: your
               Managing Partner approves the request and issues a temporary password.
             </p>
             {resetMsg ? (
-              <p className="settings-hint" style={{ fontSize: "0.82rem" }}>
+              <p className="settings-hint">
                 {resetMsg}
               </p>
             ) : (
@@ -200,14 +199,6 @@ export function LoginForm() {
             )}
           </div>
         ) : null}
-
-        <div className="login-security">
-          <Icon name="lock" />
-          <div>
-            Sessions are role-aware (RBAC). Sensitive actions are written to the audit log. Your
-            firm workspace is private to your organisation on LexZim.
-          </div>
-        </div>
       </AuthFormPanel>
     </AuthScreen>
   );

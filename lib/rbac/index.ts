@@ -5,6 +5,7 @@ export {
   hasAllPermissions,
   canViewAllMatters,
   canViewAllLawyerPerformance,
+  canApproveTemplates,
   type ClientAuthSession,
 } from "@/lib/rbac/permissions";
 

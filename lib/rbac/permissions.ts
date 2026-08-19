@@ -51,3 +51,17 @@ export function canViewAllLawyerPerformance(
   if (hasPermission(user, "finance.view")) return true;
   return canViewAllMatters(user);
 }
+
+const PRACTICE_LAWYER_ROLES = new Set([
+  "managing_partner",
+  "senior_associate",
+  "junior_associate",
+]);
+
+/** Managing Partner or any lawyer may approve firm templates. */
+export function canApproveTemplates(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  if (!user) return false;
+  return PRACTICE_LAWYER_ROLES.has(user.role.code);
+}

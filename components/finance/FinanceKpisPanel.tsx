@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { centsToDisplay } from "@/lib/billing/money";
 import type { FinanceKpis } from "@/lib/repos/finance-kpis";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 type FinanceKpisPanelProps = {
   kpis: FinanceKpis;
@@ -12,18 +13,22 @@ type FinanceKpisPanelProps = {
 function KpiTile({
   label,
   value,
+  format,
   hint,
   href,
 }: {
   label: string;
-  value: string;
+  value: number;
+  format?: (n: number) => string;
   hint?: string;
   href?: string;
 }) {
   const inner = (
     <div className="trust-overview-card panel finance-kpi-tile">
       <div className="trust-overview-card-label">{label}</div>
-      <div className="trust-overview-card-balance">{value}</div>
+      <div className="trust-overview-card-balance">
+        <AnimatedNumber value={value} durationMs={900} format={format} />
+      </div>
       {hint ? (
         <span className="muted" style={{ fontSize: "0.85rem" }}>{hint}</span>
       ) : null}
@@ -41,6 +46,7 @@ function KpiTile({
 
 export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProps) {
   const c = kpis.currency;
+  const money = (n: number) => centsToDisplay(n, c);
 
   if (compact) {
     return (
@@ -59,25 +65,29 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
         <div className="trust-overview-cards finance-kpis-strip-cards">
           <KpiTile
             label="Fees collected"
-            value={centsToDisplay(kpis.feesCollectedCents, c)}
+            value={kpis.feesCollectedCents}
+            format={money}
             hint={`Billed ${centsToDisplay(kpis.feesBilledCents, c)}`}
             href="/finance/invoicing"
           />
           <KpiTile
             label="Debtors 30+"
-            value={centsToDisplay(kpis.debtorsOver30Cents, c)}
+            value={kpis.debtorsOver30Cents}
+            format={money}
             hint={`${kpis.debtorsOver30Count} invoices`}
             href="/finance/debtors"
           />
           <KpiTile
             label="Business bank"
-            value={centsToDisplay(kpis.businessBankBookCents, c)}
+            value={kpis.businessBankBookCents}
+            format={money}
             hint="Book balance"
             href="/finance/expenses"
           />
           <KpiTile
             label="Monthly profit"
-            value={centsToDisplay(kpis.monthlyProfitCents, c)}
+            value={kpis.monthlyProfitCents}
+            format={money}
             hint={`Expenses ${centsToDisplay(kpis.monthlyExpensesCents, c)}`}
             href="/finance/reports"
           />
@@ -96,25 +106,29 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
       <div className="trust-overview-cards" style={{ marginBottom: "1.25rem" }}>
         <KpiTile
           label="Fees billed"
-          value={centsToDisplay(kpis.feesBilledCents, c)}
+          value={kpis.feesBilledCents}
+          format={money}
           hint={`${kpis.feesBilledInvoiceCount} invoice${kpis.feesBilledInvoiceCount === 1 ? "" : "s"}`}
           href="/finance/invoicing"
         />
         <KpiTile
           label="Fees collected"
-          value={centsToDisplay(kpis.feesCollectedCents, c)}
+          value={kpis.feesCollectedCents}
+          format={money}
           hint={`${kpis.feesCollectedPaymentCount} payment${kpis.feesCollectedPaymentCount === 1 ? "" : "s"}`}
           href="/finance/invoicing"
         />
         <KpiTile
           label="Monthly expenses"
-          value={centsToDisplay(kpis.monthlyExpensesCents, c)}
+          value={kpis.monthlyExpensesCents}
+          format={money}
           hint={`${kpis.monthlyExpenseCount} posted`}
           href="/finance/expenses"
         />
         <KpiTile
           label="Monthly profit"
-          value={centsToDisplay(kpis.monthlyProfitCents, c)}
+          value={kpis.monthlyProfitCents}
+          format={money}
           hint="Collected minus expenses"
         />
       </div>
@@ -123,19 +137,22 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
       <div className="trust-overview-cards" style={{ marginBottom: "1.25rem" }}>
         <KpiTile
           label="Over 30 days"
-          value={centsToDisplay(kpis.debtorsOver30Cents, c)}
+          value={kpis.debtorsOver30Cents}
+          format={money}
           hint={`${kpis.debtorsOver30Count} invoice${kpis.debtorsOver30Count === 1 ? "" : "s"}`}
           href="/finance/debtors"
         />
         <KpiTile
           label="Over 60 days"
-          value={centsToDisplay(kpis.debtorsOver60Cents, c)}
+          value={kpis.debtorsOver60Cents}
+          format={money}
           hint={`${kpis.debtorsOver60Count} invoice${kpis.debtorsOver60Count === 1 ? "" : "s"}`}
           href="/finance/debtors"
         />
         <KpiTile
           label="Over 90 days"
-          value={centsToDisplay(kpis.debtorsOver90Cents, c)}
+          value={kpis.debtorsOver90Cents}
+          format={money}
           hint={`${kpis.debtorsOver90Count} invoice${kpis.debtorsOver90Count === 1 ? "" : "s"}`}
           href="/finance/debtors"
         />
@@ -145,7 +162,8 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
       <div className="trust-overview-cards" style={{ marginBottom: "1.25rem" }}>
         <KpiTile
           label="Business bank (book)"
-          value={centsToDisplay(kpis.businessBankBookCents, c)}
+          value={kpis.businessBankBookCents}
+          format={money}
           hint={
             kpis.businessBankStatementCents != null
               ? `Last stmt ${centsToDisplay(kpis.businessBankStatementCents, c)}`
@@ -155,7 +173,8 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
         />
         <KpiTile
           label="Trust vault"
-          value={centsToDisplay(kpis.trustVaultCents, c)}
+          value={kpis.trustVaultCents}
+          format={money}
           hint="Physical trust cash"
           href="/finance/trust"
         />
@@ -165,12 +184,12 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
       <div className="trust-overview-cards">
         <KpiTile
           label="Opened this month"
-          value={String(kpis.mattersOpened)}
+          value={kpis.mattersOpened}
           href="/matters?bucket=open"
         />
         <KpiTile
           label="Closed this month"
-          value={String(kpis.mattersClosed)}
+          value={kpis.mattersClosed}
           href="/matters?bucket=closed"
         />
       </div>

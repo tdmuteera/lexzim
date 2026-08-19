@@ -53,17 +53,18 @@ Generated files use `doc_type = generated_template` and link `template_id`.
 
 ## UI
 
-- `/documents` → Template library
-- Matter detail → **Documents** → **Generate from template** (preview fields → generate)
+- `/documents` → Template library: **Add a template** (Word/PDF), then a lawyer or Managing Partner **Approves**. Seed starters still available.
+- Client profile → **Documents** tab: extra files for that client (not tied to a matter).
+- Matter detail → **Documents** → upload and **Generate from template** (approved templates).
 
 ## API
 
 | Method | Path | Permission |
 |---|---|---|
 | `GET` | `/api/templates` | `templates.view` |
-| `POST` | `/api/templates` | `templates.manage` (seed starters) |
-| `GET`/`PATCH` | `/api/templates/[id]` | view / manage |
-| `POST` | `/api/templates/[id]/approve` | manage + Managing Partner |
+| `POST` | `/api/templates/upload` | `templates.manage` or `documents.manage` |
+| `POST` | `/api/templates/[id]/approve` | lawyer or Managing Partner (`templates.view`) |
+| `GET`/`POST` | `/api/clients/[id]/documents` | `documents.view` / `documents.manage` |
 | `GET` | `/api/templates/[id]/download` | `templates.view` |
 | `GET` | `/api/matters/[id]/generate` | `documents.manage` + `templates.view` (preview) |
 | `POST` | `/api/matters/[id]/generate` | same (merge + attach) |

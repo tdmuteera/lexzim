@@ -14,12 +14,14 @@ export function ClientSearchPicker({
   disabled,
   label = "Client",
   placeholder = "Search by CL number, name, phone, or ID…",
+  inputId = "client-search-picker",
 }: {
   value: string;
   onChange: (id: string, option: ClientSearchOption | null) => void;
   disabled?: boolean;
   label?: string;
   placeholder?: string;
+  inputId?: string;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -117,11 +119,11 @@ export function ClientSearchPicker({
 
   return (
     <div className="quote-search-picker" ref={boxRef}>
-      <label className="muted" htmlFor="quote-client-search">
+      <label className="muted" htmlFor={inputId}>
         {label}
       </label>
       <input
-        id="quote-client-search"
+        id={inputId}
         type="search"
         autoComplete="off"
         disabled={disabled}

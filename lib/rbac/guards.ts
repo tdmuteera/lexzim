@@ -7,6 +7,7 @@ import type { PermissionCode } from "@/lib/db/types";
 import {
   canViewAllLawyerPerformance,
   canViewAllMatters,
+  canApproveTemplates,
   hasAllPermissions,
   hasAnyPermission,
   hasPermission,
@@ -57,6 +58,7 @@ export async function requireFirmScope(firmId: string): Promise<AuthSessionUser>
 export {
   canViewAllMatters,
   canViewAllLawyerPerformance,
+  canApproveTemplates,
   hasPermission,
   hasAnyPermission,
   hasAllPermissions,

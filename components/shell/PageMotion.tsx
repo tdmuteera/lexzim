@@ -3,31 +3,20 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-const VARIANTS = ["rise", "slide", "scale", "blur", "sweep"] as const;
-
-function variantFor(path: string): (typeof VARIANTS)[number] {
-  let hash = 0;
-  for (let i = 0; i < path.length; i += 1) {
-    hash = (hash * 33 + path.charCodeAt(i)) >>> 0;
-  }
-  return VARIANTS[hash % VARIANTS.length];
+function moduleKey(path: string): string {
+  const part = path.split("/").filter(Boolean)[0];
+  return part ?? "home";
 }
 
 /**
- * Plays a distinct enter animation whenever the user changes module or tab.
- * The variant is stable per path so each area of the app has its own feel.
+ * Short fade and rise when switching Practice / Finance / HR / System modules.
+ * In-module tabs (finance, HR) animate via ModuleTabMotion so the tab bar stays put.
  */
 export function PageMotion({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const variant = variantFor(pathname);
 
   return (
-    <div
-      key={pathname}
-      className={`page-motion page-motion-${variant}`}
-      data-motion={variant}
-    >
-      <span className="page-motion-accent" aria-hidden />
+    <div key={moduleKey(pathname)} className="page-motion page-motion-rise">
       {children}
     </div>
   );
