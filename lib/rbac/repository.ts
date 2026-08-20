@@ -6,6 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { permissions, rolePermissions, roles, userPermissions } from "@/lib/db/schema";
 import { AuthError } from "@/lib/auth/types";
+import { expandAccessTicks } from "@/lib/rbac/access-ticks";
 
 export async function getRoles() {
   const db = getDb();
@@ -73,7 +74,7 @@ export async function getEffectivePermissionCodes(input: {
       const roleCodes = await getPermissionCodesForRole(input.roleId);
       return withProtectedMp(input.roleCode, roleCodes);
     }
-    return withProtectedMp(input.roleCode, cached);
+    return withProtectedMp(input.roleCode, expandAccessTicks(cached));
   }
 
   const db = getDb();
@@ -91,7 +92,7 @@ export async function getEffectivePermissionCodes(input: {
 
   const codes = rows.map((r) => r.code);
   setCachedUserPermissionCodes(input.userId, codes);
-  return withProtectedMp(input.roleCode, codes);
+  return withProtectedMp(input.roleCode, expandAccessTicks(codes));
 }
 
 export async function replaceUserPermissionCodes(input: {

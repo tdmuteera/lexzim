@@ -19,7 +19,7 @@ export function toTopbarUser(session: ClientAuthSession): TopbarUser {
     id: session.id,
     fullName: session.fullName,
     email: session.email,
-    roleName: session.role.name,
+    roleName: session.jobTitle?.trim() || session.role.name,
     initials: initialsFromName(session.fullName),
     firmName: session.firm.name,
   };

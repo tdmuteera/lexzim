@@ -35,4 +35,4 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "npx drizzle-kit migrate && npm run start"]
