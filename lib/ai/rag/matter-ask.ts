@@ -38,6 +38,25 @@ Rules
 - When citing Zimbabwe law, use only the optional legal snippets. Do not dump excerpts or a disclaimer.
 - Read-only: do not claim you filed, emailed, or saved anything unless the user asked you to draft a Word file for download.`;
 
+function looksCutOff(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length < 180) return false;
+  if (/[.!?)]["']?\s*$/.test(trimmed)) return false;
+  const tail = trimmed.slice(-240);
+  if (/[,:;(]\s*$/.test(trimmed)) return true;
+  if (/\n(?:-|\d+\.)\s+[^\n.!?]{1,80}$/.test(tail)) return true;
+  if (/\([^)]{0,80}$/.test(tail)) return true;
+  return true;
+}
+
+function mergeContinuation(base: string, continuation: string): string {
+  const first = base.trimEnd();
+  const second = continuation.trim();
+  if (!second) return first;
+  if (first.includes(second)) return first;
+  return `${first}\n\n${second}`;
+}
+
 export type MatterAskResult = {
   conversationId: string;
   userMessageId: string;
@@ -137,10 +156,11 @@ export async function aiMatterAsk(input: {
   if (settings && settings.matterContextEnabled === false) {
     throw new Error("matter_context_disabled");
   }
-  const maxOutputTokens = Math.min(
+  const configuredMaxOutputTokens = Math.min(
     4096,
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
+  const maxOutputTokens = intent === "legal" ? Math.max(1400, configuredMaxOutputTokens) : configuredMaxOutputTokens;
 
   const snapshot = await buildMatterAssistSnapshot(input.firmId, matterId);
   if (!snapshot) throw new Error("matter_not_found");
@@ -304,6 +324,7 @@ export async function aiMatterAsk(input: {
   let answerText: string;
   let chatLatency = 0;
   let usedLlm = true;
+  const chatTemperature = intent === "chat" ? 0.55 : 0.35;
   try {
     const history = await loadChatHistory({
       firmId: input.firmId,
@@ -326,10 +347,31 @@ export async function aiMatterAsk(input: {
           content: `${question}${attachmentBlock}\n\n${grounding}`,
         },
       ],
-      { temperature: intent === "chat" ? 0.55 : 0.35, maxOutputTokens },
+      { temperature: chatTemperature, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
+
+    if (intent === "legal" && looksCutOff(answerText)) {
+      const continuation = await provider.chat(
+        [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...history.slice(0, -1),
+          { role: "assistant", content: answerText },
+          {
+            role: "user",
+            content:
+              "Continue exactly where you stopped. Do not repeat earlier text. Finish incomplete lines and steps only.",
+          },
+        ],
+        {
+          temperature: chatTemperature,
+          maxOutputTokens: Math.max(900, Math.floor(maxOutputTokens / 2)),
+        },
+      );
+      answerText = mergeContinuation(answerText, continuation.text);
+      chatLatency += continuation.latencyMs;
+    }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     usedLlm = false;

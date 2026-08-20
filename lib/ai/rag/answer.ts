@@ -45,6 +45,25 @@ Legal caution (quiet)
 Documents
 - If asked to draft a letter, notice, affidavit, or Word document, write the full document body. Follow font and spacing requests.`;
 
+function looksCutOff(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length < 180) return false;
+  if (/[.!?)]["']?\s*$/.test(trimmed)) return false;
+  const tail = trimmed.slice(-240);
+  if (/[,:;(]\s*$/.test(trimmed)) return true;
+  if (/\n(?:-|\d+\.)\s+[^\n.!?]{1,80}$/.test(tail)) return true;
+  if (/\([^)]{0,80}$/.test(tail)) return true;
+  return true;
+}
+
+function mergeContinuation(base: string, continuation: string): string {
+  const first = base.trimEnd();
+  const second = continuation.trim();
+  if (!second) return first;
+  if (first.includes(second)) return first;
+  return `${first}\n\n${second}`;
+}
+
 export type ConfidenceLabel = "high" | "medium" | "low";
 
 export type LegalAskDocument = {
@@ -179,10 +198,11 @@ export async function aiLegalAsk(input: {
 
   const settings = await getAiSettings(input.firmId);
   const webEnabled = Boolean(settings?.webLookupEnabled) && intent === "legal";
-  const maxOutputTokens = Math.min(
+  const configuredMaxOutputTokens = Math.min(
     4096,
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
+  const maxOutputTokens = intent === "legal" ? Math.max(1400, configuredMaxOutputTokens) : configuredMaxOutputTokens;
 
   let retrieval: RetrieveLegalContextResult = {
     hits: [],
@@ -313,6 +333,7 @@ export async function aiLegalAsk(input: {
 
   let answerText: string;
   let chatLatency = 0;
+  const chatTemperature = intent === "chat" ? 0.6 : 0.3;
   try {
     const chat = await provider.chat(
       [
@@ -320,13 +341,38 @@ export async function aiLegalAsk(input: {
         ...history.slice(0, -1),
         {
           role: "user",
-          content: `${question}${attachmentBlock}\n\n${grounding}`,
+          content:
+            `${question}${attachmentBlock}\n\n${grounding}` +
+            (intent === "legal"
+              ? "\n\nFor legal/procedural questions, give a complete step-by-step answer with practical detail. If listing steps, finish every step cleanly."
+              : ""),
         },
       ],
-      { temperature: intent === "chat" ? 0.6 : 0.3, maxOutputTokens },
+      { temperature: chatTemperature, maxOutputTokens },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
+
+    if (intent === "legal" && looksCutOff(answerText)) {
+      const continuation = await provider.chat(
+        [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...history.slice(0, -1),
+          { role: "assistant", content: answerText },
+          {
+            role: "user",
+            content:
+              "Continue exactly where you stopped. Do not repeat earlier text. Finish incomplete lines and steps only.",
+          },
+        ],
+        {
+          temperature: chatTemperature,
+          maxOutputTokens: Math.max(900, Math.floor(maxOutputTokens / 2)),
+        },
+      );
+      answerText = mergeContinuation(answerText, continuation.text);
+      chatLatency += continuation.latencyMs;
+    }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
     const fallback = "The model did not finish that reply. Please try again in a moment.";

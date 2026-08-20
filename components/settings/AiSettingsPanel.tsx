@@ -112,7 +112,7 @@ export function AiSettingsPanel() {
   const [keyMode, setKeyMode] = useState<"direct" | "proxy">("direct");
   const [monthlySoftBudget, setMonthlySoftBudget] = useState("500");
   const [budgetUnlimited, setBudgetUnlimited] = useState(false);
-  const [maxOutputTokens, setMaxOutputTokens] = useState("1200");
+  const [maxOutputTokens, setMaxOutputTokens] = useState("2200");
   const [matterContextEnabled, setMatterContextEnabled] = useState(true);
   const [byoGemini, setByoGemini] = useState("");
   const [byoClaude, setByoClaude] = useState("");
@@ -206,7 +206,7 @@ export function AiSettingsPanel() {
         setBudgetUnlimited(false);
         setMonthlySoftBudget(String(budget));
       }
-      setMaxOutputTokens(String(body.data.settings.maxOutputTokens ?? 1200));
+      setMaxOutputTokens(String(body.data.settings.maxOutputTokens ?? 2200));
       setMatterContextEnabled(body.data.settings.matterContextEnabled !== false);
       if (body.data.key.status === "missing") {
         setConnectionStatus("missing");

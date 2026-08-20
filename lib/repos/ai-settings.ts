@@ -8,7 +8,7 @@ import { aiSettings } from "@/lib/db/schema";
 export type AiRoutingMode = "auto" | "manual";
 export type AiKeyMode = "direct" | "proxy";
 
-const DEFAULT_MAX_OUTPUT_TOKENS = 1200;
+const DEFAULT_MAX_OUTPUT_TOKENS = 2200;
 
 export function normalizeRoutingMode(raw: string | null | undefined): AiRoutingMode {
   return raw === "manual" ? "manual" : "auto";
