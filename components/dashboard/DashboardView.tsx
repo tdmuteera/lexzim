@@ -18,6 +18,7 @@ import { diagnosticJson } from "@/lib/diagnostics/client";
 import { formatDateTime } from "@/lib/format/dates";
 import type { FinanceKpis } from "@/lib/repos/finance-kpis";
 import type { NavIcon } from "@/lib/nav";
+import { firstNameFromFullName } from "@/lib/utils/name";
 import { UiAnomalyProbe } from "@/components/diagnostics/UiAnomalyProbe";
 
 const DASHBOARD_CACHE_KEY = "module:/api/dashboard";
@@ -318,7 +319,7 @@ export function DashboardView() {
     year: "numeric",
   });
 
-  const roleLabel = data?.jobTitle?.trim() || data?.roleName || user?.jobTitle?.trim() || user?.role.name || "Colleague";
+  const greetingName = firstNameFromFullName(user?.fullName);
   const firmLabel = data?.firmName ?? user?.firm.name ?? "LexZim";
 
   // Instant shell: constants + icons first; numbers fill when data arrives.
@@ -333,7 +334,7 @@ export function DashboardView() {
         <div className="dash-hero">
           <div className="dash-greeting">
             <h2>
-              {greeting}, {roleLabel}
+              {greeting}, {greetingName}
             </h2>
             <p>
               {dateLine} · {firmLabel}
@@ -521,7 +522,7 @@ export function DashboardView() {
       <div className="dash-hero motion-hero">
         <div className="dash-greeting">
           <h2>
-            {greeting}, {roleLabel}
+            {greeting}, {greetingName}
           </h2>
           <p>
             {dateLine} · {firmLabel}

@@ -5,3 +5,9 @@ export function initialsFromName(fullName: string): string {
   }
   return fullName.slice(0, 2).toUpperCase() || "—";
 }
+
+/** First given name for greetings (e.g. "Cathrine Dhliwayoe" → "Cathrine"). */
+export function firstNameFromFullName(fullName: string | null | undefined): string {
+  const first = fullName?.trim().split(/\s+/).filter(Boolean)[0];
+  return first || "there";
+}
