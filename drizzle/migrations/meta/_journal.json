@@ -204,6 +204,20 @@
       "when": 1787065000000,
       "tag": "0028_phase9_trial_seats",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1787080000000,
+      "tag": "0029_phase9_client_lawyer_assignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1787080100000,
+      "tag": "0030_phase9_matters_tick_view_all",
+      "breakpoints": true
     }
   ]
 }

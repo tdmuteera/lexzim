@@ -14,10 +14,10 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function EditClientPage({ params }: PageProps) {
   let session;
   try {
-    session = await requirePermission("clients.kyc.manage");
+    session = await requirePermission("clients.edit");
   } catch (err) {
     if (err instanceof AuthError && err.code === "forbidden") {
-      return <AccessDenied permission="clients.kyc.manage" />;
+      return <AccessDenied permission="clients.edit" />;
     }
     throw err;
   }

@@ -38,6 +38,7 @@ type DashboardData = {
   isManagingPartner: boolean;
   firmName: string;
   roleName?: string;
+  jobTitle?: string | null;
   permissions: {
     calendar: boolean;
     billing: boolean;
@@ -317,8 +318,7 @@ export function DashboardView() {
     year: "numeric",
   });
 
-  const roleLabel =
-    data?.roleName ?? user?.role.name ?? "Colleague";
+  const roleLabel = data?.jobTitle?.trim() || data?.roleName || user?.jobTitle?.trim() || user?.role.name || "Colleague";
   const firmLabel = data?.firmName ?? user?.firm.name ?? "LexZim";
 
   // Instant shell: constants + icons first; numbers fill when data arrives.

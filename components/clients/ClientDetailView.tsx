@@ -39,6 +39,8 @@ type ClientDetail = {
   registeredAddress: string | null;
   businessAddress: string | null;
   industry: string | null;
+  responsibleLawyerId: string | null;
+  responsibleLawyerName?: string | null;
   email: string | null;
   phone: string | null;
   whatsapp: string | null;
@@ -154,7 +156,7 @@ export function ClientDetailView({
             <Can permissions={["users.manage", "billing.manage"]} mode="any">
               <ClientEmailButton clientId={client.id} defaultEmail={client.email} />
             </Can>
-            <Can permission="clients.kyc.manage">
+            <Can permission="clients.edit">
               <Link href={`/clients/${client.id}/edit`} className="btn btn-outline btn-sm">
                 Edit KYC
               </Link>
@@ -204,6 +206,10 @@ export function ClientDetailView({
                 <DetailField label="WhatsApp" value={client.whatsapp} />
                 <DetailField label="Email" value={client.email} />
                 <DetailField label="ID / registration" value={client.idNumber || client.nationalIdOrRegNumber} />
+                <DetailField
+                  label="Responsible lawyer"
+                  value={client.responsibleLawyerName ?? "Unassigned"}
+                />
               </div>
               {type === "individual" ? (
                 <div className="grid-2">

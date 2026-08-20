@@ -16,7 +16,7 @@ export type AccessTick = {
 export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "dashboard.view": ["dashboard.view"],
   "clients.view": ["clients.view", "clients.create", "clients.edit", "clients.kyc.manage"],
-  "matters.view": ["matters.view", "matters.create", "matters.edit"],
+  "matters.view": ["matters.view", "matters.create", "matters.edit", "matters.view_all"],
   "documents.view": [
     "documents.view",
     "documents.manage",

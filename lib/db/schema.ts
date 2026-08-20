@@ -245,6 +245,9 @@ export const clients = pgTable(
     occupation: text("occupation"),
     employer: text("employer"),
     industry: text("industry"),
+    responsibleLawyerId: uuid("responsible_lawyer_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     pepStatus: boolean("pep_status").notNull().default(false),
     pepDetails: text("pep_details"),
     uboJson: jsonb("ubo_json").notNull().default([]),
@@ -269,6 +272,7 @@ export const clients = pgTable(
     index("clients_firm_type_idx").on(t.firmId, t.clientType),
     index("clients_firm_id_number_idx").on(t.firmId, t.idNumber),
     index("clients_firm_whatsapp_idx").on(t.firmId, t.whatsapp),
+    index("clients_responsible_lawyer_idx").on(t.responsibleLawyerId),
   ],
 );
 

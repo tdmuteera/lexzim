@@ -56,6 +56,7 @@ function clientValuesFromInput(input: ClientInput) {
     occupation: input.occupation,
     employer: input.employer,
     industry: input.industry,
+    responsibleLawyerId: input.responsibleLawyerId ?? null,
     pepStatus: input.pepStatus ?? false,
     pepDetails: input.pepDetails,
     uboJson: input.uboJson ?? [],

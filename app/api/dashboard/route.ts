@@ -149,6 +149,7 @@ export async function GET(request: Request) {
       isManagingPartner,
       firmName: session.firm.name,
       roleName: session.role.name,
+      jobTitle: session.jobTitle ?? null,
       permissions: {
         calendar: canCalendar,
         billing: canBilling,

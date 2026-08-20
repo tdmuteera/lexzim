@@ -42,6 +42,7 @@ export function serializeClient(row: ClientRow) {
     occupation: row.occupation,
     employer: row.employer,
     industry: row.industry,
+    responsibleLawyerId: row.responsibleLawyerId,
     pepStatus: row.pepStatus,
     pepDetails: row.pepDetails,
     uboJson: (row.uboJson ?? []) as UboRow[],

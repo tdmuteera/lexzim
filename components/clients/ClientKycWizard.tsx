@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import {
@@ -15,6 +15,7 @@ import {
 
 export type ClientKycFormValues = {
   clientType: ClientType;
+  responsibleLawyerId: string;
   firstName: string;
   surname: string;
   otherNames: string;
@@ -53,6 +54,7 @@ export type ClientKycFormValues = {
 
 const emptyValues: ClientKycFormValues = {
   clientType: "individual",
+  responsibleLawyerId: "",
   firstName: "",
   surname: "",
   otherNames: "",
@@ -95,6 +97,8 @@ type Props = {
   initialValues?: Partial<ClientKycFormValues>;
 };
 
+type LawyerOption = { id: string; fullName: string; email: string };
+
 function Field({
   label,
   required,
@@ -123,9 +127,33 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lawyers, setLawyers] = useState<LawyerOption[]>([]);
 
   const isIndividual = values.clientType === "individual";
   const isEntity = !isIndividual;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/clients?includeLawyers=1", {
+          credentials: "include",
+        });
+        const body = (await res.json()) as {
+          ok?: boolean;
+          data?: { lawyers?: LawyerOption[] };
+        };
+        if (!cancelled && res.ok && body.ok) {
+          setLawyers(body.data?.lawyers ?? []);
+        }
+      } catch {
+        /* optional lookup */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function setField<K extends keyof ClientKycFormValues>(key: K, value: ClientKycFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -142,6 +170,7 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
   function buildPayload() {
     return {
       clientType: values.clientType,
+      responsibleLawyerId: values.responsibleLawyerId || null,
       firstName: values.firstName || null,
       surname: values.surname || null,
       otherNames: values.otherNames || null,
@@ -228,6 +257,19 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
             {CLIENT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {clientTypeLabel(t)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Responsible lawyer">
+          <select
+            value={values.responsibleLawyerId}
+            onChange={(e) => setField("responsibleLawyerId", e.target.value)}
+          >
+            <option value="">Unassigned</option>
+            {lawyers.map((lawyer) => (
+              <option key={lawyer.id} value={lawyer.id}>
+                {lawyer.fullName}
               </option>
             ))}
           </select>
@@ -598,6 +640,7 @@ export function toClientKycFormValues(client: Record<string, unknown>): ClientKy
   return {
     ...emptyValues,
     clientType: (client.clientType as ClientType) ?? "individual",
+    responsibleLawyerId: String(client.responsibleLawyerId ?? ""),
     firstName: String(client.firstName ?? ""),
     surname: String(client.surname ?? ""),
     otherNames: String(client.otherNames ?? ""),

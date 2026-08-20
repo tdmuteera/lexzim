@@ -43,6 +43,7 @@ export type ClientInput = {
   occupation?: string | null;
   employer?: string | null;
   industry?: string | null;
+  responsibleLawyerId?: string | null;
   pepStatus?: boolean;
   pepDetails?: string | null;
   uboJson?: UboRow[];
@@ -191,6 +192,7 @@ export function parseClientInput(body: unknown, opts?: { requireKycCore?: boolea
     occupation: trimOrNull(raw.occupation),
     employer: trimOrNull(raw.employer),
     industry: trimOrNull(raw.industry),
+    responsibleLawyerId: trimOrNull(raw.responsibleLawyerId),
     pepStatus: Boolean(raw.pepStatus),
     pepDetails: trimOrNull(raw.pepDetails),
     uboJson: parseUboRows(raw.uboJson),

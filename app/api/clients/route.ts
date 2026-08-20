@@ -3,6 +3,7 @@ import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { serializeClient } from "@/lib/clients/serialize";
 import { parseClientInput } from "@/lib/clients/validation";
 import { createClient, listClients } from "@/lib/repos/clients";
+import { listFirmLawyers } from "@/lib/repos/matters";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -14,6 +15,7 @@ export async function GET(request: Request) {
     const q = url.searchParams.get("q") ?? undefined;
     const clientType = url.searchParams.get("clientType");
     const archived = url.searchParams.get("archived");
+    const includeLawyers = url.searchParams.get("includeLawyers") === "1";
     const sort = url.searchParams.get("sort");
     const sortDir = url.searchParams.get("sortDir");
 
@@ -35,9 +37,14 @@ export async function GET(request: Request) {
       sortDir: sortDir === "desc" ? "desc" : "asc",
     });
 
-    return jsonOk({
+    const payload: Record<string, unknown> = {
       items: rows.map(serializeClient),
-    });
+    };
+    if (includeLawyers) {
+      payload.lawyers = await listFirmLawyers(firmId);
+    }
+
+    return jsonOk(payload);
   } catch (err) {
     return jsonError(err, request);
   }

@@ -5,7 +5,7 @@ import { serializeClient } from "@/lib/clients/serialize";
 import { serializeMatter } from "@/lib/matters/serialize";
 import { getClientById } from "@/lib/repos/clients";
 import { canViewAllMatters } from "@/lib/rbac/guards";
-import { getMatterCountsForClient, listMatters } from "@/lib/repos/matters";
+import { getMatterCountsForClient, listFirmLawyers, listMatters } from "@/lib/repos/matters";
 import { requireRouteAccess } from "@/lib/rbac/route-access";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -33,11 +33,14 @@ export default async function ClientDetailPage({ params }: PageProps) {
     sortDir: "desc",
   });
   const client = serializeClient(row);
+  const lawyers = await listFirmLawyers(firmId);
+  const responsibleLawyerName =
+    lawyers.find((lawyer) => lawyer.id === client.responsibleLawyerId)?.fullName ?? null;
 
   return (
     <ProtectedModulePage path="/clients">
       <ClientDetailView
-        client={client}
+        client={{ ...client, responsibleLawyerName }}
         matterCounts={matterCounts}
         matters={matterRows.map((m) => {
           const s = serializeMatter(m, {

@@ -48,6 +48,7 @@ export type Client = {
   physicalAddress: string | null;
   postalAddress: string | null;
   kycNotes: string | null;
+  responsibleLawyerId: string | null;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
