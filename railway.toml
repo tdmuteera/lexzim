@@ -5,7 +5,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 # Production process: Next.js server (binds Railway's $PORT automatically).
-startCommand = "npx drizzle-kit migrate && npm run start"
+startCommand = "npm run start"
 # Railway healthcheck (returns 200 once env is ready).
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
