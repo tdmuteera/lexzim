@@ -415,7 +415,7 @@ export function DashboardView() {
   }
 
   const { stats, commandKpis } = data;
-  const permissions = {
+  const permissionDefaults = {
     clients: false,
     matters: false,
     calendar: false,
@@ -424,8 +424,8 @@ export function DashboardView() {
     reports: false,
     finance: false,
     ai: false,
-    ...data.permissions,
   };
+  const permissions = { ...permissionDefaults, ...data.permissions };
   const overdueInvCount = data.overdueInvoices?.length ?? 0;
   const deadlinesDue =
     data.calendarReminders?.counts.dueSoon ??
