@@ -16,7 +16,13 @@ export async function countActiveFirmUsers(firmId: string): Promise<number> {
   const rows = await db
     .select({ n: count() })
     .from(users)
-    .where(and(eq(users.firmId, firmId), eq(users.isActive, true)));
+    .where(
+      and(
+        eq(users.firmId, firmId),
+        eq(users.isActive, true),
+        eq(users.isSystemUser, true),
+      ),
+    );
   return Number(rows[0]?.n ?? 0);
 }
 

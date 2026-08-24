@@ -33,6 +33,28 @@ export const AREA_OF_LAW_OPTIONS: AreaOfLaw[] = [
   "Immigration",
 ];
 
+/** Courts commonly used in Harare. Store the display string on matters.court_name. */
+export const HARARE_COURT_OPTIONS = [
+  "High Court of Zimbabwe, Harare",
+  "High Court Commercial Division, Harare",
+  "Supreme Court of Zimbabwe",
+  "Constitutional Court of Zimbabwe",
+  "Labour Court, Harare",
+  "Administrative Court, Harare",
+  "Harare Magistrates Court (Civil)",
+  "Harare Magistrates Court (Criminal)",
+  "Harare Magistrates Court (Rotten Row)",
+  "Regional Magistrates Court, Harare",
+  "Small Claims Court, Harare",
+  "Children's Court, Harare",
+  "Maintenance Court, Harare",
+] as const;
+
+export type HarareCourt = (typeof HARARE_COURT_OPTIONS)[number];
+
+/** Sentinel value for the matter form when the court is not in the Harare list. */
+export const COURT_OTHER_VALUE = "__other__";
+
 export type Client = {
   id: string;
   firmId: string;

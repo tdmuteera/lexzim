@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
+import { FEE_PAYMENT_METHODS } from "@/lib/billing/fee-payment-methods";
 import { INVOICING_LIST_PATH } from "@/lib/billing/paths";
 
 type Invoice = {
@@ -92,9 +93,10 @@ export function InvoiceDetailView({
   const [payOpen, setPayOpen] = useState(false);
   const [amountDollars, setAmountDollars] = useState("");
   const [paidAt, setPaidAt] = useState(todayInput);
-  const [method, setMethod] = useState("");
+  const [method, setMethod] = useState("Bank deposit (confirmed)");
   const [reference, setReference] = useState("");
   const [payError, setPayError] = useState<string | null>(null);
+  const [bankConfirmed, setBankConfirmed] = useState(true);
   const [detailTab, setDetailTab] = useState<"invoice" | "receipts">("invoice");
   const [retainerOpen, setRetainerOpen] = useState(false);
   const [retainerDollars, setRetainerDollars] = useState("");
@@ -164,6 +166,16 @@ export function InvoiceDetailView({
     setBusy(true);
     setPayError(null);
     try {
+      let methodOut = method || null;
+      if (methodOut && /bank|eft|rtgs|deposit/i.test(methodOut) && bankConfirmed) {
+        if (!/confirmed/i.test(methodOut)) {
+          methodOut = `${methodOut} (confirmed)`;
+        }
+      }
+      const notes =
+        bankConfirmed && methodOut && /bank|eft|rtgs|deposit/i.test(methodOut)
+          ? "Bank payment confirmed. Included in fee revenue."
+          : null;
       const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
         method: "POST",
         credentials: "include",
@@ -171,8 +183,9 @@ export function InvoiceDetailView({
         body: JSON.stringify({
           amountDollars,
           paidAt: new Date(`${paidAt}T12:00:00`).toISOString(),
-          method: method || null,
+          method: methodOut,
           reference: reference || null,
+          notes,
         }),
       });
       const body = (await res.json()) as {
@@ -184,6 +197,7 @@ export function InvoiceDetailView({
         return;
       }
       setPayOpen(false);
+      setDetailTab("receipts");
       await load();
     } catch {
       setPayError("Could not record payment.");
@@ -316,7 +330,7 @@ export function InvoiceDetailView({
               invoice.balanceCents > 0 ? (
                 <>
                   <Button size="sm" disabled={busy} onClick={() => setPayOpen(true)}>
-                    Record fee payment
+                    Confirm bank payment
                   </Button>
                   <Button
                     size="sm"
@@ -355,9 +369,10 @@ export function InvoiceDetailView({
               className="panel"
               style={{ padding: "1rem", marginBottom: "1rem" }}
             >
-              <h4 style={{ marginTop: 0 }}>Fee payment (not trust)</h4>
+              <h4 style={{ marginTop: 0 }}>Confirm bank / fee payment</h4>
               <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
-                Records a fee receipt against this invoice. Does not post to the trust ledger.
+                Records a fee receipt when funds are paid into the firm bank account (or cash).
+                This updates fee revenue. Trust money stays in Trust.
               </p>
               {payError ? (
                 <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
@@ -391,25 +406,61 @@ export function InvoiceDetailView({
               <div className="grid-2">
                 <div className="form-group">
                   <label htmlFor="pay-method">Method</label>
-                  <input
+                  <select
                     id="pay-method"
                     value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                    placeholder="EFT, cash…"
-                  />
+                    onChange={(e) => {
+                      setMethod(e.target.value);
+                      setBankConfirmed(/bank|eft|rtgs|deposit/i.test(e.target.value));
+                    }}
+                  >
+                    {FEE_PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
-                  <label htmlFor="pay-ref">Reference</label>
+                  <label htmlFor="pay-ref">Bank / payment reference</label>
                   <input
                     id="pay-ref"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
+                    placeholder="Deposit slip or EFT reference"
                   />
                 </div>
               </div>
+              <label
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "flex-start",
+                  marginBottom: "0.85rem",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={bankConfirmed}
+                  onChange={(e) => setBankConfirmed(e.target.checked)}
+                  style={{ marginTop: "0.2rem" }}
+                />
+                <span>
+                  Payment confirmed in the firm bank account (include in fee revenue and issue
+                  receipt).
+                </span>
+              </label>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <Button type="submit" size="sm" disabled={busy}>
-                  {busy ? "Saving…" : "Save payment"}
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    busy ||
+                    (/bank|eft|rtgs|deposit/i.test(method) && !bankConfirmed)
+                  }
+                >
+                  {busy ? "Saving…" : "Save payment & generate receipt"}
                 </Button>
                 <Button
                   type="button"
@@ -421,6 +472,11 @@ export function InvoiceDetailView({
                   Cancel
                 </Button>
               </div>
+              {!bankConfirmed && /bank|eft|rtgs|deposit/i.test(method) ? (
+                <p className="muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
+                  Tick confirmation once the bank deposit or EFT is verified.
+                </p>
+              ) : null}
             </form>
           ) : null}
 

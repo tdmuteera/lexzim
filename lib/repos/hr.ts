@@ -24,6 +24,8 @@ export async function listStaffProfiles(
       userEmail: users.email,
       userFullName: users.fullName,
       userIsActive: users.isActive,
+      userIsLawyer: users.isLawyer,
+      userIsSystemUser: users.isSystemUser,
     })
     .from(hrStaffProfiles)
     .leftJoin(users, and(eq(users.id, hrStaffProfiles.userId), eq(users.firmId, firmId)))
@@ -39,6 +41,8 @@ export async function getStaffProfile(firmId: string, id: string) {
       userEmail: users.email,
       userFullName: users.fullName,
       userIsActive: users.isActive,
+      userIsLawyer: users.isLawyer,
+      userIsSystemUser: users.isSystemUser,
     })
     .from(hrStaffProfiles)
     .leftJoin(users, and(eq(users.id, hrStaffProfiles.userId), eq(users.firmId, firmId)))
@@ -55,6 +59,8 @@ export async function listLinkableUsers(firmId: string) {
       email: users.email,
       fullName: users.fullName,
       isActive: users.isActive,
+      isLawyer: users.isLawyer,
+      isSystemUser: users.isSystemUser,
       linkedProfileId: hrStaffProfiles.id,
     })
     .from(users)

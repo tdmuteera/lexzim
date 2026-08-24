@@ -57,6 +57,11 @@ export type StaffProfileInput = {
   notes: string | null;
   userId: string | null;
   annualLeaveEntitlementDays: number | null;
+  /**
+   * When true and no userId is linked, create a no-login directory lawyer
+   * so they appear in responsible-attorney pickers.
+   */
+  listAsLawyer?: boolean;
 };
 
 export function parseStaffProfileInput(body: unknown): StaffProfileInput {
@@ -103,6 +108,7 @@ export function parseStaffProfileInput(body: unknown): StaffProfileInput {
     notes: parseOptionalString(raw.notes, 2000),
     userId,
     annualLeaveEntitlementDays,
+    listAsLawyer: Boolean(raw.listAsLawyer),
   };
 }
 

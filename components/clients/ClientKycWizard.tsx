@@ -27,7 +27,7 @@ type Props = {
   initialValues?: Partial<ClientKycFormValues>;
 };
 
-type LawyerOption = { id: string; fullName: string; email: string };
+type LawyerOption = { id: string; fullName: string; email: string; isSystemUser?: boolean };
 
 function Field({
   label,
@@ -200,6 +200,7 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
             {lawyers.map((lawyer) => (
               <option key={lawyer.id} value={lawyer.id}>
                 {lawyer.fullName}
+                {lawyer.isSystemUser === false ? " (no login)" : ""}
               </option>
             ))}
           </select>

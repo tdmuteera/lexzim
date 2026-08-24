@@ -239,6 +239,20 @@
       "when": 1787992000000,
       "tag": "0033_accounts_kyc_unbundle",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1787993000000,
+      "tag": "0034_matter_number_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1787994000000,
+      "tag": "0035_directory_lawyers",
+      "breakpoints": true
     }
   ]
 }

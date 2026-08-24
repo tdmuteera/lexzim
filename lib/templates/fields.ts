@@ -19,6 +19,3 @@ export type TemplateMergeField = (typeof TEMPLATE_MERGE_FIELDS)[number];
 export function mergeFieldToken(field: TemplateMergeField | string): string {
   return `{{${field}}}`;
 }
-
-export const TEMPLATE_DISCLAIMER =
-  "PLACEHOLDER TEMPLATE ONLY. A qualified legal practitioner must review and adapt this document before use in any real matter. LexZim starters are illustrative and not legal advice.";

@@ -36,6 +36,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       jobTitle?: string | null;
       permissionCodes?: unknown;
+      isLawyer?: boolean;
     };
 
     const db = getDb();
@@ -45,6 +46,8 @@ export async function PATCH(
         roleId: users.roleId,
         roleCode: roles.code,
         jobTitle: users.jobTitle,
+        isLawyer: users.isLawyer,
+        isSystemUser: users.isSystemUser,
       })
       .from(users)
       .innerJoin(roles, eq(users.roleId, roles.id))
@@ -55,19 +58,32 @@ export async function PATCH(
 
     const tickCodes = parseTickCodes(body.permissionCodes);
     let savedTicks: string[] | undefined;
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
 
     if (typeof body.jobTitle === "string" || body.jobTitle === null) {
-      const jobTitle =
+      patch.jobTitle =
         typeof body.jobTitle === "string" && body.jobTitle.trim()
           ? body.jobTitle.trim()
           : null;
+    }
+    if (typeof body.isLawyer === "boolean") {
+      patch.isLawyer = body.isLawyer;
+    }
+
+    if (Object.keys(patch).length > 1) {
       await db
         .update(users)
-        .set({ jobTitle, updatedAt: new Date() })
+        .set(patch)
         .where(and(eq(users.id, id), eq(users.firmId, firmId)));
     }
 
     if (tickCodes) {
+      if (!target.isSystemUser) {
+        throw new AuthError(
+          "validation",
+          "Directory people (no login) do not have module access ticks.",
+        );
+      }
       const existing = await getEffectivePermissionCodes({
         userId: target.id,
         roleId: target.roleId,
@@ -94,10 +110,24 @@ export async function PATCH(
       });
     }
 
+    if (typeof body.isLawyer === "boolean") {
+      await writeAuditLog({
+        action: "users.lawyer_flag_update",
+        firmId,
+        userId: session.id,
+        entityType: "user",
+        entityId: target.id,
+        metadata: { isLawyer: body.isLawyer },
+        ipOrUserAgent: clientInfo(request),
+      });
+    }
+
     return jsonOk({
       user: {
         id: target.id,
         permissionCodes: savedTicks ?? tickCodes,
+        isLawyer:
+          typeof body.isLawyer === "boolean" ? body.isLawyer : target.isLawyer,
       },
     });
   } catch (err) {

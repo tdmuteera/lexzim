@@ -266,6 +266,12 @@ export async function listLawyersForCrmFilter(firmId: string) {
       email: users.email,
     })
     .from(users)
-    .where(and(eq(users.firmId, firmId), eq(users.isActive, true)))
+    .where(
+      and(
+        eq(users.firmId, firmId),
+        eq(users.isActive, true),
+        eq(users.isLawyer, true),
+      ),
+    )
     .orderBy(asc(users.fullName));
 }

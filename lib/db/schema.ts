@@ -109,6 +109,13 @@ export const users = pgTable(
       .notNull()
       .references(() => roles.id),
     isActive: boolean("is_active").notNull().default(true),
+    /**
+     * Login seat user (Supabase Auth). false = practice directory person
+     * (e.g. lawyer without a LexZim login) who can still be responsible attorney.
+     */
+    isSystemUser: boolean("is_system_user").notNull().default(true),
+    /** Appears in responsible-lawyer / attorney pickers when active. */
+    isLawyer: boolean("is_lawyer").notNull().default(false),
     /** P7-11: force a password change on next login (temp password issued). */
     mustChangePassword: boolean("must_change_password").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -313,6 +320,7 @@ export const matters = pgTable(
     index("matters_firm_status_idx").on(t.firmId, t.status),
     index("matters_firm_client_idx").on(t.firmId, t.clientId),
     index("matters_responsible_lawyer_idx").on(t.responsibleLawyerId),
+    unique("matters_firm_matter_number_uid").on(t.firmId, t.matterNumber),
   ],
 );
 

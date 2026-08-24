@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +15,8 @@ type StaffRow = {
   fullName: string;
   jobTitle: string | null;
   isActive: boolean;
+  isSystemUser: boolean;
+  isLawyer: boolean;
   roleCode: string;
   roleName: string;
   lastLoginAt: string | null;
@@ -39,11 +41,14 @@ type SessionRow = {
   lastSeenAt: string;
 };
 
+type StaffTab = "logins" | "lawyers";
+
 const DEFAULT_TICKS = ["dashboard.view"];
 
 export function StaffView() {
   const { toast } = useToast();
   const { user: me, refresh } = useAuth();
+  const [tab, setTab] = useState<StaffTab>("logins");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +59,7 @@ export function StaffView() {
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [password, setPassword] = useState("");
+  const [isLawyer, setIsLawyer] = useState(true);
   const [createTicks, setCreateTicks] = useState<string[]>(DEFAULT_TICKS);
   const [issuedTemp, setIssuedTemp] = useState<{ email: string; tempPassword: string } | null>(
     null,
@@ -61,6 +67,7 @@ export function StaffView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTicks, setEditTicks] = useState<string[]>([]);
   const [editJobTitle, setEditJobTitle] = useState("");
+  const [editIsLawyer, setEditIsLawyer] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,13 +107,21 @@ export function StaffView() {
     void load();
   }, [load]);
 
+  const loginUsers = useMemo(() => items.filter((u) => u.isSystemUser), [items]);
+  const directoryLawyers = useMemo(
+    () => items.filter((u) => !u.isSystemUser),
+    [items],
+  );
+  const visible = tab === "logins" ? loginUsers : directoryLawyers;
+
   function startEdit(u: StaffRow) {
     setEditingId(u.id);
     setEditTicks(u.permissionCodes ?? []);
     setEditJobTitle(u.jobTitle ?? "");
+    setEditIsLawyer(u.isLawyer);
   }
 
-  async function onCreate() {
+  async function onCreateLogin() {
     setSaving(true);
     setError(null);
     try {
@@ -120,6 +135,8 @@ export function StaffView() {
           jobTitle: jobTitle.trim() || undefined,
           password: password.trim() || undefined,
           permissionCodes: createTicks,
+          isSystemUser: true,
+          isLawyer,
         }),
       });
       const body = (await res.json()) as {
@@ -140,10 +157,47 @@ export function StaffView() {
       setFullName("");
       setJobTitle("");
       setPassword("");
+      setIsLawyer(true);
       setCreateTicks(DEFAULT_TICKS);
       await load();
     } catch {
       setError("Could not create user.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onCreateDirectoryLawyer() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim() || undefined,
+          fullName,
+          jobTitle: jobTitle.trim() || "Lawyer",
+          isSystemUser: false,
+          isLawyer: true,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not add lawyer.");
+        return;
+      }
+      toast("Lawyer added. They can be selected as responsible attorney on clients and matters.");
+      setEmail("");
+      setFullName("");
+      setJobTitle("");
+      await load();
+    } catch {
+      setError("Could not add lawyer.");
     } finally {
       setSaving(false);
     }
@@ -154,26 +208,31 @@ export function StaffView() {
     setSaving(true);
     setError(null);
     try {
+      const editing = items.find((u) => u.id === editingId);
+      const payload: Record<string, unknown> = {
+        jobTitle: editJobTitle,
+        isLawyer: editIsLawyer,
+      };
+      if (editing?.isSystemUser) {
+        payload.permissionCodes = editTicks;
+      }
       const res = await fetch(`/api/staff/${editingId}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobTitle: editJobTitle,
-          permissionCodes: editTicks,
-        }),
+        body: JSON.stringify(payload),
       });
       const body = (await res.json()) as { ok: boolean; error?: { message: string } };
       if (!res.ok || !body.ok) {
-        setError(body.error?.message ?? "Could not update access.");
+        setError(body.error?.message ?? "Could not update.");
         return;
       }
-      toast("Access updated.");
+      toast("Saved.");
       setEditingId(null);
       await load();
       if (editingId === me?.id) await refresh();
     } catch {
-      setError("Could not update access.");
+      setError("Could not update.");
     } finally {
       setSaving(false);
     }
@@ -181,7 +240,7 @@ export function StaffView() {
 
   async function setActive(userId: string, activate: boolean) {
     const label = activate ? "Reactivate" : "Deactivate";
-    if (!window.confirm(`${label} this user?`)) return;
+    if (!window.confirm(`${label} this person?`)) return;
     setSaving(true);
     setError(null);
     try {
@@ -202,7 +261,7 @@ export function StaffView() {
         setError(body.error?.message ?? `Could not ${label.toLowerCase()}.`);
         return;
       }
-      toast(activate ? "User reactivated." : "User deactivated; sessions revoked.");
+      toast(activate ? "Reactivated." : "Deactivated.");
       await load();
     } catch {
       setError(`Could not ${label.toLowerCase()}.`);
@@ -276,12 +335,13 @@ export function StaffView() {
           <div>
             <h1 style={{ margin: 0, fontSize: "1.15rem" }}>Lawyers &amp; Staff</h1>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-              Create a login, then tick the modules that person may use. Help is always available.
+              System logins use seats. Practice lawyers without a login can still be responsible
+              attorneys on clients and matters.
             </p>
             {seats ? (
               <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
                 Active logins: {seats.used} of {seats.limit}
-                {seats.edition ? ` (${seats.edition} licence)` : ""}. Inactive people do not use a
+                {seats.edition ? ` (${seats.edition} licence)` : ""}. Directory lawyers do not use a
                 seat.
               </p>
             ) : null}
@@ -291,7 +351,30 @@ export function StaffView() {
           </Button>
         </div>
 
-        {seats !== null && seats.remaining <= 0 ? (
+        <div className="tabs" style={{ marginBottom: "1rem" }}>
+          <button
+            type="button"
+            className={["tab", tab === "logins" ? "active" : ""].filter(Boolean).join(" ")}
+            onClick={() => {
+              setTab("logins");
+              setEditingId(null);
+            }}
+          >
+            System logins ({loginUsers.length})
+          </button>
+          <button
+            type="button"
+            className={["tab", tab === "lawyers" ? "active" : ""].filter(Boolean).join(" ")}
+            onClick={() => {
+              setTab("lawyers");
+              setEditingId(null);
+            }}
+          >
+            Practice lawyers ({directoryLawyers.length})
+          </button>
+        </div>
+
+        {tab === "logins" && seats !== null && seats.remaining <= 0 ? (
           <div
             className="panel"
             style={{ marginBottom: "1rem", borderColor: "var(--gold, #b8860b)" }}
@@ -300,11 +383,8 @@ export function StaffView() {
             <div className="panel-body">
               <strong>No free login seats</strong>
               <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.88rem" }}>
-                This trial licence allows {seats.limit} people signed in at once. All {seats.used}{" "}
-                are already Active in the list below. Click <strong>Deactivate</strong> on a login
-                you are not using (you cannot deactivate yourself). Then you can create the new
-                user. Deactivated people keep their ticks and can be reactivated later if a seat is
-                free.
+                Deactivate an unused login, or add a practice lawyer on the other tab (no seat
+                needed) if they only need to appear as responsible attorney.
               </p>
             </div>
           </div>
@@ -319,8 +399,7 @@ export function StaffView() {
             <div className="panel-body" style={{ display: "grid", gap: "0.4rem" }}>
               <strong>Temporary password for {issuedTemp.email}</strong>
               <p className="muted" style={{ margin: 0, fontSize: "0.82rem" }}>
-                Share this securely with the new user. It is shown only once and they must change it
-                on first login.
+                Share this securely. Shown once; they must change it on first login.
               </p>
               <code
                 style={{
@@ -344,7 +423,14 @@ export function StaffView() {
 
         <div className="panel" style={{ marginBottom: "1rem" }}>
           <div className="panel-body" style={{ display: "grid", gap: "0.65rem" }}>
-            <strong>Create user</strong>
+            <strong>
+              {tab === "logins" ? "Create system login" : "Add practice lawyer (no login)"}
+            </strong>
+            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+              {tab === "logins"
+                ? "Creates a LexZim login and uses one seat. Tick modules they may use."
+                : "For lawyers who practice and bring revenue but do not need system access. They appear in responsible attorney lists on clients and matters."}
+            </p>
             <div className="grid-2">
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
@@ -358,12 +444,13 @@ export function StaffView() {
               </label>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  Email
+                  {tab === "logins" ? "Email" : "Email (optional)"}
                 </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder={tab === "lawyers" ? "Optional contact email" : undefined}
                   style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                 />
               </label>
@@ -376,49 +463,74 @@ export function StaffView() {
                 <input
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
-                  placeholder="e.g. Associate, Accounts clerk"
+                  placeholder={tab === "lawyers" ? "e.g. Advocate, Associate" : "e.g. Associate, Accounts"}
                   style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                 />
               </label>
-              <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  Temporary password (leave blank to auto-generate)
-                </div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Auto-generated if blank"
-                  autoComplete="new-password"
-                  style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
-                />
-              </label>
+              {tab === "logins" ? (
+                <label>
+                  <div className="muted" style={{ fontSize: "0.8rem" }}>
+                    Temporary password (leave blank to auto-generate)
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Auto-generated if blank"
+                    autoComplete="new-password"
+                    style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
+                  />
+                </label>
+              ) : (
+                <div />
+              )}
             </div>
-            <AccessChecklist selected={createTicks} onChange={setCreateTicks} disabled={saving} />
-            <Button
-              variant="gold"
-              onClick={() => void onCreate()}
-              disabled={saving || loading || (seats !== null && seats.remaining <= 0)}
-            >
-              {saving ? "Creating…" : "Create user"}
-            </Button>
-            {seats !== null && seats.remaining <= 0 ? (
-              <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-                Create stays off until a seat is free. Use Deactivate on a user in the list below.
-              </p>
-            ) : null}
+            {tab === "logins" ? (
+              <>
+                <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={isLawyer}
+                    onChange={(e) => setIsLawyer(e.target.checked)}
+                  />
+                  <span style={{ fontSize: "0.9rem" }}>
+                    This person is a lawyer (show in responsible attorney lists)
+                  </span>
+                </label>
+                <AccessChecklist selected={createTicks} onChange={setCreateTicks} disabled={saving} />
+                <Button
+                  variant="gold"
+                  onClick={() => void onCreateLogin()}
+                  disabled={saving || loading || (seats !== null && seats.remaining <= 0)}
+                >
+                  {saving ? "Creating…" : "Create user"}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="gold"
+                onClick={() => void onCreateDirectoryLawyer()}
+                disabled={saving || loading || !fullName.trim()}
+              >
+                {saving ? "Saving…" : "Add lawyer"}
+              </Button>
+            )}
           </div>
         </div>
 
         <div className="panel" style={{ marginBottom: "1rem" }}>
           <div className="panel-body">
-            <strong style={{ display: "block", marginBottom: "0.65rem" }}>Users</strong>
+            <strong style={{ display: "block", marginBottom: "0.65rem" }}>
+              {tab === "logins" ? "Users with login" : "Practice lawyers (no login)"}
+            </strong>
             {loading ? <p className="muted">Loading…</p> : null}
-            {!loading && items.length === 0 ? (
-              <p className="muted">No users yet.</p>
+            {!loading && visible.length === 0 ? (
+              <p className="muted">
+                {tab === "logins" ? "No login users yet." : "No directory lawyers yet."}
+              </p>
             ) : null}
             <div style={{ display: "grid", gap: "0.5rem" }}>
-              {items.map((u) => (
+              {visible.map((u) => (
                 <div
                   key={u.id}
                   style={{
@@ -437,26 +549,33 @@ export function StaffView() {
                     <div style={{ flex: 1, minWidth: "12rem" }}>
                       <div style={{ fontWeight: 600 }}>{u.fullName}</div>
                       <div className="muted" style={{ fontSize: "0.8rem" }}>
-                        {u.email}
+                        {u.email.includes("@") && !u.email.includes(".lexzim.local")
+                          ? u.email
+                          : u.isSystemUser
+                            ? u.email
+                            : "No login email"}
                         {u.jobTitle ? ` · ${u.jobTitle}` : ""}
                       </div>
                     </div>
-                    <Badge tone="pending">{u.jobTitle || u.roleName}</Badge>
+                    {u.isLawyer ? <Badge tone="open">Lawyer</Badge> : null}
+                    {!u.isSystemUser ? <Badge tone="pending">No login</Badge> : null}
                     <Badge tone={u.isActive ? "open" : "closed"}>
                       {u.isActive ? "Active" : "Inactive"}
                     </Badge>
-                    <span className="muted" style={{ fontSize: "0.75rem" }}>
-                      {u.lastLoginAt
-                        ? `Last login ${formatDateTime(u.lastLoginAt)}`
-                        : "Never logged in"}
-                    </span>
+                    {u.isSystemUser ? (
+                      <span className="muted" style={{ fontSize: "0.75rem" }}>
+                        {u.lastLoginAt
+                          ? `Last login ${formatDateTime(u.lastLoginAt)}`
+                          : "Never logged in"}
+                      </span>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={saving}
                       onClick={() => (editingId === u.id ? setEditingId(null) : startEdit(u))}
                     >
-                      {editingId === u.id ? "Close" : "Edit access"}
+                      {editingId === u.id ? "Close" : u.isSystemUser ? "Edit access" : "Edit"}
                     </Button>
                     {u.id !== me?.id ? (
                       <Button
@@ -468,7 +587,7 @@ export function StaffView() {
                         {u.isActive ? "Deactivate" : "Reactivate"}
                       </Button>
                     ) : null}
-                    {u.isActive ? (
+                    {u.isSystemUser && u.isActive ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -491,15 +610,34 @@ export function StaffView() {
                           style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                         />
                       </label>
-                      <AccessChecklist
-                        selected={editTicks}
-                        onChange={setEditTicks}
-                        disabled={saving}
-                        lockUsersManage={u.isProtectedMp || u.id === me?.id}
-                      />
+                      <label
+                        style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                          marginBottom: "0.65rem",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editIsLawyer}
+                          onChange={(e) => setEditIsLawyer(e.target.checked)}
+                        />
+                        <span style={{ fontSize: "0.9rem" }}>
+                          Lawyer (responsible attorney lists)
+                        </span>
+                      </label>
+                      {editing.isSystemUser ? (
+                        <AccessChecklist
+                          selected={editTicks}
+                          onChange={setEditTicks}
+                          disabled={saving}
+                          lockUsersManage={u.isProtectedMp || u.id === me?.id}
+                        />
+                      ) : null}
                       <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.5rem" }}>
                         <Button size="sm" onClick={() => void onSaveAccess()} disabled={saving}>
-                          {saving ? "Saving…" : "Save access"}
+                          {saving ? "Saving…" : "Save"}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
                           Cancel
@@ -513,56 +651,56 @@ export function StaffView() {
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-body">
-            <strong style={{ display: "block", marginBottom: "0.35rem" }}>
-              Active web sessions
-            </strong>
-            <p className="muted" style={{ margin: "0 0 0.65rem", fontSize: "0.85rem" }}>
-              Replaces desktop device pairing. Sessions are recorded on login. Revoking blocks
-              further use of that session (JWT may linger until expiry; refresh is cleared when
-              possible).
-            </p>
-            {sessions.length === 0 ? (
-              <p className="muted">No active tracked sessions yet. Sign in again to register.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "0.45rem" }}>
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: "flex",
-                      gap: "0.75rem",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      padding: "0.45rem 0",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: "12rem" }}>
-                      <div style={{ fontWeight: 600 }}>{s.fullName}</div>
-                      <div className="muted" style={{ fontSize: "0.8rem" }}>
-                        {s.email}
-                        {s.ipOrUserAgent ? ` · ${s.ipOrUserAgent.slice(0, 80)}` : ""}
-                      </div>
-                    </div>
-                    <span className="muted" style={{ fontSize: "0.75rem" }}>
-                      Seen {formatDateTime(s.lastSeenAt)}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving}
-                      onClick={() => void revokeSession(s.id)}
+        {tab === "logins" ? (
+          <div className="panel">
+            <div className="panel-body">
+              <strong style={{ display: "block", marginBottom: "0.35rem" }}>
+                Active web sessions
+              </strong>
+              <p className="muted" style={{ margin: "0 0 0.65rem", fontSize: "0.85rem" }}>
+                Sessions are recorded on login. Revoking signs that browser out.
+              </p>
+              {sessions.length === 0 ? (
+                <p className="muted">No active tracked sessions yet.</p>
+              ) : (
+                <div style={{ display: "grid", gap: "0.45rem" }}>
+                  {sessions.map((s) => (
+                    <div
+                      key={s.id}
+                      style={{
+                        display: "flex",
+                        gap: "0.75rem",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        padding: "0.45rem 0",
+                        borderBottom: "1px solid var(--border)",
+                      }}
                     >
-                      Revoke
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+                      <div style={{ flex: 1, minWidth: "12rem" }}>
+                        <div style={{ fontWeight: 600 }}>{s.fullName}</div>
+                        <div className="muted" style={{ fontSize: "0.8rem" }}>
+                          {s.email}
+                          {s.ipOrUserAgent ? ` · ${s.ipOrUserAgent.slice(0, 80)}` : ""}
+                        </div>
+                      </div>
+                      <span className="muted" style={{ fontSize: "0.75rem" }}>
+                        Seen {formatDateTime(s.lastSeenAt)}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => void revokeSession(s.id)}
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </Can>
   );

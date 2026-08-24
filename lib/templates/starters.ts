@@ -1,5 +1,4 @@
 import {
-  AlignmentType,
   Document,
   HeadingLevel,
   Packer,
@@ -7,7 +6,6 @@ import {
   TextRun,
 } from "docx";
 import {
-  TEMPLATE_DISCLAIMER,
   TEMPLATE_MERGE_FIELDS,
   mergeFieldToken,
 } from "@/lib/templates/fields";
@@ -37,10 +35,10 @@ function p(text: string, opts?: { bold?: boolean; heading?: boolean }): Paragrap
 export const STARTER_TEMPLATE_DEFS: StarterTemplateDef[] = [
   {
     key: "family_letter_of_demand",
-    title: "Family — Letter of Demand (placeholder)",
+    title: "Family — Letter of Demand",
     areaOfLaw: "Family",
     description:
-      "Starter letter of demand for family disputes. Replace merge fields and have a practitioner review before use.",
+      "Starter letter of demand for family disputes. Replace merge fields and review before use.",
     fileName: "family-letter-of-demand.docx",
     paragraphs: [
       "{{FIRM_NAME}}",
@@ -65,10 +63,10 @@ export const STARTER_TEMPLATE_DEFS: StarterTemplateDef[] = [
   },
   {
     key: "civil_letter_of_demand",
-    title: "Civil — Letter of Demand (placeholder)",
+    title: "Civil — Letter of Demand",
     areaOfLaw: "Civil",
     description:
-      "Starter civil letter of demand with standard LexZim merge fields. Practitioner review required.",
+      "Starter civil letter of demand with standard LexZim merge fields.",
     fileName: "civil-letter-of-demand.docx",
     paragraphs: [
       "{{FIRM_NAME}}",
@@ -93,10 +91,10 @@ export const STARTER_TEMPLATE_DEFS: StarterTemplateDef[] = [
   },
   {
     key: "labour_notice_of_referral",
-    title: "Labour — Notice / complaint letter (placeholder)",
+    title: "Labour — Notice / complaint letter",
     areaOfLaw: "Labour",
     description:
-      "Starter labour complaint / referral letter. Adapt for the competent forum and have counsel review.",
+      "Starter labour complaint / referral letter. Adapt for the competent forum.",
     fileName: "labour-notice-complaint.docx",
     paragraphs: [
       "{{FIRM_NAME}}",
@@ -126,18 +124,6 @@ export async function buildStarterDocxBuffer(def: StarterTemplateDef): Promise<B
   const fieldList = TEMPLATE_MERGE_FIELDS.map((f) => mergeFieldToken(f)).join(", ");
 
   const children: Paragraph[] = [
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 300 },
-      children: [
-        new TextRun({
-          text: "LEXZIM STARTER — NOT FOR UNREVIEWED USE",
-          bold: true,
-          color: "A85345",
-        }),
-      ],
-    }),
-    p(TEMPLATE_DISCLAIMER),
     p(`Supported merge fields: ${fieldList}`),
     p(""),
     p(def.title, { heading: true }),

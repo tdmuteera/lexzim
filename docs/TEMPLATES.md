@@ -1,10 +1,6 @@
 # Templates + merge (P1-08 / P1-09)
 
-Firm template library with Zimbabwe-oriented **placeholder** starters, plus server-side `{{FIELD}}` merge onto matters.
-
-## Disclaimer
-
-PLACEHOLDER TEMPLATE ONLY. A qualified legal practitioner must review and adapt every document before use in a real matter. Starters are illustrative and not legal advice.
+Firm template library with Zimbabwe-oriented starters, plus server-side `{{FIELD}}` merge onto matters.
 
 ## Merge fields
 
@@ -36,9 +32,9 @@ PDF export is out of scope for Phase 1 (DOCX required).
 
 | Area | Title |
 |---|---|
-| Family | Family — Letter of Demand (placeholder) |
-| Civil | Civil — Letter of Demand (placeholder) |
-| Labour | Labour — Notice / complaint letter (placeholder) |
+| Family | Family — Letter of Demand |
+| Civil | Civil — Letter of Demand |
+| Labour | Labour — Notice / complaint letter |
 
 Seed via UI button or `POST /api/templates` (`templates.manage`).
 

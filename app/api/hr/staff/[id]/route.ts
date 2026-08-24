@@ -2,6 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { AuthError } from "@/lib/auth/types";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { parseStaffProfileInput } from "@/lib/hr/validation";
+import { createDirectoryPerson } from "@/lib/repos/directory-people";
 import { getStaffProfile, updateStaffProfile } from "@/lib/repos/hr";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -27,6 +28,8 @@ function serializeStaff(row: NonNullable<Awaited<ReturnType<typeof getStaffProfi
     userEmail: row.userEmail,
     userFullName: row.userFullName,
     userIsActive: row.userIsActive,
+    userIsLawyer: row.userIsLawyer,
+    userIsSystemUser: row.userIsSystemUser,
     createdAt: row.profile.createdAt.toISOString(),
     updatedAt: row.profile.updatedAt.toISOString(),
   };
@@ -54,7 +57,38 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json();
     const input = parseStaffProfileInput(body);
-    const profile = await updateStaffProfile(firmId, id, input);
+
+    const existing = await getStaffProfile(firmId, id);
+    if (!existing) {
+      throw new AuthError("not_found", "Staff record not found.");
+    }
+
+    let userId = input.userId;
+    if (!userId && !existing.profile.userId && input.listAsLawyer) {
+      const person = await createDirectoryPerson(firmId, {
+        fullName: input.fullName,
+        email: input.email,
+        jobTitle: input.jobTitle,
+        isLawyer: true,
+      });
+      userId = person.id;
+      await writeAuditLog({
+        action: "users.create_directory",
+        firmId,
+        userId: session.id,
+        entityType: "user",
+        entityId: person.id,
+        metadata: {
+          email: person.email,
+          fullName: person.fullName,
+          source: "hr_staff_update",
+          isLawyer: true,
+        },
+        ipOrUserAgent: clientInfo(request),
+      });
+    }
+
+    const profile = await updateStaffProfile(firmId, id, { ...input, userId });
     if (!profile) {
       throw new AuthError("not_found", "Staff record not found.");
     }
@@ -69,6 +103,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         fullName: profile.fullName,
         userId: profile.userId,
         isActive: profile.isActive,
+        listAsLawyer: Boolean(input.listAsLawyer),
       },
       ipOrUserAgent: clientInfo(request),
     });

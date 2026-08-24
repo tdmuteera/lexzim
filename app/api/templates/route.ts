@@ -1,7 +1,7 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { serializeTemplate } from "@/lib/templates/serialize";
-import { TEMPLATE_DISCLAIMER, TEMPLATE_MERGE_FIELDS } from "@/lib/templates/fields";
+import { TEMPLATE_MERGE_FIELDS } from "@/lib/templates/fields";
 import { seedStarterTemplates } from "@/lib/templates/seed-starters";
 import { listTemplates } from "@/lib/repos/templates";
 import { requirePermission } from "@/lib/rbac/guards";
@@ -32,7 +32,6 @@ export async function GET(request: Request) {
         }),
       ),
       mergeFields: TEMPLATE_MERGE_FIELDS,
-      disclaimer: TEMPLATE_DISCLAIMER,
     });
   } catch (err) {
     return jsonError(err, request);

@@ -1,6 +1,7 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { parseStaffProfileInput } from "@/lib/hr/validation";
+import { createDirectoryPerson } from "@/lib/repos/directory-people";
 import {
   createStaffProfile,
   getStaffProfile,
@@ -29,6 +30,8 @@ function serializeStaff(row: Awaited<ReturnType<typeof listStaffProfiles>>[numbe
     userEmail: row.userEmail,
     userFullName: row.userFullName,
     userIsActive: row.userIsActive,
+    userIsLawyer: row.userIsLawyer,
+    userIsSystemUser: row.userIsSystemUser,
     createdAt: row.profile.createdAt.toISOString(),
     updatedAt: row.profile.updatedAt.toISOString(),
   };
@@ -55,6 +58,8 @@ export async function GET(request: Request) {
         email: u.email,
         fullName: u.fullName,
         isActive: u.isActive,
+        isLawyer: u.isLawyer,
+        isSystemUser: u.isSystemUser,
         linkedProfileId: u.linkedProfileId,
       })),
     });
@@ -69,7 +74,33 @@ export async function POST(request: Request) {
     const firmId = tenantFirmId(session);
     const body = await request.json();
     const input = parseStaffProfileInput(body);
-    const profile = await createStaffProfile(firmId, input);
+
+    let userId = input.userId;
+    if (!userId && input.listAsLawyer) {
+      const person = await createDirectoryPerson(firmId, {
+        fullName: input.fullName,
+        email: input.email,
+        jobTitle: input.jobTitle,
+        isLawyer: true,
+      });
+      userId = person.id;
+      await writeAuditLog({
+        action: "users.create_directory",
+        firmId,
+        userId: session.id,
+        entityType: "user",
+        entityId: person.id,
+        metadata: {
+          email: person.email,
+          fullName: person.fullName,
+          source: "hr_staff",
+          isLawyer: true,
+        },
+        ipOrUserAgent: clientInfo(request),
+      });
+    }
+
+    const profile = await createStaffProfile(firmId, { ...input, userId });
 
     await writeAuditLog({
       action: "hr_staff.create",
@@ -81,6 +112,7 @@ export async function POST(request: Request) {
         fullName: profile.fullName,
         userId: profile.userId,
         isActive: profile.isActive,
+        listAsLawyer: Boolean(input.listAsLawyer),
       },
       ipOrUserAgent: clientInfo(request),
     });

@@ -9,6 +9,9 @@ import {
   setUserActiveState,
 } from "@/lib/auth/staff-sessions";
 import { assertSeatAvailable, getLicenceUsage } from "@/lib/licensing/policy";
+import { getDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { requirePermission } from "@/lib/rbac/guards";
 import { createClient } from "@/lib/supabase/server";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -120,7 +123,15 @@ export async function POST(request: Request) {
       }
       const isActive = body.action === "reactivate";
       if (isActive) {
-        await assertSeatAvailable(firmId);
+        const db = getDb();
+        const targetRows = await db
+          .select({ isSystemUser: users.isSystemUser })
+          .from(users)
+          .where(and(eq(users.id, targetId), eq(users.firmId, firmId)))
+          .limit(1);
+        if (targetRows[0]?.isSystemUser !== false) {
+          await assertSeatAvailable(firmId);
+        }
       }
       const user = await setUserActiveState({
         firmId,

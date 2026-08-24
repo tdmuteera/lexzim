@@ -154,7 +154,7 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
                   </td>
                   <td>
                     <Button size="sm" variant="outline" onClick={() => void onDownload(item.id)}>
-                      Download
+                      View
                     </Button>
                   </td>
                 </tr>

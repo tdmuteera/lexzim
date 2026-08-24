@@ -22,6 +22,7 @@ import {
 } from "@/lib/matters/validation";
 import type { MatterStatus } from "@/lib/db/mvp-types";
 import { syncMatterHearingEvent } from "@/lib/repos/calendar";
+import { allocateMatterNumber } from "@/lib/repos/firm-settings";
 
 export type ListMattersOpts = {
   q?: string;
@@ -275,6 +276,8 @@ export async function createMatter(firmId: string, userId: string, input: Matter
   const db = getDb();
   const status: MatterStatus = input.status ?? "prospective";
   const stamps = timestampsForStatus(status);
+  const matterNumber =
+    input.matterNumber?.trim() || (await allocateMatterNumber(firmId));
 
   const rows = await db
     .insert(matters)
@@ -283,6 +286,7 @@ export async function createMatter(firmId: string, userId: string, input: Matter
       createdBy: userId,
       status,
       ...valuesFromInput(input),
+      matterNumber,
       ...stamps,
     })
     .returning();
@@ -328,11 +332,16 @@ export async function updateMatter(
     closedAt: existing.closedAt,
   });
 
+  const matterNumber =
+    input.matterNumber?.trim() ||
+    existing.matterNumber ||
+    (await allocateMatterNumber(firmId));
+
   const patch: Record<string, unknown> = {
     title: input.title,
     description: input.description ?? null,
     areaOfLaw: input.areaOfLaw,
-    matterNumber: input.matterNumber ?? null,
+    matterNumber,
     fileRef: input.fileRef ?? null,
     courtName: input.courtName ?? null,
     caseNumber: input.caseNumber ?? null,
@@ -455,8 +464,15 @@ export async function listFirmLawyers(firmId: string) {
       id: users.id,
       fullName: users.fullName,
       email: users.email,
+      isSystemUser: users.isSystemUser,
     })
     .from(users)
-    .where(and(eq(users.firmId, firmId), eq(users.isActive, true)))
+    .where(
+      and(
+        eq(users.firmId, firmId),
+        eq(users.isActive, true),
+        eq(users.isLawyer, true),
+      ),
+    )
     .orderBy(asc(users.fullName));
 }

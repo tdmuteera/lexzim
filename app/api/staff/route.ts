@@ -10,6 +10,7 @@ import {
   assertSeatAvailable,
   getLicenceUsage,
 } from "@/lib/licensing/policy";
+import { createDirectoryPerson } from "@/lib/repos/directory-people";
 import { requirePermission } from "@/lib/rbac/guards";
 import {
   copyRolePermissionsToUser,
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     const session = await requirePermission("users.manage");
     const firmId = tenantFirmId(session);
     const db = getDb();
+    const scope = new URL(request.url).searchParams.get("scope") ?? "all";
 
     const rows = await db
       .select({
@@ -47,6 +49,8 @@ export async function GET(request: Request) {
         fullName: users.fullName,
         jobTitle: users.jobTitle,
         isActive: users.isActive,
+        isSystemUser: users.isSystemUser,
+        isLawyer: users.isLawyer,
         roleCode: roles.code,
         roleName: roles.name,
         roleId: roles.id,
@@ -57,24 +61,35 @@ export async function GET(request: Request) {
       .where(eq(users.firmId, firmId))
       .orderBy(users.fullName);
 
+    const filtered =
+      scope === "system"
+        ? rows.filter((r) => r.isSystemUser)
+        : scope === "directory"
+          ? rows.filter((r) => !r.isSystemUser)
+          : rows;
+
     const usage = await getLicenceUsage(firmId);
     const items = await Promise.all(
-      rows.map(async (row) => {
-        const grants = await getEffectivePermissionCodes({
-          userId: row.id,
-          roleId: row.roleId,
-          roleCode: row.roleCode,
-        });
+      filtered.map(async (row) => {
+        const grants = row.isSystemUser
+          ? await getEffectivePermissionCodes({
+              userId: row.id,
+              roleId: row.roleId,
+              roleCode: row.roleCode,
+            })
+          : [];
         return {
           id: row.id,
           email: row.email,
           fullName: row.fullName,
           jobTitle: row.jobTitle,
           isActive: row.isActive,
+          isSystemUser: row.isSystemUser,
+          isLawyer: row.isLawyer,
           roleCode: row.roleCode,
           roleName: row.roleName,
           lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
-          permissionCodes: navTicksFromGrants(grants),
+          permissionCodes: row.isSystemUser ? navTicksFromGrants(grants) : [],
           isProtectedMp: row.roleCode === "managing_partner",
         };
       }),
@@ -95,8 +110,12 @@ export async function GET(request: Request) {
 }
 
 /**
- * Create a firm user (seat-limited).
- * Body: { email, fullName, password?, jobTitle?, permissionCodes? }
+ * Create a firm user (login) or directory person (no login).
+ * Body: {
+ *   email?, fullName, password?, jobTitle?, permissionCodes?,
+ *   isSystemUser?: boolean (default true),
+ *   isLawyer?: boolean
+ * }
  */
 export async function POST(request: Request) {
   try {
@@ -110,16 +129,69 @@ export async function POST(request: Request) {
       permissionCodes?: unknown;
       roleCode?: string;
       forceChange?: boolean;
+      isSystemUser?: boolean;
+      isLawyer?: boolean;
     };
 
-    const email = validateEmail(body.email ?? "");
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     if (!fullName) throw new AuthError("validation", "fullName is required.");
     const jobTitle =
       typeof body.jobTitle === "string" && body.jobTitle.trim()
         ? body.jobTitle.trim()
         : null;
+    const isSystemUser = body.isSystemUser !== false;
+    const isLawyer = body.isLawyer === true || (!isSystemUser && body.isLawyer !== false);
 
+    if (!isSystemUser) {
+      const person = await createDirectoryPerson(firmId, {
+        fullName,
+        email: body.email ?? null,
+        jobTitle,
+        isLawyer,
+      });
+
+      await writeAuditLog({
+        action: "users.create_directory",
+        firmId,
+        userId: session.id,
+        entityType: "user",
+        entityId: person.id,
+        metadata: {
+          email: person.email,
+          fullName: person.fullName,
+          jobTitle: person.jobTitle,
+          isLawyer: person.isLawyer,
+          isSystemUser: false,
+        },
+        ipOrUserAgent: clientInfo(request),
+      });
+
+      const usage = await getLicenceUsage(firmId);
+      return jsonOk(
+        {
+          user: {
+            id: person.id,
+            email: person.email,
+            fullName: person.fullName,
+            jobTitle: person.jobTitle,
+            roleCode: DEFAULT_ROLE,
+            isActive: true,
+            isSystemUser: false,
+            isLawyer: person.isLawyer,
+            mustChangePassword: false,
+          },
+          tempPassword: null,
+          seats: {
+            limit: usage.seats,
+            used: usage.seatsUsed,
+            remaining: usage.seatsRemaining,
+          },
+        },
+        { status: 201 },
+      );
+    }
+
+    const email = validateEmail(body.email ?? "");
     const providedPassword = typeof body.password === "string" ? body.password.trim() : "";
     const generatedTemp = providedPassword ? null : generateTempPassword();
     const password = providedPassword || generatedTemp!;
@@ -168,6 +240,8 @@ export async function POST(request: Request) {
         jobTitle,
         roleId: role.id,
         isActive: true,
+        isSystemUser: true,
+        isLawyer,
         mustChangePassword: forceChange,
       });
 
@@ -198,6 +272,7 @@ export async function POST(request: Request) {
         email,
         fullName,
         jobTitle,
+        isLawyer,
         tempPasswordGenerated: Boolean(generatedTemp),
         forceChange,
         permissionCodes: tickCodes,
@@ -215,6 +290,8 @@ export async function POST(request: Request) {
           jobTitle,
           roleCode: DEFAULT_ROLE,
           isActive: true,
+          isSystemUser: true,
+          isLawyer,
           mustChangePassword: forceChange,
         },
         tempPassword: generatedTemp ?? null,

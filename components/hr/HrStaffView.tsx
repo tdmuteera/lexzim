@@ -24,6 +24,8 @@ type StaffItem = {
   userId: string | null;
   userEmail: string | null;
   userFullName: string | null;
+  userIsLawyer?: boolean | null;
+  userIsSystemUser?: boolean | null;
   annualLeaveEntitlementDays: number | null;
 };
 
@@ -32,6 +34,8 @@ type LinkableUser = {
   email: string;
   fullName: string;
   isActive: boolean;
+  isLawyer?: boolean;
+  isSystemUser?: boolean;
   linkedProfileId: string | null;
 };
 
@@ -77,6 +81,7 @@ export function HrStaffView() {
   const [notes, setNotes] = useState("");
   const [userId, setUserId] = useState("");
   const [annualEntitlement, setAnnualEntitlement] = useState("");
+  const [listAsLawyer, setListAsLawyer] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +127,7 @@ export function HrStaffView() {
     setNotes("");
     setUserId("");
     setAnnualEntitlement("");
+    setListAsLawyer(false);
     setFormOpen(false);
   }
 
@@ -147,6 +153,7 @@ export function HrStaffView() {
     setAnnualEntitlement(
       row.annualLeaveEntitlementDays != null ? String(row.annualLeaveEntitlementDays) : "",
     );
+    setListAsLawyer(Boolean(row.userIsLawyer && row.userIsSystemUser === false));
     setFormOpen(true);
   }
 
@@ -170,6 +177,7 @@ export function HrStaffView() {
         notes: notes || null,
         userId: userId || null,
         annualLeaveEntitlementDays: annualEntitlement === "" ? null : Number(annualEntitlement),
+        listAsLawyer: !userId && listAsLawyer,
       };
       const url = editingId ? `/api/hr/staff/${editingId}` : "/api/hr/staff";
       const method = editingId ? "PATCH" : "POST";
@@ -270,15 +278,34 @@ export function HrStaffView() {
                 </label>
                 <label>
                   Link to login user
-                  <select className="filter-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
-                    <option value="">No login (non-system staff)</option>
+                  <select className="filter-select" value={userId} onChange={(e) => {
+                    setUserId(e.target.value);
+                    if (e.target.value) setListAsLawyer(false);
+                  }}>
+                    <option value="">No login linked yet</option>
                     {availableUsers.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.fullName} ({u.email}){u.linkedProfileId && u.linkedProfileId !== editingId ? " · linked" : ""}
+                        {u.fullName} ({u.email})
+                        {u.isSystemUser === false ? " · no login" : ""}
+                        {u.linkedProfileId && u.linkedProfileId !== editingId ? " · linked" : ""}
                       </option>
                     ))}
                   </select>
                 </label>
+                {!userId ? (
+                  <label style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={listAsLawyer}
+                      onChange={(e) => setListAsLawyer(e.target.checked)}
+                      style={{ marginTop: "0.2rem" }}
+                    />
+                    <span>
+                      This person is a lawyer. Add them to responsible attorney lists even without a
+                      LexZim login (for matters they handle and revenue attribution).
+                    </span>
+                  </label>
+                ) : null}
                 <label>
                   Annual leave entitlement (days)
                   <input
@@ -345,7 +372,16 @@ export function HrStaffView() {
                     <td>{row.jobTitle ?? "—"}</td>
                     <td>
                       {row.userId
-                        ? row.userFullName ?? row.userEmail ?? "Linked"
+                        ? (
+                          <>
+                            {row.userFullName ?? row.userEmail ?? "Linked"}
+                            {row.userIsLawyer ? (
+                              <div className="muted" style={{ fontSize: "0.8rem" }}>
+                                Lawyer{row.userIsSystemUser === false ? " · no login" : ""}
+                              </div>
+                            ) : null}
+                          </>
+                        )
                         : <span className="muted">No login</span>}
                     </td>
                     <td>{formatShortDate(row.startDate)}</td>

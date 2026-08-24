@@ -207,6 +207,10 @@ export async function setUserActiveState(input: {
     .returning();
   if (!rows[0]) throw new AuthError("not_found", "User not found in this firm.");
 
+  if (!rows[0].isSystemUser) {
+    return rows[0];
+  }
+
   try {
     const admin = createAdminClient();
     if (!input.isActive) {

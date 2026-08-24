@@ -1,14 +1,21 @@
 /**
  * Matter documents repository (P1-07).
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { documents, users } from "@/lib/db/schema";
+import { clients, documents, users } from "@/lib/db/schema";
+import { clientDisplayLabel } from "@/lib/clients/display";
 
 export type DocumentListRow = typeof documents.$inferSelect & {
   createdByName: string | null;
 };
 
+export type ClientDocumentListRow = DocumentListRow & {
+  clientDisplayName: string | null;
+  clientNumber: string | null;
+};
+
+/** Client-file documents only (not matter uploads). */
 export async function listDocumentsForClient(firmId: string, clientId: string) {
   const db = getDb();
   const rows = await db
@@ -18,13 +25,83 @@ export async function listDocumentsForClient(firmId: string, clientId: string) {
     })
     .from(documents)
     .leftJoin(users, eq(users.id, documents.createdBy))
-    .where(and(eq(documents.firmId, firmId), eq(documents.clientId, clientId)))
+    .where(
+      and(
+        eq(documents.firmId, firmId),
+        eq(documents.clientId, clientId),
+        isNull(documents.matterId),
+      ),
+    )
     .orderBy(desc(documents.createdAt));
 
   return rows.map((row) => ({
     ...row.document,
     createdByName: row.createdByName ?? null,
   }));
+}
+
+/** All client-file documents for the firm (matter files excluded). */
+export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: string }) {
+  const db = getDb();
+  const conditions = [
+    eq(documents.firmId, firmId),
+    isNull(documents.matterId),
+  ];
+
+  const rows = await db
+    .select({
+      document: documents,
+      createdByName: users.fullName,
+      clientNumber: clients.clientNumber,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientFirstName: clients.firstName,
+      clientSurname: clients.surname,
+      clientLegalName: clients.legalName,
+      clientRegisteredName: clients.registeredName,
+      clientTradingName: clients.tradingName,
+    })
+    .from(documents)
+    .leftJoin(users, eq(users.id, documents.createdBy))
+    .leftJoin(clients, eq(clients.id, documents.clientId))
+    .where(and(...conditions))
+    .orderBy(desc(documents.createdAt));
+
+  const q = opts?.q?.trim().toLowerCase();
+  const mapped: ClientDocumentListRow[] = rows.map((row) => {
+    const clientDisplayName = row.clientType
+      ? clientDisplayLabel({
+          clientNumber: row.clientNumber,
+          clientType: row.clientType,
+          fullName: row.clientFullName,
+          firstName: row.clientFirstName,
+          surname: row.clientSurname,
+          legalName: row.clientLegalName,
+          registeredName: row.clientRegisteredName,
+          tradingName: row.clientTradingName,
+        })
+      : null;
+    return {
+      ...row.document,
+      createdByName: row.createdByName ?? null,
+      clientDisplayName,
+      clientNumber: row.clientNumber ?? null,
+    };
+  });
+
+  if (!q) return mapped;
+  return mapped.filter((row) => {
+    const hay = [
+      row.title,
+      row.fileName,
+      row.clientDisplayName,
+      row.clientNumber,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  });
 }
 
 export async function listDocumentsForMatter(firmId: string, matterId: string) {

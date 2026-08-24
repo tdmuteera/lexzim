@@ -1,10 +1,10 @@
 import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
-import { TemplatesLibraryView } from "@/components/templates/TemplatesLibraryView";
+import { DocumentsHubView } from "@/components/documents/DocumentsHubView";
 
 export default function DocumentsPage() {
   return (
     <ProtectedModulePage path="/documents">
-      <TemplatesLibraryView />
+      <DocumentsHubView />
     </ProtectedModulePage>
   );
 }

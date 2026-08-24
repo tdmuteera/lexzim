@@ -23,6 +23,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
       isActive: users.isActive,
       mustChangePassword: users.mustChangePassword,
       jobTitle: users.jobTitle,
+      isSystemUser: users.isSystemUser,
       lastLoginAt: users.lastLoginAt,
       firmId: firms.id,
       firmName: firms.name,
@@ -43,6 +44,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
 
   const row = rows[0];
   if (!row || !row.isActive) return null;
+  if (!row.isSystemUser) return null;
   if (row.firmStatus === "suspended" || row.firmStatus === "archived") {
     return null;
   }
