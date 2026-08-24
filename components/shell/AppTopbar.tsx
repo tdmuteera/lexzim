@@ -303,8 +303,8 @@ export function AppTopbar() {
           >
             <button
               type="button"
-              onClick={() => goProfileLink("/settings")}
-              title="Firm profile, AI, backup, and about"
+              onClick={() => goProfileLink("/settings?section=profile")}
+              title="Your name, email, and password"
             >
               <Icon name="user" /> Account &amp; profile
             </button>

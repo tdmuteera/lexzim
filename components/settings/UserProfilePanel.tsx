@@ -14,11 +14,17 @@ export function UserProfilePanel() {
   const { refresh } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordOk, setPasswordOk] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,11 +86,51 @@ export function UserProfilePanel() {
     }
   }
 
+  async function onChangePassword() {
+    setPasswordError(null);
+    setPasswordOk(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    if (!currentPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message?: string };
+      };
+      if (!res.ok || !body.ok) {
+        setPasswordError(body.error?.message ?? "Could not change password.");
+        return;
+      }
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordOk("Password updated.");
+      await refresh();
+    } catch {
+      setPasswordError("Could not change password.");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
   return (
     <div className="settings-form">
       <div className="settings-form-head">
         <p className="settings-lede">
-          Manage how your account appears across the system. Your chosen name is used in greetings.
+          Manage how your account appears across the system, and change your password whenever you
+          need to.
         </p>
         {loading ? <span className="muted">Loading…</span> : null}
         {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
@@ -129,6 +175,58 @@ export function UserProfilePanel() {
           {saving ? "Saving…" : "Save profile"}
         </Button>
       </div>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">Change password</h3>
+        <p className="settings-hint">
+          Any signed-in user, including Managing Partner, can update their password at any time.
+          Minimum 10 characters.
+        </p>
+        {passwordError ? (
+          <p style={{ color: "var(--danger)", margin: "0 0 0.75rem" }}>{passwordError}</p>
+        ) : null}
+        {passwordOk ? (
+          <p style={{ color: "var(--ok)", margin: "0 0 0.75rem" }}>{passwordOk}</p>
+        ) : null}
+        <label>
+          <span className="muted">Current password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            disabled={changingPassword}
+          />
+        </label>
+        <label>
+          <span className="muted">New password</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            disabled={changingPassword}
+          />
+        </label>
+        <label>
+          <span className="muted">Confirm new password</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            disabled={changingPassword}
+          />
+        </label>
+        <div className="settings-actions">
+          <Button
+            onClick={() => void onChangePassword()}
+            disabled={changingPassword || !currentPassword || !newPassword}
+          >
+            {changingPassword ? "Updating…" : "Update password"}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
