@@ -148,6 +148,7 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "settings.manage",
     "ai.manage_settings",
     "crm.manage",
+    "clients.delete",
   ]),
   junior_associate: [
     "dashboard.view",

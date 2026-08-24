@@ -17,8 +17,10 @@ import { LicencePanel } from "@/components/settings/LicencePanel";
 import { RemindersSettingsPanel } from "@/components/settings/RemindersSettingsPanel";
 import { RetrievalDiagnosticPanel } from "@/components/settings/RetrievalDiagnosticPanel";
 import { SecurityPanel } from "@/components/settings/SecurityPanel";
+import { UserProfilePanel } from "@/components/settings/UserProfilePanel";
 
 type Section =
+  | "profile"
   | "about"
   | "firm"
   | "licence"
@@ -33,6 +35,7 @@ type Section =
   | "backup";
 
 const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
+  { id: "profile", label: "Account profile", icon: "user" },
   { id: "about", label: "About", icon: "shield" },
   { id: "firm", label: "Firm profile", icon: "briefcase" },
   { id: "licence", label: "Licence", icon: "lock" },
@@ -106,7 +109,9 @@ export function SettingsView() {
             key={section}
             className={`panel-body settings-main-body enter-motion ${pageTransitionClass(section)}`}
           >
-            {section === "about" ? (
+            {section === "profile" ? (
+              <UserProfilePanel />
+            ) : section === "about" ? (
               <AboutPanel />
             ) : section === "firm" ? (
               <FirmProfilePanel />

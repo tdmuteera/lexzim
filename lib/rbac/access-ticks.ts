@@ -16,6 +16,7 @@ export type AccessTick = {
 export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "dashboard.view": ["dashboard.view"],
   "clients.view": ["clients.view", "clients.create", "clients.edit", "clients.kyc.manage"],
+  "clients.delete": ["clients.delete"],
   "matters.view": ["matters.view", "matters.create", "matters.edit", "matters.view_all"],
   "documents.view": [
     "documents.view",
@@ -36,6 +37,15 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "audit.view": ["audit.view"],
   "settings.manage": ["settings.manage"],
 };
+
+const EXTRA_ACCESS_TICKS: AccessTick[] = [
+  {
+    code: "clients.delete",
+    section: "Practice",
+    label: "Delete clients",
+    hint: "Archive or restore client records.",
+  },
+];
 
 export const ACCESS_TICK_UNIVERSE = new Set<string>(
   Object.values(ACCESS_TICK_GRANTS).flat(),
@@ -65,6 +75,11 @@ export function accessTicksFromNav(): AccessTick[] {
             : undefined,
       });
     }
+  }
+  for (const tick of EXTRA_ACCESS_TICKS) {
+    if (seen.has(tick.code)) continue;
+    seen.add(tick.code);
+    out.push(tick);
   }
   return out;
 }

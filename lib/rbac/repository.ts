@@ -52,6 +52,7 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   const set = new Set(codes);
   set.add("users.manage");
   set.add("dashboard.view");
+  set.add("clients.delete");
   return [...set];
 }
 
@@ -115,6 +116,9 @@ export async function replaceUserPermissionCodes(input: {
   }
   if (isProtectedMp && !unique.includes("dashboard.view")) {
     unique.push("dashboard.view");
+  }
+  if (isProtectedMp && !unique.includes("clients.delete")) {
+    unique.push("clients.delete");
   }
 
   const db = getDb();
