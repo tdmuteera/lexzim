@@ -111,9 +111,19 @@ export function ClientDetailView({
   const type = normalizeClientType(client.clientType);
 
   async function onArchiveOrRestore() {
+    const action = isArchived ? "restore" : "archive";
+    if (action === "archive") {
+      const ok = window.confirm(
+        `Delete client "${client.displayName}"?\n\nThis archives the client (soft delete). You can restore them later from Archived clients.`,
+      );
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(`Restore client "${client.displayName}"?`);
+      if (!ok) return;
+    }
+
     setLoading(true);
     setError(null);
-    const action = isArchived ? "restore" : "archive";
     try {
       const res = await fetch(`/api/clients/${client.id}/${action}`, {
         method: "POST",
@@ -125,6 +135,9 @@ export function ClientDetailView({
         return;
       }
       router.refresh();
+      if (action === "archive") {
+        router.push("/clients?archived=archived");
+      }
     } catch {
       setError("Action failed. Check your connection.");
     } finally {
@@ -163,7 +176,13 @@ export function ClientDetailView({
             </Can>
             <Can permission="clients.delete">
               <Button size="sm" variant="danger" onClick={onArchiveOrRestore} disabled={loading}>
-                {isArchived ? "Restore" : "Archive"}
+                {loading
+                  ? isArchived
+                    ? "Restoring…"
+                    : "Deleting…"
+                  : isArchived
+                    ? "Restore client"
+                    : "Delete client"}
               </Button>
             </Can>
           </div>
