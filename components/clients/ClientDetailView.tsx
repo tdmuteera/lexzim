@@ -136,7 +136,7 @@ export function ClientDetailView({
       }
       router.refresh();
       if (action === "archive") {
-        router.push("/clients?archived=archived");
+        router.push("/clients");
       }
     } catch {
       setError("Action failed. Check your connection.");
