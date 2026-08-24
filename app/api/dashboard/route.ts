@@ -23,6 +23,7 @@ import { getReminders } from "@/lib/repos/reminders";
 import {
   canViewAllLawyerPerformance,
   canViewAllMatters,
+  canViewFirmRevenue,
   hasPermission,
   requirePermission,
 } from "@/lib/rbac/guards";
@@ -31,20 +32,24 @@ import { prepareDbRetry } from "@/lib/db";
 
 export async function GET(request: Request) {
   try {
-    // Dashboard is high-traffic; clear stale cooldown before probing DB.
     prepareDbRetry();
     const session = await requirePermission("dashboard.view");
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
     const isManagingPartner = session.role.code === "managing_partner";
 
+    const canClients = hasPermission(session, "clients.view");
+    const canMatters = hasPermission(session, "matters.view");
     const canCalendar = hasPermission(session, "calendar.view");
     const canBilling = hasPermission(session, "billing.view");
     const canTrust = hasPermission(session, "trust.view");
     const canReports = hasPermission(session, "reports.view");
-    const canFinanceKpis = isManagingPartner && hasPermission(session, "finance.view");
+    const canFinance = hasPermission(session, "finance.view");
+    const canAi = hasPermission(session, "ai.use");
+    /** Revenue by lawyer / firm money charts: finance desk only. */
+    const canViewRevenue = canViewFirmRevenue(session);
+    const canFinanceKpis = canFinance;
     const lawyerViewAll = canViewAllLawyerPerformance(session);
-    const canViewRevenue = canBilling || canReports || hasPermission(session, "finance.view");
     const currency = session.firm.defaultCurrency || "USD";
     const lawyerRange = lastMonthsRange(6);
 
@@ -61,21 +66,32 @@ export async function GET(request: Request) {
       statusMix,
       commandKpis,
     ] = await Promise.all([
-      getDashboardStats({ firmId, userId: session.id, viewAll }),
-      listDashboardProcedures({
-        firmId,
-        userId: session.id,
-        viewAll,
-        mode: "overdue",
-        limit: 8,
-      }),
-      listDashboardProcedures({
-        firmId,
-        userId: session.id,
-        viewAll,
-        mode: "due_soon",
-        limit: 8,
-      }),
+      canMatters
+        ? getDashboardStats({ firmId, userId: session.id, viewAll })
+        : Promise.resolve({
+            openMatters: 0,
+            closedMatters: 0,
+            newClientsThisMonth: 0,
+            overdueProcedures: 0,
+          }),
+      canMatters
+        ? listDashboardProcedures({
+            firmId,
+            userId: session.id,
+            viewAll,
+            mode: "overdue",
+            limit: 8,
+          })
+        : Promise.resolve([]),
+      canMatters
+        ? listDashboardProcedures({
+            firmId,
+            userId: session.id,
+            viewAll,
+            mode: "due_soon",
+            limit: 8,
+          })
+        : Promise.resolve([]),
       canCalendar
         ? listUpcomingHearings({
             firmId,
@@ -92,13 +108,17 @@ export async function GET(request: Request) {
             limit: meetingLimit,
           })
         : Promise.resolve([]),
-      listRecentActivity({
-        firmId,
-        userId: session.id,
-        viewAll,
-        limit: 10,
-      }),
-      getDashboardMatterStatusMix({ firmId, userId: session.id, viewAll }),
+      canMatters
+        ? listRecentActivity({
+            firmId,
+            userId: session.id,
+            viewAll,
+            limit: 10,
+          })
+        : Promise.resolve([]),
+      canMatters
+        ? getDashboardMatterStatusMix({ firmId, userId: session.id, viewAll })
+        : Promise.resolve({ byStatus: {}, total: 0 }),
       getDashboardCommandKpis({ firmId, userId: session.id, viewAll }),
     ]);
 
@@ -106,15 +126,19 @@ export async function GET(request: Request) {
       void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
     }
 
-    const lawyerPerformance = await buildLawyerPerformance({
-      firmId,
-      from: lawyerRange.from,
-      to: lawyerRange.to,
-      currency,
-      viewAll: lawyerViewAll,
-      lawyerId: session.id,
-      includeGlCheck: isManagingPartner && hasPermission(session, "finance.gl.view"),
-    });
+    const lawyerPerformance =
+      canMatters || canViewRevenue
+        ? await buildLawyerPerformance({
+            firmId,
+            from: lawyerRange.from,
+            to: lawyerRange.to,
+            currency,
+            viewAll: lawyerViewAll,
+            lawyerId: session.id,
+            includeGlCheck:
+              canViewRevenue && hasPermission(session, "finance.gl.view"),
+          })
+        : null;
 
     const financeKpis = canFinanceKpis
       ? await getFinanceKpis(firmId, {
@@ -139,7 +163,7 @@ export async function GET(request: Request) {
           ? listDashboardOverdueInvoices(firmId, { limit: 8 })
           : Promise.resolve(null),
         canTrust ? listDashboardTrustAttention(firmId) : Promise.resolve(null),
-        canBilling
+        canBilling || canViewRevenue
           ? getDashboardFeeRevenueByMonth(firmId, 6)
           : Promise.resolve(null),
       ]);
@@ -151,41 +175,51 @@ export async function GET(request: Request) {
       roleName: session.role.name,
       jobTitle: session.jobTitle ?? null,
       permissions: {
+        clients: canClients,
+        matters: canMatters,
         calendar: canCalendar,
         billing: canBilling,
         trust: canTrust,
         reports: canReports,
+        finance: canFinance,
+        ai: canAi,
       },
       stats,
-      commandKpis,
+      commandKpis: {
+        ...commandKpis,
+        activeClients: canClients ? commandKpis.activeClients : 0,
+        newClientsThisMonth: canClients ? commandKpis.newClientsThisMonth : 0,
+        outstandingFeesCents: canBilling ? commandKpis.outstandingFeesCents : 0,
+        hearingsThisWeek: canCalendar ? commandKpis.hearingsThisWeek : 0,
+        nextHearingAt: canCalendar ? commandKpis.nextHearingAt : null,
+      },
       statusMix,
-      feeRevenue,
-      overdueProcedures,
-      dueSoonProcedures,
+      feeRevenue: canBilling || canViewRevenue ? feeRevenue : null,
+      overdueProcedures: canMatters ? overdueProcedures : [],
+      dueSoonProcedures: canMatters ? dueSoonProcedures : [],
       upcomingHearings,
       upcomingMeetings,
       recentActivity,
-      workloadByLawyer: lawyerPerformance.rows.map((r) => ({
-        lawyerId: r.lawyerId,
-        lawyerName: r.lawyerName,
-        openMatters: r.openMatters,
-      })),
-      lawyerPerformance: {
-        viewAll: lawyerPerformance.viewAll,
-        canViewRevenue,
-        from: lawyerPerformance.from,
-        to: lawyerPerformance.to,
-        currency: lawyerPerformance.currency,
-        attributionPolicy: lawyerPerformance.attributionPolicy,
-        rows: canViewRevenue
-          ? lawyerPerformance.rows
-          : lawyerPerformance.rows.map((r) => ({ ...r, collectedCents: 0 })),
-        totals: {
-          openMatters: lawyerPerformance.totals.openMatters,
-          collectedCents: canViewRevenue ? lawyerPerformance.totals.collectedCents : 0,
-        },
-        glCheck: canViewRevenue ? lawyerPerformance.glCheck : null,
-      },
+      lawyerPerformance: lawyerPerformance
+        ? {
+            viewAll: lawyerPerformance.viewAll,
+            canViewRevenue,
+            from: lawyerPerformance.from,
+            to: lawyerPerformance.to,
+            currency: lawyerPerformance.currency,
+            attributionPolicy: lawyerPerformance.attributionPolicy,
+            rows: canViewRevenue
+              ? lawyerPerformance.rows
+              : lawyerPerformance.rows.map((r) => ({ ...r, collectedCents: 0 })),
+            totals: {
+              openMatters: lawyerPerformance.totals.openMatters,
+              collectedCents: canViewRevenue
+                ? lawyerPerformance.totals.collectedCents
+                : 0,
+            },
+            glCheck: canViewRevenue ? lawyerPerformance.glCheck : null,
+          }
+        : null,
       calendarReminders: calendarReminders
         ? {
             counts: calendarReminders.counts,
@@ -198,10 +232,7 @@ export async function GET(request: Request) {
       overdueInvoices,
       trustAttention,
       financeKpis,
-      labels: {
-        billing: "Billing (fees)",
-        trust: "Trust (client money)",
-      },
+      labels: { billing: "Fee notes", trust: "Trust" },
     });
   } catch (err) {
     return jsonError(err, request);

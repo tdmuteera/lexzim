@@ -41,10 +41,14 @@ type DashboardData = {
   roleName?: string;
   jobTitle?: string | null;
   permissions: {
+    clients: boolean;
+    matters: boolean;
     calendar: boolean;
     billing: boolean;
     trust: boolean;
     reports: boolean;
+    finance: boolean;
+    ai: boolean;
   };
   stats: {
     openMatters: number;
@@ -341,27 +345,23 @@ export function DashboardView() {
             </p>
           </div>
           <div className="dash-hero-actions">
-            <Link href="/ai" className="ai-launch">
-              <div className="ai-launch-icon">
-                <Icon name="robot" />
-              </div>
-              <div className="ai-launch-text">
-                <strong>AI Assistant</strong>
-                <em>Ask · Research · Draft</em>
-              </div>
-            </Link>
+            {user?.permissions?.includes("ai.use") ? (
+              <Link href="/ai" className="ai-launch">
+                <div className="ai-launch-icon">
+                  <Icon name="robot" />
+                </div>
+                <div className="ai-launch-text">
+                  <strong>AI Assistant</strong>
+                  <em>Ask · Research · Draft</em>
+                </div>
+              </Link>
+            ) : null}
           </div>
         </div>
 
         <div className="alert-pills">
           <span className="alert-pill ok">
-            <Icon name="calendar" /> Hearings this week
-          </span>
-          <span className="alert-pill ok">
-            <Icon name="invoice" /> Fee notes
-          </span>
-          <span className="alert-pill ok">
-            <Icon name="bell" /> Deadlines
+            <Icon name="briefcase" /> Loading your workspace…
           </span>
         </div>
 
@@ -414,7 +414,18 @@ export function DashboardView() {
     return null;
   }
 
-  const { stats, permissions, commandKpis } = data;
+  const { stats, commandKpis } = data;
+  const permissions = {
+    clients: false,
+    matters: false,
+    calendar: false,
+    billing: false,
+    trust: false,
+    reports: false,
+    finance: false,
+    ai: false,
+    ...data.permissions,
+  };
   const overdueInvCount = data.overdueInvoices?.length ?? 0;
   const deadlinesDue =
     data.calendarReminders?.counts.dueSoon ??
@@ -530,15 +541,17 @@ export function DashboardView() {
           </p>
         </div>
         <div className="dash-hero-actions">
-          <Link href="/ai" className="ai-launch">
-            <div className="ai-launch-icon">
-              <Icon name="robot" />
-            </div>
-            <div className="ai-launch-text">
-              <strong>AI Assistant</strong>
-              <em>Ask · Research · Draft</em>
-            </div>
-          </Link>
+          {permissions.ai ? (
+            <Link href="/ai" className="ai-launch">
+              <div className="ai-launch-icon">
+                <Icon name="robot" />
+              </div>
+              <div className="ai-launch-text">
+                <strong>AI Assistant</strong>
+                <em>Ask · Research · Draft</em>
+              </div>
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -563,13 +576,15 @@ export function DashboardView() {
             {overdueInvCount === 1 ? "" : "s"}
           </Link>
         ) : null}
-        <Link
-          href="/reminders"
-          className={`alert-pill ${deadlinesDue ? "warn" : "ok"}`}
-        >
-          <Icon name="bell" />
-          <AnimatedNumber value={deadlinesDue} durationMs={800} /> deadlines due
-        </Link>
+        {permissions.calendar || permissions.matters ? (
+          <Link
+            href={permissions.calendar ? "/reminders" : "/matters"}
+            className={`alert-pill ${deadlinesDue ? "warn" : "ok"}`}
+          >
+            <Icon name="bell" />
+            <AnimatedNumber value={deadlinesDue} durationMs={800} /> deadlines due
+          </Link>
+        ) : null}
         {permissions.trust ? (
           <Link
             href="/trust"
@@ -593,39 +608,45 @@ export function DashboardView() {
 
       <OnboardingChecklist />
 
-      {data.financeKpis ? (
+      {data.financeKpis && permissions.finance ? (
         <FinanceKpisPanel kpis={data.financeKpis} compact />
       ) : null}
 
       <div className="stats-grid dash-kpi-row motion-kpis">
-        <KpiCard
-          href="/clients"
-          icon="users"
-          label="Active clients"
-          value={commandKpis.activeClients}
-          hint={`+${commandKpis.newClientsThisMonth} this month`}
-          delay={0}
-        />
-        <KpiCard
-          href="/matters?bucket=open"
-          icon="briefcase"
-          label="Open matters"
-          value={stats.openMatters}
-          hint={`${commandKpis.highPriorityOpen} high priority`}
-          delay={1}
-        />
-        <KpiCard
-          href="/calendar"
-          icon="calendar"
-          label="Pending hearings"
-          value={commandKpis.hearingsThisWeek}
-          hint={
-            commandKpis.nextHearingAt
-              ? `Next: ${formatShortDate(commandKpis.nextHearingAt)}`
-              : "None scheduled"
-          }
-          delay={2}
-        />
+        {permissions.clients ? (
+          <KpiCard
+            href="/clients"
+            icon="users"
+            label="Active clients"
+            value={commandKpis.activeClients}
+            hint={`+${commandKpis.newClientsThisMonth} this month`}
+            delay={0}
+          />
+        ) : null}
+        {permissions.matters ? (
+          <KpiCard
+            href="/matters?bucket=open"
+            icon="briefcase"
+            label="Open matters"
+            value={stats.openMatters}
+            hint={`${commandKpis.highPriorityOpen} high priority`}
+            delay={1}
+          />
+        ) : null}
+        {permissions.calendar ? (
+          <KpiCard
+            href="/calendar"
+            icon="calendar"
+            label="Pending hearings"
+            value={commandKpis.hearingsThisWeek}
+            hint={
+              commandKpis.nextHearingAt
+                ? `Next: ${formatShortDate(commandKpis.nextHearingAt)}`
+                : "None scheduled"
+            }
+            delay={2}
+          />
+        ) : null}
         {permissions.billing ? (
           <KpiCard
             href="/billing"
@@ -636,7 +657,7 @@ export function DashboardView() {
             hint={`${overdueInvCount} overdue`}
             delay={3}
           />
-        ) : (
+        ) : permissions.matters ? (
           <KpiCard
             href="/matters?bucket=closed"
             icon="folder"
@@ -645,62 +666,66 @@ export function DashboardView() {
             hint="Closed or archived"
             delay={3}
           />
-        )}
-        <KpiCard
-          href="/reminders"
-          icon="clipboard"
-          label="Upcoming deadlines"
-          value={
-            (data.calendarReminders?.counts.total ??
-              data.dueSoonProcedures.length + data.overdueProcedures.length) ||
-            stats.overdueProcedures
-          }
-          hint={`${stats.overdueProcedures} overdue procedures`}
-          delay={4}
-        />
+        ) : null}
+        {permissions.calendar || permissions.matters ? (
+          <KpiCard
+            href={permissions.calendar ? "/reminders" : "/matters"}
+            icon="clipboard"
+            label="Upcoming deadlines"
+            value={
+              (data.calendarReminders?.counts.total ??
+                data.dueSoonProcedures.length + data.overdueProcedures.length) ||
+              stats.overdueProcedures
+            }
+            hint={`${stats.overdueProcedures} overdue procedures`}
+            delay={4}
+          />
+        ) : null}
       </div>
 
-      <div className="dash-body dash-charts motion-charts">
-        <div className="panel dash-chart-panel">
-          <div className="panel-head">
-            <h3>Case distribution</h3>
-            <span className="muted">Matter status mix</span>
-          </div>
-          <div className="panel-body">
-            {donutSlices.length === 0 ? (
-              <p className="muted">No matters yet.</p>
-            ) : (
-              <AnimatedDonutChart slices={donutSlices} totalLabel="total" />
-            )}
-          </div>
-        </div>
+      {permissions.matters || permissions.billing || permissions.finance ? (
+        <div className="dash-body dash-charts motion-charts">
+          {permissions.matters ? (
+            <div className="panel dash-chart-panel">
+              <div className="panel-head">
+                <h3>Case distribution</h3>
+                <span className="muted">Matter status mix</span>
+              </div>
+              <div className="panel-body">
+                {donutSlices.length === 0 ? (
+                  <p className="muted">No matters yet.</p>
+                ) : (
+                  <AnimatedDonutChart slices={donutSlices} totalLabel="total" />
+                )}
+              </div>
+            </div>
+          ) : null}
 
-        <div className="panel dash-chart-panel">
-          <div className="panel-head">
-            <h3>Fee revenue</h3>
-            <span className="muted">Last 6 months</span>
-          </div>
-          <div className="panel-body">
-            {!permissions.billing || !data.feeRevenue ? (
-              <p className="muted">Billing charts require billing access.</p>
-            ) : feeBars.every((b) => b.value === 0) ? (
-              <p className="muted">No fee payments recorded in this period.</p>
-            ) : (
-              <AnimatedBarChart
-                bars={feeBars}
-                formatValue={(n) =>
-                  n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${Math.round(n)}`
-                }
-              />
-            )}
-            {permissions.billing ? (
-              <p className="muted dash-chart-caption">
-                Collected fees ({feeCurrency})
-              </p>
-            ) : null}
-          </div>
+          {permissions.billing || permissions.finance ? (
+            <div className="panel dash-chart-panel">
+              <div className="panel-head">
+                <h3>Fee revenue</h3>
+                <span className="muted">Last 6 months</span>
+              </div>
+              <div className="panel-body">
+                {!data.feeRevenue || feeBars.every((b) => b.value === 0) ? (
+                  <p className="muted">No fee payments recorded in this period.</p>
+                ) : (
+                  <AnimatedBarChart
+                    bars={feeBars}
+                    formatValue={(n) =>
+                      n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${Math.round(n)}`
+                    }
+                  />
+                )}
+                <p className="muted dash-chart-caption">
+                  Collected fees ({feeCurrency})
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
 
       {permissions.calendar ? (
         <div className="dash-body dash-lists motion-lists">
@@ -767,120 +792,127 @@ export function DashboardView() {
         </div>
       ) : null}
 
-      <div className="dash-body dash-lists motion-lists">
-        <div className="panel">
-          <div className="panel-head">
-            <h3>Upcoming diary</h3>
-            <Link href="/reminders" className="btn btn-ghost btn-sm">
-              All
-            </Link>
+      {permissions.matters || permissions.calendar ? (
+        <div className="dash-body dash-lists motion-lists">
+          <div className="panel">
+            <div className="panel-head">
+              <h3>Upcoming diary</h3>
+              <Link
+                href={permissions.calendar ? "/reminders" : "/matters"}
+                className="btn btn-ghost btn-sm"
+              >
+                All
+              </Link>
+            </div>
+            <div className="panel-body">
+              {diary.length === 0 ? (
+                <p className="muted">Nothing upcoming.</p>
+              ) : (
+                <ul className="dash-feed">
+                  {diary.map((item) => (
+                    <li key={`${item.kind}-${item.id}`}>
+                      <Link href={item.href}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          <em className={item.isOverdue ? "tone-danger" : ""}>
+                            {item.kind}
+                          </em>
+                          {" · "}
+                          {formatShortDate(item.dueAt)}
+                          {item.matterTitle ? ` · ${item.matterTitle}` : ""}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-          <div className="panel-body">
-            {diary.length === 0 ? (
-              <p className="muted">Nothing upcoming.</p>
-            ) : (
-              <ul className="dash-feed">
-                {diary.map((item) => (
-                  <li key={`${item.kind}-${item.id}`}>
-                    <Link href={item.href}>
-                      <strong>{item.title}</strong>
-                      <span>
-                        <em className={item.isOverdue ? "tone-danger" : ""}>
-                          {item.kind}
-                        </em>
-                        {" · "}
-                        {formatShortDate(item.dueAt)}
-                        {item.matterTitle ? ` · ${item.matterTitle}` : ""}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
 
-        <div className="panel">
-          <div className="panel-head">
-            <h3>Recent activity</h3>
-          </div>
-          <div className="panel-body">
-            {data.recentActivity.length === 0 ? (
-              <p className="muted">No recent timeline activity.</p>
-            ) : (
-              <ul className="dash-feed">
-                {data.recentActivity.slice(0, 6).map((a) => (
-                  <li key={a.id}>
-                    <Link href={`/matters/${a.matterId}`}>
-                      <strong>{a.title}</strong>
-                      <span>
-                        {a.createdByName ? `${a.createdByName} · ` : ""}
-                        {a.matterTitle} · {formatDateTime(a.eventAt)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {permissions.matters ? (
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Recent activity</h3>
+              </div>
+              <div className="panel-body">
+                {data.recentActivity.length === 0 ? (
+                  <p className="muted">No recent timeline activity.</p>
+                ) : (
+                  <ul className="dash-feed">
+                    {data.recentActivity.slice(0, 6).map((a) => (
+                      <li key={a.id}>
+                        <Link href={`/matters/${a.matterId}`}>
+                          <strong>{a.title}</strong>
+                          <span>
+                            {a.createdByName ? `${a.createdByName} · ` : ""}
+                            {a.matterTitle} · {formatDateTime(a.eventAt)}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
 
-      {lp ? (
+      {lp && (permissions.matters || permissions.finance) ? (
         <div className="dash-body dash-charts motion-charts">
-          <div className="panel dash-chart-panel">
-            <div className="panel-head">
-              <h3>Caseload by lawyer</h3>
-              <span className="muted">
-                {lp.viewAll ? "Open matters" : "Your open matters"} ·{" "}
-                <AnimatedNumber value={lp.totals.openMatters} durationMs={900} />
-              </span>
+          {permissions.matters ? (
+            <div className="panel dash-chart-panel">
+              <div className="panel-head">
+                <h3>Caseload by lawyer</h3>
+                <span className="muted">
+                  {lp.viewAll ? "Open matters" : "Your open matters"} ·{" "}
+                  <AnimatedNumber value={lp.totals.openMatters} durationMs={900} />
+                </span>
+              </div>
+              <div className="panel-body">
+                {caseloadBars.length === 0 || caseloadBars.every((b) => b.value === 0) ? (
+                  <p className="muted">No open matters in this scope.</p>
+                ) : (
+                  <AnimatedBarChart bars={caseloadBars} formatValue={(n) => String(Math.round(n))} />
+                )}
+              </div>
             </div>
-            <div className="panel-body">
-              {caseloadBars.length === 0 || caseloadBars.every((b) => b.value === 0) ? (
-                <p className="muted">No open matters in this scope.</p>
-              ) : (
-                <AnimatedBarChart bars={caseloadBars} formatValue={(n) => String(Math.round(n))} />
-              )}
-            </div>
-          </div>
+          ) : null}
 
-          <div className="panel dash-chart-panel">
-            <div className="panel-head">
-              <h3>Revenue by lawyer</h3>
-              {permissions.reports ? (
-                <Link href="/reports/lawyer-performance" className="btn btn-ghost btn-sm">
-                  Full report
-                </Link>
-              ) : (
-                <span className="muted">Last 6 months</span>
-              )}
-            </div>
-            <div className="panel-body">
-              {!lp.canViewRevenue ? (
-                <p className="muted">Fee totals require billing or reports access.</p>
-              ) : lawyerRevenueBars.every((b) => b.value === 0) ? (
-                <p className="muted">No fee receipts in the last 6 months.</p>
-              ) : (
-                <AnimatedBarChart
-                  bars={lawyerRevenueBars}
-                  formatValue={(n) =>
-                    n >= 1000
-                      ? `${(n / 1000).toFixed(0)}k`
-                      : centsToDisplay(Math.round(n * 100), lawyerCurrency)
-                  }
-                />
-              )}
-              {lp.canViewRevenue ? (
+          {permissions.finance && lp.canViewRevenue ? (
+            <div className="panel dash-chart-panel">
+              <div className="panel-head">
+                <h3>Revenue by lawyer</h3>
+                {permissions.reports ? (
+                  <Link href="/reports/lawyer-performance" className="btn btn-ghost btn-sm">
+                    Full report
+                  </Link>
+                ) : (
+                  <span className="muted">Last 6 months</span>
+                )}
+              </div>
+              <div className="panel-body">
+                {lawyerRevenueBars.every((b) => b.value === 0) ? (
+                  <p className="muted">No fee receipts in the last 6 months.</p>
+                ) : (
+                  <AnimatedBarChart
+                    bars={lawyerRevenueBars}
+                    formatValue={(n) =>
+                      n >= 1000
+                        ? `${(n / 1000).toFixed(0)}k`
+                        : centsToDisplay(Math.round(n * 100), lawyerCurrency)
+                    }
+                  />
+                )}
                 <p className="muted dash-chart-caption">
                   Collected fees ({lawyerCurrency}) by responsible lawyer. Cash basis.
                   {lp.glCheck?.mismatch
                     ? ` GL revenue differs by ${centsToDisplay(lp.glCheck.varianceCents, lawyerCurrency)}.`
                     : ""}
                 </p>
-              ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       ) : null}
 

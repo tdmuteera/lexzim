@@ -40,6 +40,30 @@ export function canViewAllMatters(
 }
 
 /**
+ * Client name lookup for invoicing / quotations without full KYC registry access.
+ * Full Clients module still requires clients.view.
+ */
+export function canLookupClients(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  return hasAnyPermission(user, [
+    "clients.view",
+    "billing.view",
+    "billing.manage",
+    "finance.quote.manage",
+  ]);
+}
+
+/**
+ * Fee revenue / revenue-by-lawyer: finance desk only (not individual lawyers).
+ */
+export function canViewFirmRevenue(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  return hasPermission(user, "finance.view");
+}
+
+/**
  * Lawyer caseload / revenue: MP and finance.view see the firm.
  * Others see self unless they have matters.view_all.
  */

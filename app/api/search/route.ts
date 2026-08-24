@@ -2,7 +2,7 @@ import { jsonError, jsonOk } from "@/lib/auth/http";
 import { requireSession } from "@/lib/auth/session";
 import { AuthError } from "@/lib/auth/types";
 import { searchClients, searchMatters } from "@/lib/repos/search";
-import { canViewAllMatters } from "@/lib/rbac/guards";
+import { canLookupClients, canViewAllMatters } from "@/lib/rbac/guards";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const canClients = hasPermission(session, "clients.view");
+    const canClients = canLookupClients(session);
     const canMatters = hasPermission(session, "matters.view");
     if (!canClients && !canMatters) {
       throw new AuthError("forbidden", "No search permissions.");

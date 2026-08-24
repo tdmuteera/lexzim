@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -103,12 +104,15 @@ export function ClientDetailView({
   matterCounts: MatterCounts;
   matters: MatterSummary[];
 }) {
+  const { can } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isArchived = Boolean(client.archivedAt);
   const type = normalizeClientType(client.clientType);
+  const canSeeKyc = can("clients.kyc.manage") || can("clients.edit");
+  const visibleTabs = TABS.filter((t) => t.id !== "kyc" || canSeeKyc);
 
   async function onArchiveOrRestore() {
     const action = isArchived ? "restore" : "archive";
@@ -189,7 +193,7 @@ export function ClientDetailView({
         </div>
 
         <nav className="tabs client-detail-tabs" aria-label="Client sections">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -245,7 +249,7 @@ export function ClientDetailView({
             </>
           ) : null}
 
-          {tab === "kyc" ? (
+          {tab === "kyc" && canSeeKyc ? (
             <div className="kyc-readonly">
               <h4>Individual / entity</h4>
               {type === "individual" ? (

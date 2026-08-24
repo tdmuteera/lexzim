@@ -15,7 +15,8 @@ export type AccessTick = {
  */
 export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "dashboard.view": ["dashboard.view"],
-  "clients.view": ["clients.view", "clients.create", "clients.edit", "clients.kyc.manage"],
+  "clients.view": ["clients.view", "clients.create", "clients.edit"],
+  "clients.kyc.manage": ["clients.kyc.manage"],
   "clients.delete": ["clients.delete"],
   "matters.view": ["matters.view", "matters.create", "matters.edit", "matters.view_all"],
   "documents.view": [
@@ -44,6 +45,12 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     section: "Practice",
     label: "Delete clients",
     hint: "Archive or restore client records.",
+  },
+  {
+    code: "clients.kyc.manage",
+    section: "Practice",
+    label: "Manage client KYC",
+    hint: "View and edit KYC / AML fields. Finance can invoice without this.",
   },
 ];
 

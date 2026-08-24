@@ -1,6 +1,11 @@
 import type { clients } from "@/lib/db/schema";
 import { clientDisplayLabel, clientDisplayName } from "@/lib/clients/display";
-import type { KycDocumentsChecklist, UboRow } from "@/lib/clients/kyc-types";
+import {
+  clientTypeLabel,
+  normalizeClientType,
+  type KycDocumentsChecklist,
+  type UboRow,
+} from "@/lib/clients/kyc-types";
 
 type ClientRow = typeof clients.$inferSelect;
 
@@ -60,5 +65,19 @@ export function serializeClient(row: ClientRow) {
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     displayName: clientDisplayName(row),
     displayLabel: clientDisplayLabel(row),
+  };
+}
+
+/** Slim client payload for invoice / quotation pickers (no KYC fields). */
+export function serializeClientLite(row: ClientRow) {
+  return {
+    id: row.id,
+    clientNumber: row.clientNumber,
+    clientType: row.clientType,
+    phone: row.phone,
+    email: row.email,
+    displayName: clientDisplayName(row),
+    displayLabel: clientDisplayLabel(row),
+    clientTypeLabel: clientTypeLabel(normalizeClientType(row.clientType)),
   };
 }

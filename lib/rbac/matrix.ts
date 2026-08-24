@@ -183,7 +183,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
   accounts: [
     "dashboard.view",
     "clients.view",
-    "clients.kyc.manage",
     "matters.view",
     "matters.view_all",
     "billing.view",
