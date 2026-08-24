@@ -250,16 +250,16 @@ export async function exportInvoiceLetterheadPdf(
       const reLine = subject.toUpperCase().startsWith("RE")
         ? subject.toUpperCase()
         : `RE: ${subject.toUpperCase()}`;
-      const reY = y;
-      doc.font("Helvetica-Bold").fontSize(10).text(reLine, MARGIN, reY, { width: pageWidth });
-      const reBottom = doc.y + 2;
+      doc.font("Helvetica-Bold").fontSize(10).text(reLine, MARGIN, y, { width: pageWidth });
+      // One full-width rule only (paper sample: under RE, tops the items block).
+      const ruleY = doc.y + 2;
       doc
-        .moveTo(MARGIN, reBottom)
-        .lineTo(MARGIN + pageWidth, reBottom)
+        .moveTo(MARGIN, ruleY)
+        .lineTo(MARGIN + pageWidth, ruleY)
         .strokeColor("#000000")
-        .lineWidth(0.9)
+        .lineWidth(1)
         .stroke();
-      y = reBottom + 12;
+      y = ruleY + 8;
     }
 
     const dateW = 72;
@@ -269,28 +269,16 @@ export async function exportInvoiceLetterheadPdf(
     const descX = MARGIN + dateW;
     const amtX = MARGIN + dateW + descW;
 
-    const tableHeaderTop = y;
-    doc
-      .moveTo(MARGIN, tableHeaderTop)
-      .lineTo(MARGIN + pageWidth, tableHeaderTop)
-      .strokeColor("#000000")
-      .lineWidth(0.9)
-      .stroke();
-
-    const tableHeaderTextY = tableHeaderTop + 6;
+    // Column titles sit under that single rule (no second page-wide line).
     doc.font("Helvetica-Bold").fontSize(10);
-    doc.text("Date", dateX, tableHeaderTextY, { width: dateW, lineBreak: false });
-    doc.text("Description", descX, tableHeaderTextY, { width: descW, lineBreak: false });
-    doc.text("Amount ($)", amtX, tableHeaderTextY, { width: amtW, align: "right", lineBreak: false });
-
-    const tableHeaderBottom = tableHeaderTextY + 14;
-    doc
-      .moveTo(MARGIN, tableHeaderBottom)
-      .lineTo(MARGIN + pageWidth, tableHeaderBottom)
-      .strokeColor("#000000")
-      .lineWidth(0.9)
-      .stroke();
-    y = tableHeaderBottom + 10;
+    doc.text("Date", dateX, y, { width: dateW, lineBreak: false });
+    doc.text("Description", descX, y, { width: descW, lineBreak: false });
+    doc.text("Amount ($)", amtX, y, {
+      width: amtW,
+      align: "right",
+      lineBreak: false,
+    });
+    y += 16;
 
     doc.font("Helvetica").fontSize(10).fillColor("#000000");
     for (const line of lines) {
