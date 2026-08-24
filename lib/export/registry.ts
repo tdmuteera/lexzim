@@ -34,6 +34,7 @@ import {
   weeklyFinanceToCsv,
 } from "@/lib/export/reports/finance-pack-document";
 import { exportToDocx } from "@/lib/export/to-docx";
+import { exportInvoiceLetterheadPdf } from "@/lib/export/to-invoice-pdf";
 import { exportToPdf } from "@/lib/export/to-pdf";
 import { exportToXlsx } from "@/lib/export/to-xlsx";
 import type { ExportDocument, ExportFormat } from "@/lib/export/types";
@@ -410,6 +411,15 @@ export async function renderExport(
     if (!def.buildCsv) throw new AuthError("validation", "CSV not supported for this export.");
     const csv = await def.buildCsv(ctx);
     return { bytes: Buffer.from(csv, "utf8"), filenameBase };
+  }
+
+  if (format === "pdf" && kind === "invoice") {
+    const id = ctx.searchParams.get("id")?.trim();
+    if (!id) throw new AuthError("validation", "Invoice id is required.");
+    return {
+      bytes: await exportInvoiceLetterheadPdf(ctx.firmId, id, branding),
+      filenameBase,
+    };
   }
 
   const document = await def.buildDocument(ctx);

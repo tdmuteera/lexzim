@@ -5,12 +5,22 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
+import {
+  EMPTY_INVOICE_BANKING,
+  parseInvoiceBanking,
+  serializeInvoiceBanking,
+  type InvoiceBankingDetails,
+} from "@/lib/billing/invoice-banking";
 import { getDb } from "@/lib/db";
 import { firms } from "@/lib/db/schema";
 import {
   getFirmSetting,
   getInvoiceDueDays,
+  INVOICE_ATTORNEY_LINE_KEY,
+  INVOICE_BANKING_KEY,
+  INVOICE_CLOSING_NOTE_KEY,
   INVOICE_DUE_DAYS_KEY,
+  INVOICE_PAYMENT_NOTE_KEY,
   INVOICE_PREFIX_KEY,
   ONBOARDING_PROFILE_CONFIRMED_AT_KEY,
   upsertFirmSetting,
@@ -31,6 +41,10 @@ export type FirmProfileDto = {
   invoicePrefix: string;
   invoiceDueDays: number;
   profileConfirmedAt: string | null;
+  invoiceAttorneyLine: string | null;
+  invoicePaymentNote: string | null;
+  invoiceClosingNote: string | null;
+  invoiceBanking: InvoiceBankingDetails;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -45,11 +59,16 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
   const firm = rows[0];
   if (!firm) return null;
 
-  const [prefix, dueDays, confirmed] = await Promise.all([
-    getFirmSetting(firmId, INVOICE_PREFIX_KEY),
-    getInvoiceDueDays(firmId),
-    getFirmSetting(firmId, ONBOARDING_PROFILE_CONFIRMED_AT_KEY),
-  ]);
+  const [prefix, dueDays, confirmed, attorneyLine, paymentNote, closingNote, bankingRaw] =
+    await Promise.all([
+      getFirmSetting(firmId, INVOICE_PREFIX_KEY),
+      getInvoiceDueDays(firmId),
+      getFirmSetting(firmId, ONBOARDING_PROFILE_CONFIRMED_AT_KEY),
+      getFirmSetting(firmId, INVOICE_ATTORNEY_LINE_KEY),
+      getFirmSetting(firmId, INVOICE_PAYMENT_NOTE_KEY),
+      getFirmSetting(firmId, INVOICE_CLOSING_NOTE_KEY),
+      getFirmSetting(firmId, INVOICE_BANKING_KEY),
+    ]);
 
   return {
     id: firm.id,
@@ -66,6 +85,10 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
     invoicePrefix: prefix?.trim() || "INV",
     invoiceDueDays: dueDays,
     profileConfirmedAt: confirmed,
+    invoiceAttorneyLine: attorneyLine,
+    invoicePaymentNote: paymentNote,
+    invoiceClosingNote: closingNote,
+    invoiceBanking: parseInvoiceBanking(bankingRaw),
   };
 }
 
@@ -81,6 +104,10 @@ export type UpdateFirmProfileInput = {
   invoicePrefix?: string;
   invoiceDueDays?: number;
   confirmProfile?: boolean;
+  invoiceAttorneyLine?: string | null;
+  invoicePaymentNote?: string | null;
+  invoiceClosingNote?: string | null;
+  invoiceBanking?: Partial<InvoiceBankingDetails> | null;
 };
 
 export async function updateFirmProfile(
@@ -125,6 +152,36 @@ export async function updateFirmProfile(
       throw new AuthError("validation", "invoiceDueDays must be 0–365.");
     }
     await upsertFirmSetting(firmId, INVOICE_DUE_DAYS_KEY, String(days));
+  }
+
+  if (input.invoiceAttorneyLine !== undefined) {
+    await upsertFirmSetting(
+      firmId,
+      INVOICE_ATTORNEY_LINE_KEY,
+      trimOrNull(input.invoiceAttorneyLine) ?? "",
+    );
+  }
+  if (input.invoicePaymentNote !== undefined) {
+    await upsertFirmSetting(
+      firmId,
+      INVOICE_PAYMENT_NOTE_KEY,
+      trimOrNull(input.invoicePaymentNote) ?? "",
+    );
+  }
+  if (input.invoiceClosingNote !== undefined) {
+    await upsertFirmSetting(
+      firmId,
+      INVOICE_CLOSING_NOTE_KEY,
+      trimOrNull(input.invoiceClosingNote) ?? "",
+    );
+  }
+  if (input.invoiceBanking !== undefined) {
+    const next = {
+      ...EMPTY_INVOICE_BANKING,
+      ...existing.invoiceBanking,
+      ...(input.invoiceBanking ?? {}),
+    };
+    await upsertFirmSetting(firmId, INVOICE_BANKING_KEY, serializeInvoiceBanking(next));
   }
 
   await db

@@ -844,6 +844,10 @@ export const invoices = pgTable(
     discountPct: real("discount_pct"),
     retainerAppliedCents: integer("retainer_applied_cents").notNull().default(0),
     notes: text("notes"),
+    /** RE: matter subject shown on printed invoice */
+    subject: text("subject"),
+    /** Payment terms shown beside Bill to (e.g. "-" or "Cash") */
+    paymentTerms: text("payment_terms"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -869,6 +873,8 @@ export const invoiceLines = pgTable(
     /** time | disbursement | fee | other */
     lineType: text("line_type").notNull().default("fee"),
     description: text("description").notNull(),
+    /** Work / service date shown on printed invoice */
+    workDate: timestamp("work_date", { withTimezone: true }),
     quantity: real("quantity").notNull().default(1),
     unitAmountCents: integer("unit_amount_cents").notNull().default(0),
     amountCents: integer("amount_cents").notNull().default(0),

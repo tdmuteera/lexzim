@@ -77,6 +77,30 @@ export async function PATCH(request: Request) {
       invoicePrefix:
         typeof body.invoicePrefix === "string" ? body.invoicePrefix : undefined,
       invoiceDueDays,
+      invoiceAttorneyLine:
+        body.invoiceAttorneyLine === undefined
+          ? undefined
+          : typeof body.invoiceAttorneyLine === "string"
+            ? body.invoiceAttorneyLine
+            : null,
+      invoicePaymentNote:
+        body.invoicePaymentNote === undefined
+          ? undefined
+          : typeof body.invoicePaymentNote === "string"
+            ? body.invoicePaymentNote
+            : null,
+      invoiceClosingNote:
+        body.invoiceClosingNote === undefined
+          ? undefined
+          : typeof body.invoiceClosingNote === "string"
+            ? body.invoiceClosingNote
+            : null,
+      invoiceBanking:
+        body.invoiceBanking === undefined
+          ? undefined
+          : body.invoiceBanking && typeof body.invoiceBanking === "object"
+            ? (body.invoiceBanking as Record<string, string>)
+            : null,
       confirmProfile: body.confirmProfile !== false,
     });
 

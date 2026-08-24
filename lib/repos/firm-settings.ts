@@ -24,6 +24,13 @@ export const ONBOARDING_EXPORT_ACK_KEY = "onboarding_export_acknowledged_at";
 export const ONBOARDING_PROFILE_CONFIRMED_AT_KEY = "onboarding_profile_confirmed_at";
 export const ONBOARDING_DEMO_SEEDED_AT_KEY = "onboarding_demo_seeded_at";
 
+/** Per-firm invoice letterhead (T Pfigu-style PDF). */
+export const INVOICE_ATTORNEY_LINE_KEY = "invoice_attorney_line";
+export const INVOICE_PAYMENT_NOTE_KEY = "invoice_payment_note";
+export const INVOICE_CLOSING_NOTE_KEY = "invoice_closing_note";
+/** JSON: accountName, bank, accountNumber, branch, accountType, swiftCode, branchCode */
+export const INVOICE_BANKING_KEY = "invoice_banking";
+
 export const PHASE3_FIRM_SETTING_KEYS = [
   DEFAULT_CURRENCY_KEY,
   INVOICE_PREFIX_KEY,

@@ -375,6 +375,8 @@ export async function getInvoice(firmId: string, invoiceId: string) {
       clientTradingName: clients.tradingName,
       clientType: clients.clientType,
       clientNumber: clients.clientNumber,
+      clientPhysicalAddress: clients.physicalAddress,
+      clientPostalAddress: clients.postalAddress,
     })
     .from(invoices)
     .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
@@ -721,6 +723,8 @@ export async function createInvoiceFromServices(
         taxCents: 0,
         totalCents,
         notes: input.notes ?? null,
+        subject: input.subject ?? null,
+        paymentTerms: input.paymentTerms ?? "-",
         createdBy: userId,
         updatedAt: new Date(),
       })
@@ -738,6 +742,7 @@ export async function createInvoiceFromServices(
         invoiceId: invoice!.id,
         lineType: "fee",
         description: line.description,
+        workDate: line.workDate ?? null,
         quantity: line.qty,
         unitAmountCents: line.unitPriceCents,
         amountCents,

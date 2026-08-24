@@ -186,12 +186,18 @@ export type ServiceInvoiceLineInput = {
   qty: number;
   unitPriceCents: number;
   revenueGlAccountId?: string | null;
+  /** Work / service date for printed invoice Date column */
+  workDate?: Date | null;
 };
 
 export type CreateServiceInvoiceInput = {
   clientId: string;
   matterId: string;
   notes?: string | null;
+  /** RE: subject line on printed invoice */
+  subject?: string | null;
+  /** Payment terms column (e.g. "-" or "Cash") */
+  paymentTerms?: string | null;
   discountCents?: number;
   discountPct?: number | null;
   currency?: string;
@@ -256,6 +262,14 @@ function parseServiceLine(raw: unknown, idx: number): ServiceInvoiceLineInput {
   if (unitPriceCents == null || !Number.isInteger(unitPriceCents) || unitPriceCents < 0) {
     throw new AuthError("validation", `Line ${idx + 1}: unit price is invalid.`);
   }
+  let workDate: Date | null = null;
+  if (line.workDate != null && line.workDate !== "") {
+    const parsed = new Date(String(line.workDate));
+    if (Number.isNaN(parsed.getTime())) {
+      throw new AuthError("validation", `Line ${idx + 1}: work date is invalid.`);
+    }
+    workDate = parsed;
+  }
   return {
     firmServiceId: typeof line.firmServiceId === "string" ? line.firmServiceId : null,
     description,
@@ -263,6 +277,7 @@ function parseServiceLine(raw: unknown, idx: number): ServiceInvoiceLineInput {
     unitPriceCents,
     revenueGlAccountId:
       typeof line.revenueGlAccountId === "string" ? line.revenueGlAccountId : null,
+    workDate,
   };
 }
 
@@ -300,6 +315,8 @@ export function parseCreateServiceInvoiceInput(body: unknown): CreateServiceInvo
     clientId,
     matterId,
     notes: trimOrNull(raw.notes),
+    subject: trimOrNull(raw.subject),
+    paymentTerms: trimOrNull(raw.paymentTerms) ?? "-",
     discountCents,
     discountPct,
     currency: trimOrNull(raw.currency) ?? undefined,

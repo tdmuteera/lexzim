@@ -31,6 +31,7 @@ type DraftLine = {
   description: string;
   qty: string;
   unitPriceDollars: string;
+  workDate: string;
 };
 
 function newLine(partial?: Partial<DraftLine>): DraftLine {
@@ -40,6 +41,7 @@ function newLine(partial?: Partial<DraftLine>): DraftLine {
     description: "",
     qty: "1",
     unitPriceDollars: "",
+    workDate: new Date().toISOString().slice(0, 10),
     ...partial,
   };
 }
@@ -49,6 +51,8 @@ export function InvoiceFormView() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [clientId, setClientId] = useState("");
   const [matterId, setMatterId] = useState("");
+  const [subject, setSubject] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("-");
   const [notes, setNotes] = useState("");
   const [discountMode, setDiscountMode] = useState<"none" | "amount" | "percent">("none");
   const [discountDollars, setDiscountDollars] = useState("");
@@ -147,12 +151,15 @@ export function InvoiceFormView() {
       const payload: Record<string, unknown> = {
         clientId,
         matterId,
+        subject: subject.trim() || null,
+        paymentTerms: paymentTerms.trim() || "-",
         notes: notes.trim() || null,
         lines: lines.map((line) => ({
           firmServiceId: line.firmServiceId,
           description: line.description.trim(),
           qty: Number(line.qty),
           unitPriceDollars: line.unitPriceDollars,
+          workDate: line.workDate || null,
         })),
       };
       if (discountMode === "amount" && discountDollars) {
@@ -187,7 +194,8 @@ export function InvoiceFormView() {
           <div>
             <h1>New invoice</h1>
             <p className="muted">
-              Create a fee note from the service catalogue. GL posts when you mark the invoice sent.
+              Create a fee note matching your firm letterhead. Banking and firm address come from
+              Settings → Firm profile (Isolation uses Isolation details; T Pfigu uses T Pfigu).
             </p>
           </div>
           <Link href="/finance/invoicing" className="btn btn-outline btn-sm">
@@ -226,6 +234,26 @@ export function InvoiceFormView() {
               disabled={saving}
               required
             />
+            <label>
+              <span className="muted">RE / Subject (printed on invoice)</span>
+              <input
+                type="text"
+                placeholder="e.g. DUE DILIGENCE - BUDIRIRO PROPERTY"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                disabled={saving}
+              />
+            </label>
+            <label>
+              <span className="muted">Payment terms</span>
+              <input
+                type="text"
+                placeholder="-"
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                disabled={saving}
+              />
+            </label>
           </div>
 
           <div className="quote-catalogue">
@@ -257,6 +285,7 @@ export function InvoiceFormView() {
               <table className="data quote-lines-table">
                 <thead>
                   <tr>
+                    <th>Date</th>
                     <th>Description</th>
                     <th className="num">Qty</th>
                     <th className="num">Unit price</th>
@@ -267,6 +296,14 @@ export function InvoiceFormView() {
                 <tbody>
                   {lines.map((line, idx) => (
                     <tr key={line.key}>
+                      <td>
+                        <input
+                          type="date"
+                          value={line.workDate}
+                          onChange={(e) => updateLine(line.key, { workDate: e.target.value })}
+                          disabled={saving}
+                        />
+                      </td>
                       <td>
                         <input
                           type="text"
