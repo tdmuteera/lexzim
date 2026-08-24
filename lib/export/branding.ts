@@ -27,7 +27,8 @@ export async function getFirmExportBranding(firmId: string): Promise<FirmExportB
   const addressLines = [
     firm.addressLine1,
     firm.addressLine2,
-    [firm.city, firm.country].filter(Boolean).join(", ") || null,
+    firm.city,
+    firm.country,
   ].filter((line): line is string => Boolean(line?.trim()));
 
   return {

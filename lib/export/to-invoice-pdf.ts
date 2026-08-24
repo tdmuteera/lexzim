@@ -9,6 +9,10 @@ import { getFirmProfile } from "@/lib/repos/firm-profile";
 import { quotationDiscountCents } from "@/lib/quotes/totals";
 
 const MARGIN = 48;
+/** Matches T Pfigu sample invoices (~11.5–12pt body). */
+const BODY = 11.5;
+const TITLE = 12;
+const FIRM = 12;
 
 export function formatInvoiceDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -37,40 +41,47 @@ export function moneyUs(cents: number, currency: string): string {
   return `${prefix}${(cents / 100).toFixed(2)}`;
 }
 
-function underlineLastHarare(
+/**
+ * Paper samples use one place per line:
+ * 187 Josiah Chinamano / 8 Windsor Park / Avenues / HARARE
+ * Never "Avenues, HARARE" on one line.
+ */
+export function expandInvoiceAddressLines(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    for (const part of trimmed.split(/,\s*/).map((p) => p.trim()).filter(Boolean)) {
+      const harareSplit = part.match(/^(.*)\s+(HARARE)$/i);
+      if (harareSplit?.[1]?.trim()) {
+        out.push(harareSplit[1].trim());
+        out.push("HARARE");
+      } else {
+        out.push(part);
+      }
+    }
+  }
+  return out;
+}
+
+function drawAddressLine(
   doc: PDFKit.PDFDocument,
   text: string,
   x: number,
   y: number,
   width: number,
+  fontSize: number,
 ): number {
   const trimmed = text.trim();
-  const upper = trimmed.toUpperCase();
-  const harareAt = upper.lastIndexOf("HARARE");
-  const underlineHarare =
-    harareAt >= 0 && (upper === "HARARE" || upper.endsWith("HARARE"));
-
-  if (underlineHarare) {
-    const before = trimmed.slice(0, harareAt);
-    const city = trimmed.slice(harareAt, harareAt + 6);
-    doc.font("Helvetica").fontSize(10);
-    const beforeW = before ? doc.widthOfString(before) : 0;
-    if (before) {
-      doc.text(before, x, y, { lineBreak: false });
-    }
-    doc.font("Helvetica-Bold").fontSize(10);
-    const cityX = x + beforeW;
-    doc.text(city, cityX, y, { lineBreak: false });
-    const cityW = doc.widthOfString(city);
-    doc
-      .moveTo(cityX, y + 12)
-      .lineTo(cityX + cityW, y + 12)
-      .strokeColor("#000000")
-      .lineWidth(0.8)
-      .stroke();
-    return y + 14;
+  if (trimmed.toUpperCase() === "HARARE") {
+    doc.font("Helvetica-Bold").fontSize(fontSize).text("HARARE", x, y, {
+      width,
+      underline: true,
+      lineBreak: false,
+    });
+    return y + fontSize + 4;
   }
-  doc.font("Helvetica").fontSize(10).text(text, x, y, { width });
+  doc.font("Helvetica").fontSize(fontSize).text(trimmed, x, y, { width });
   return doc.y;
 }
 
@@ -79,11 +90,12 @@ function drawBankingBlock(
   banking: InvoiceBankingDetails,
   x: number,
   y: number,
+  fontSize: number,
 ): number {
   if (!hasAnyBanking(banking)) return y;
-  doc.font("Helvetica-Bold").fontSize(10).text("Banking Details:", x, y);
+  doc.font("Helvetica-Bold").fontSize(fontSize).text("Banking Details:", x, y);
   y = doc.y + 4;
-  doc.font("Helvetica-Bold").fontSize(10);
+  doc.font("Helvetica-Bold").fontSize(fontSize);
   const bankLines: Array<[string, string]> = [
     ["NAME", banking.accountName],
     ["BANK", banking.bank],
@@ -157,14 +169,16 @@ export async function exportInvoiceLetterheadPdf(
     inv.subject?.trim() ||
     (full.matterTitle ? full.matterTitle.toUpperCase() : "");
 
-  const addressLines =
+  const rawAddress =
     branding.addressLines.length > 0
       ? branding.addressLines
       : [
           profile?.addressLine1,
           profile?.addressLine2,
-          [profile?.city, profile?.country].filter(Boolean).join(" "),
+          profile?.city,
+          profile?.country,
         ].filter((l): l is string => Boolean(l?.trim()));
+  const addressLines = expandInvoiceAddressLines(rawAddress);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: MARGIN });
@@ -176,38 +190,37 @@ export async function exportInvoiceLetterheadPdf(
     const pageWidth = doc.page.width - MARGIN * 2;
     let y = MARGIN;
 
-    doc.font("Helvetica-Bold").fontSize(18).text("INVOICE", MARGIN, y, {
+    // Sample: INVOICE top-right, firm name left (same size band ~12pt).
+    doc.font("Helvetica-Bold").fontSize(TITLE).text("INVOICE", MARGIN, y, {
       width: pageWidth,
-      align: "center",
+      align: "right",
     });
-    y = doc.y + 6;
 
-    doc.font("Helvetica-Bold").fontSize(12).text(branding.firmName.toUpperCase(), MARGIN, y, {
-      width: pageWidth,
+    doc.font("Helvetica-Bold").fontSize(FIRM).text(branding.firmName.toUpperCase(), MARGIN, y, {
+      width: pageWidth * 0.55,
       align: "left",
     });
-    y = doc.y + 8;
+    y = Math.max(doc.y, y + TITLE + 2) + 4;
 
     const leftColW = pageWidth * 0.55;
     const rightX = MARGIN + leftColW;
     const rightW = pageWidth - leftColW;
 
     const addrStartY = y;
-    doc.font("Helvetica").fontSize(10).fillColor("#000000");
     for (const line of addressLines) {
-      y = underlineLastHarare(doc, line, MARGIN, y, leftColW);
+      y = drawAddressLine(doc, line, MARGIN, y, leftColW, BODY);
     }
 
     const invoiceDateLabel = `Invoice Date: ${formatInvoiceDate(inv.issueDate) || "Draft"}`;
-    doc.font("Helvetica").fontSize(10).text(invoiceDateLabel, rightX, addrStartY, {
+    doc.font("Helvetica").fontSize(BODY).text(invoiceDateLabel, rightX, addrStartY, {
       width: rightW,
       align: "right",
     });
 
-    y = Math.max(y, addrStartY + 14) + 12;
+    y = Math.max(y, addrStartY + BODY + 2) + 12;
 
     if (attorneyLine) {
-      doc.font("Helvetica").fontSize(10).text(attorneyLine, MARGIN, y, { width: pageWidth });
+      doc.font("Helvetica").fontSize(BODY).text(attorneyLine, MARGIN, y, { width: pageWidth });
       y = doc.y + 10;
     }
 
@@ -215,26 +228,27 @@ export async function exportInvoiceLetterheadPdf(
     const col2 = MARGIN + pageWidth * 0.42;
     const col3 = MARGIN + pageWidth * 0.68;
     const headerY = y;
-    doc.font("Helvetica-Bold").fontSize(10);
+    doc.font("Helvetica-Bold").fontSize(BODY);
     doc.text("Bill to:", col1, headerY);
     doc.text("Payment Terms", col2, headerY, { width: pageWidth * 0.24, align: "center" });
     doc.text("Total Amount", col3, headerY, { width: pageWidth * 0.32, align: "right" });
-    y = headerY + 16;
+    y = headerY + BODY + 6;
 
-    doc.font("Helvetica").fontSize(10);
     const billStartY = y;
-    doc.font("Helvetica-Bold").text(clientLabel.toUpperCase(), col1 + 12, y, {
+    doc.font("Helvetica-Bold").fontSize(BODY).text(clientLabel.toUpperCase(), col1 + 12, y, {
       width: pageWidth * 0.38,
     });
     y = doc.y;
     if (clientAddress) {
-      const addrParts = clientAddress.split(/\n/).map((p) => p.trim()).filter(Boolean);
+      const addrParts = expandInvoiceAddressLines(
+        clientAddress.split(/\n/).map((p) => p.trim()).filter(Boolean),
+      );
       for (const part of addrParts) {
-        y = underlineLastHarare(doc, part, col1 + 12, y, pageWidth * 0.38);
+        y = drawAddressLine(doc, part, col1 + 12, y, pageWidth * 0.38, BODY);
       }
     }
 
-    doc.font("Helvetica").fontSize(10);
+    doc.font("Helvetica").fontSize(BODY);
     doc.text(paymentTerms, col2, billStartY, {
       width: pageWidth * 0.24,
       align: "center",
@@ -244,13 +258,13 @@ export async function exportInvoiceLetterheadPdf(
       align: "right",
     });
 
-    y = Math.max(y, billStartY + 14) + 16;
+    y = Math.max(y, billStartY + BODY + 2) + 16;
 
     if (subject) {
       const reLine = subject.toUpperCase().startsWith("RE")
         ? subject.toUpperCase()
         : `RE: ${subject.toUpperCase()}`;
-      doc.font("Helvetica-Bold").fontSize(10).text(reLine, MARGIN, y, { width: pageWidth });
+      doc.font("Helvetica-Bold").fontSize(BODY).text(reLine, MARGIN, y, { width: pageWidth });
       // One full-width rule only (paper sample: under RE, tops the items block).
       const ruleY = doc.y + 2;
       doc
@@ -269,8 +283,7 @@ export async function exportInvoiceLetterheadPdf(
     const descX = MARGIN + dateW;
     const amtX = MARGIN + dateW + descW;
 
-    // Column titles sit under that single rule (no second page-wide line).
-    doc.font("Helvetica-Bold").fontSize(10);
+    doc.font("Helvetica-Bold").fontSize(BODY);
     doc.text("Date", dateX, y, { width: dateW, lineBreak: false });
     doc.text("Description", descX, y, { width: descW, lineBreak: false });
     doc.text("Amount ($)", amtX, y, {
@@ -278,9 +291,9 @@ export async function exportInvoiceLetterheadPdf(
       align: "right",
       lineBreak: false,
     });
-    y += 16;
+    y += BODY + 6;
 
-    doc.font("Helvetica").fontSize(10).fillColor("#000000");
+    doc.font("Helvetica").fontSize(BODY).fillColor("#000000");
     for (const line of lines) {
       if (y > doc.page.height - MARGIN - 160) {
         doc.addPage();
@@ -299,43 +312,43 @@ export async function exportInvoiceLetterheadPdf(
         width: amtW,
         align: "right",
       });
-      y = Math.max(descBottom, rowY + 14) + 6;
+      y = Math.max(descBottom, rowY + BODY + 2) + 6;
     }
 
     y += 8;
     if (discountApplied > 0) {
-      doc.font("Helvetica").fontSize(10);
+      doc.font("Helvetica").fontSize(BODY);
       doc.text("Discount", descX, y, { width: descW - 8 });
       doc.text(`-${moneyUs(discountApplied, inv.currency)}`, amtX, y, {
         width: amtW,
         align: "right",
       });
-      y += 16;
+      y += BODY + 6;
     }
 
-    doc.font("Helvetica-Bold").fontSize(11);
+    doc.font("Helvetica-Bold").fontSize(BODY);
     doc.text("Total", descX, y, { width: descW - 8 });
     doc.text(moneyUs(inv.totalCents, inv.currency), amtX, y, {
       width: amtW,
       align: "right",
     });
-    y += 20;
+    y += BODY + 10;
 
     if (inv.notes?.trim()) {
-      doc.font("Helvetica").fontSize(9).fillColor("#333333");
+      doc.font("Helvetica").fontSize(BODY - 1).fillColor("#333333");
       doc.text(inv.notes.trim(), MARGIN, y, { width: pageWidth });
       y = doc.y + 10;
       doc.fillColor("#000000");
     }
 
-    doc.font("Helvetica-Oblique").fontSize(9);
+    doc.font("Helvetica-Oblique").fontSize(BODY - 1);
     doc.text(paymentNote, MARGIN, y, { width: pageWidth, align: "justify" });
     y = doc.y + 12;
     doc.font("Helvetica");
 
-    y = drawBankingBlock(doc, banking, MARGIN, y);
+    y = drawBankingBlock(doc, banking, MARGIN, y, BODY);
 
-    doc.font("Helvetica-Oblique").fontSize(10).text(closingNote, MARGIN, y, {
+    doc.font("Helvetica-Oblique").fontSize(BODY).text(closingNote, MARGIN, y, {
       width: pageWidth,
       align: "left",
     });

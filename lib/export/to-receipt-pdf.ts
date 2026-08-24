@@ -84,7 +84,8 @@ export async function exportReceiptLetterheadPdf(
       : [
           profile?.addressLine1,
           profile?.addressLine2,
-          [profile?.city, profile?.country].filter(Boolean).join(" "),
+          profile?.city,
+          profile?.country,
         ].filter((l): l is string => Boolean(l?.trim()));
 
   const receiptNo = row.payment.receiptNumber ?? row.payment.id.slice(0, 8);
