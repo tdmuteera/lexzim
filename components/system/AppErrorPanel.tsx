@@ -33,6 +33,7 @@ export function AppErrorPanel({
       level: "error",
       errorCode: "frontend.error_boundary",
       requestId: id,
+      digest: error.digest ?? null,
     });
     console.error(error);
   }, [error, title]);

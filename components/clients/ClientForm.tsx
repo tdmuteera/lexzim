@@ -1,6 +1,8 @@
 /** @deprecated Use ClientKycWizard — kept for import compatibility */
+export { ClientKycWizard as ClientForm } from "@/components/clients/ClientKycWizard";
 export {
-  ClientKycWizard as ClientForm,
   toClientKycFormValues as toClientFormValues,
+  toClientKycFormValues,
   type ClientKycFormValues as ClientFormValues,
-} from "@/components/clients/ClientKycWizard";
+  type ClientKycFormValues,
+} from "@/lib/clients/kyc-form-values";

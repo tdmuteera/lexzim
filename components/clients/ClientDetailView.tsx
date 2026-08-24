@@ -404,4 +404,4 @@ function formatDate(iso: string): string {
   }
 }
 
-export { toClientKycFormValues as toClientFormValues } from "@/components/clients/ClientKycWizard";
+export { toClientKycFormValues as toClientFormValues } from "@/lib/clients/kyc-form-values";

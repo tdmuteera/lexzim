@@ -30,6 +30,7 @@ type ClientEventBody = {
   errorCode?: unknown;
   module?: unknown;
   pagePath?: unknown;
+  digest?: unknown;
 };
 
 async function requireStaffOrOps(request: Request): Promise<{
@@ -135,6 +136,9 @@ export async function POST(request: Request) {
         ? raw.errorCode.trim().slice(0, 64) || "frontend.error"
         : "frontend.error";
 
+    const digest =
+      typeof raw.digest === "string" ? raw.digest.trim().slice(0, 128) : "";
+
     await recordEvent({
       requestId,
       source: "frontend",
@@ -151,6 +155,7 @@ export async function POST(request: Request) {
       payload: {
         source: "client-event",
         pagePath: pagePath ?? undefined,
+        ...(digest ? { digest } : {}),
       },
     });
 

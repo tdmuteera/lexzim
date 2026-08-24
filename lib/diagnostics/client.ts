@@ -164,6 +164,8 @@ export type ClientDiagnosticPayload = {
   module?: string;
   pagePath?: string;
   requestId?: string;
+  /** React error digest from error boundary (safe, non-sensitive). */
+  digest?: string | null;
 };
 
 let lastReportKey = "";
@@ -197,6 +199,10 @@ export function reportClientDiagnostic(input: ClientDiagnosticPayload): void {
       errorCode: input.errorCode ?? "frontend.error",
       module: input.module,
       pagePath: input.pagePath ?? pagePathNow(),
+      digest:
+        typeof input.digest === "string" && input.digest.trim()
+          ? input.digest.trim().slice(0, 128)
+          : undefined,
     });
 
     void fetch(CLIENT_EVENT_PATH, {

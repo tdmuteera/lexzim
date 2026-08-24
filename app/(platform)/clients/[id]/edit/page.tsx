@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AccessDenied } from "@/components/shell/AccessDenied";
 import { ClientForm } from "@/components/clients/ClientForm";
-import { toClientFormValues } from "@/components/clients/ClientDetailView";
 import { AuthError } from "@/lib/auth/types";
+import { toClientKycFormValues } from "@/lib/clients/kyc-form-values";
 import { serializeClient } from "@/lib/clients/serialize";
 import { getClientById } from "@/lib/repos/clients";
 import { requirePermission } from "@/lib/rbac/guards";
@@ -43,7 +43,7 @@ export default async function EditClientPage({ params }: PageProps) {
           <ClientForm
             mode="edit"
             clientId={id}
-            initialValues={toClientFormValues(client)}
+            initialValues={toClientKycFormValues(client)}
           />
         </div>
       </div>
