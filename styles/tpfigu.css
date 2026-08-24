@@ -2275,23 +2275,85 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
     height: auto;
     max-height: none;
     overflow: visible;
+    gap: 0.65rem;
   }
-  .settings-nav-panel {
-    height: auto;
-    max-height: none;
+  .settings-hero {
+    gap: 0.65rem;
+    padding: 0.15rem 0 0.1rem;
   }
-  .settings-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.35rem;
+  .settings-hero-icon {
+    width: 2.1rem;
+    height: 2.1rem;
   }
-  .settings-nav button {
-    width: auto;
-    flex: 0 0 auto;
+  .settings-hero h1 {
+    font-size: 1.15rem;
   }
+  .settings-hero .muted {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .settings-nav-panel,
   .settings-main-panel {
     height: auto;
-    min-height: 280px;
+    max-height: none;
+    overflow: visible;
+  }
+  .settings-nav-panel .panel-body,
+  .settings-main-panel .panel-body {
+    overflow: visible;
+  }
+  .settings-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    padding: 0.7rem !important;
+  }
+  .settings-nav button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    flex: none;
+    justify-content: flex-start;
+    padding: 0.7rem 0.65rem;
+    font-size: 0.8rem;
+    line-height: 1.25;
+    border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    background: var(--bg-1);
+    transform: none;
+  }
+  .settings-nav button:hover,
+  .settings-nav button:active {
+    transform: none;
+  }
+  .settings-nav button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .settings-nav button.active {
+    border-color: rgba(197,164,90,0.35);
+    border-left-color: var(--gold-2);
+  }
+  .settings-nav button:last-child {
+    grid-column: 1 / -1;
+  }
+  .settings-main-panel {
+    min-height: 0;
+  }
+  .settings-main-panel > .panel-head {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .settings-main-body {
+    padding: 1rem 1rem 1.5rem;
+  }
+  .settings-fields.cols-2 {
+    grid-template-columns: 1fr;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .grid-2, .grid-2-equal, .grid-3 { grid-template-columns: 1fr; }
   .overlay { padding: 0.5rem; align-items: flex-end; }
@@ -2314,6 +2376,7 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   .kpi-strip { grid-template-columns: 1fr; }
   .dash-hello h2 { font-size: 1.1rem; }
   .topbar-right { gap: 0.3rem; }
+  .settings-hero .muted { display: none; }
   table.data,
   table.data-table { font-size: 0.75rem; }
   table.data th, table.data td,
