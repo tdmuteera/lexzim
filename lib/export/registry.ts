@@ -34,7 +34,9 @@ import {
   weeklyFinanceToCsv,
 } from "@/lib/export/reports/finance-pack-document";
 import { exportToDocx } from "@/lib/export/to-docx";
+import { exportInvoiceLetterheadDocx } from "@/lib/export/to-invoice-docx";
 import { exportInvoiceLetterheadPdf } from "@/lib/export/to-invoice-pdf";
+import { exportInvoiceLetterheadXlsx } from "@/lib/export/to-invoice-xlsx";
 import { exportReceiptLetterheadPdf } from "@/lib/export/to-receipt-pdf";
 import { exportToPdf } from "@/lib/export/to-pdf";
 import { exportToXlsx } from "@/lib/export/to-xlsx";
@@ -419,6 +421,24 @@ export async function renderExport(
     if (!id) throw new AuthError("validation", "Invoice id is required.");
     return {
       bytes: await exportInvoiceLetterheadPdf(ctx.firmId, id, branding),
+      filenameBase,
+    };
+  }
+
+  if (format === "docx" && kind === "invoice") {
+    const id = ctx.searchParams.get("id")?.trim();
+    if (!id) throw new AuthError("validation", "Invoice id is required.");
+    return {
+      bytes: await exportInvoiceLetterheadDocx(ctx.firmId, id, branding),
+      filenameBase,
+    };
+  }
+
+  if (format === "xlsx" && kind === "invoice") {
+    const id = ctx.searchParams.get("id")?.trim();
+    if (!id) throw new AuthError("validation", "Invoice id is required.");
+    return {
+      bytes: await exportInvoiceLetterheadXlsx(ctx.firmId, id, branding),
       filenameBase,
     };
   }

@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/help/[slug]": ["./docs/user/**/*"],
     "/(platform)/help/[slug]": ["./docs/user/**/*"],
-    "/*": ["./docs/user/**/*"],
+    "/*": ["./docs/user/**/*", "./assets/fonts/**/*"],
+    "/api/exports/*": ["./assets/fonts/**/*"],
   },
 
   // Baseline hardening (P5-13). CSP deferred (report-only / tighten later).

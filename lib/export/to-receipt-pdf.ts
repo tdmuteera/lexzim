@@ -9,7 +9,7 @@ import { clients, feePayments, invoices, matters } from "@/lib/db/schema";
 import {
   formatInvoiceDate,
   moneyUs,
-} from "@/lib/export/to-invoice-pdf";
+} from "@/lib/export/invoice-letterhead-model";
 import type { FirmExportBranding } from "@/lib/export/types";
 import { sumFeePayments } from "@/lib/repos/billing";
 import { getFirmProfile } from "@/lib/repos/firm-profile";
