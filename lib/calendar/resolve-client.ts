@@ -32,9 +32,5 @@ export async function resolveCalendarClientId(
     }
   }
 
-  if (input.eventType === "appointment" && !clientId) {
-    throw new AuthError("validation", "Client is required for a client meeting.");
-  }
-
   return { ...input, clientId };
 }

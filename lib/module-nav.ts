@@ -69,6 +69,13 @@ export const HR_TABS: ModuleTab[] = [
   { href: "/hr/staff", label: "Staff records", permission: "hr.view" },
   { href: "/hr/contracts", label: "Contracts", permission: "hr.view" },
   { href: "/hr/leave", label: "Leave", permission: "hr.view" },
+  { href: "/hr/advances", label: "Salary advances", permission: "hr.view" },
+  { href: "/hr/payroll", label: "Payroll", permission: "hr.view" },
+];
+
+export const WORKFLOW_TABS: ModuleTab[] = [
+  { href: "/workflow/tasks", label: "Tasks", permission: "dashboard.view" },
+  { href: "/workflow/approvals", label: "Approvals", permission: "dashboard.view" },
 ];
 
 /** Longest-prefix wins; order from most specific to least. */
@@ -89,7 +96,14 @@ export const ROUTE_PERMISSION_RULES: { prefix: string; permission: string }[] = 
   { prefix: "/hr/staff", permission: "hr.view" },
   { prefix: "/hr/contracts", permission: "hr.view" },
   { prefix: "/hr/leave", permission: "hr.view" },
+  { prefix: "/hr/advances", permission: "hr.view" },
+  { prefix: "/hr/payroll", permission: "hr.view" },
   { prefix: "/hr", permission: "hr.view" },
+  { prefix: "/workflow/tasks", permission: "dashboard.view" },
+  { prefix: "/workflow/approvals", permission: "dashboard.view" },
+  { prefix: "/workflow", permission: "dashboard.view" },
+  { prefix: "/knowledge/reports", permission: "knowledge.reports.view" },
+  { prefix: "/knowledge", permission: "knowledge.reports.view" },
   { prefix: "/crm", permission: "crm.view" },
 ];
 

@@ -2,6 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { getClientById } from "@/lib/repos/clients";
+import { assertClearConflictForOpenMatter } from "@/lib/repos/conflict-checks";
 import { serializeMatter } from "@/lib/matters/serialize";
 import { parseMatterInput, statusLabel } from "@/lib/matters/validation";
 import { createMatterEvent, listMatterEvents } from "@/lib/repos/timeline";
@@ -80,6 +81,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const previousStatus = existing.status;
+    const nextStatus = input.status ?? existing.status;
+    if (nextStatus === "open" && previousStatus !== "open") {
+      await assertClearConflictForOpenMatter(firmId, input.clientId, nextStatus);
+    }
+
     const row = await updateMatter(firmId, id, input, session.id);
     if (!row) {
       throw new AuthError("not_found", "Matter not found.");

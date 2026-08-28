@@ -127,6 +127,7 @@ export async function getQuotation(firmId: string, quotationId: string) {
     .select({
       quote: quotations,
       clientNumber: clients.clientNumber,
+      clientEmail: clients.email,
       clientType: clients.clientType,
       clientFirstName: clients.firstName,
       clientSurname: clients.surname,

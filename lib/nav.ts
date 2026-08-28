@@ -129,8 +129,39 @@ export const navSections: NavSection[] = [
       { href: "/hr/staff", label: "Staff records", icon: "user", permission: "hr.view" },
       { href: "/hr/contracts", label: "Contracts", icon: "folder", permission: "hr.view" },
       { href: "/hr/leave", label: "Leave", icon: "calendar", permission: "hr.view" },
+      { href: "/hr/advances", label: "Salary advances", icon: "invoice", permission: "hr.view" },
+      { href: "/hr/payroll", label: "Payroll", icon: "clipboard", permission: "hr.view" },
     ],
-  },  {
+  },
+  {
+    title: "Workflow",
+    items: [
+      {
+        href: "/workflow/tasks",
+        label: "Tasks",
+        icon: "check",
+        permission: "dashboard.view",
+      },
+      {
+        href: "/workflow/approvals",
+        label: "Approvals",
+        icon: "clipboard",
+        permission: "dashboard.view",
+      },
+    ],
+  },
+  {
+    title: "Knowledge",
+    items: [
+      {
+        href: "/knowledge/reports",
+        label: "Reports",
+        icon: "folder",
+        permission: "knowledge.reports.view",
+      },
+    ],
+  },
+  {
     title: "People & Insight",
     items: [
       { href: "/staff", label: "User access", icon: "tie", permission: "users.manage" },
@@ -167,7 +198,7 @@ export type RouteMeta = {
   title: string;
   subtitle: string;
   purpose: string;
-  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+" | "Phase 7+";
+  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+" | "Phase 7+" | "Phase 10";
 };
 
 export const routeMeta: Record<string, RouteMeta> = {
@@ -275,9 +306,40 @@ export const routeMeta: Record<string, RouteMeta> = {
   },
   "/hr/leave": {
     title: "Leave",
-    subtitle: "Requests · balances · approvals",
-    purpose: "Leave types, requests, and approval workflow (payroll deferred).",
+    subtitle: "Requests · ledger · approvals",
+    purpose: "Leave types, entitlement ledger, requests, and discretionary approval.",
     phaseBadge: "Phase 6+",
+  },
+  "/hr/advances": {
+    title: "Salary advances",
+    subtitle: "Request · finance · discretionary approval",
+    purpose: "Salary advance workflow with payroll recovery. Approval is discretionary.",
+    phaseBadge: "Phase 10",
+  },
+  "/hr/payroll": {
+    title: "Payroll",
+    subtitle: "Periods · deductions · mark paid",
+    purpose: "Payroll MVP with advance recovery. Full statutory payroll remains deferred.",
+    phaseBadge: "Phase 10",
+  },
+  "/workflow/tasks": {
+    title: "Tasks",
+    subtitle: "Assign · complete · track",
+    purpose: "Firm-wide tasks with assignee notifications. Distinct from matter pending procedures.",
+    phaseBadge: "Phase 10",
+  },
+  "/workflow/approvals": {
+    title: "Approvals",
+    subtitle: "Leave · advances · invoices · resets",
+    purpose: "Unified inbox linking to leave, salary advances, invoice approval, and password resets.",
+    phaseBadge: "Phase 10",
+  },
+  "/knowledge/reports": {
+    title: "Knowledge reports",
+    subtitle: "Events · training · BD uploads",
+    purpose:
+      "Store and download firm event and training reports (separate from AI knowledge packs).",
+    phaseBadge: "Phase 10",
   },
   "/staff": {
     title: "User access",

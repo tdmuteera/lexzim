@@ -11,6 +11,7 @@ import {
   serializeInvoiceBanking,
   type InvoiceBankingDetails,
 } from "@/lib/billing/invoice-banking";
+import { sanitizeInvoicePaymentNote } from "@/lib/billing/invoice-payment-note";
 import { getDb } from "@/lib/db";
 import { firms } from "@/lib/db/schema";
 import {
@@ -25,6 +26,14 @@ import {
   ONBOARDING_PROFILE_CONFIRMED_AT_KEY,
   upsertFirmSetting,
 } from "@/lib/repos/firm-settings";
+import {
+  getRequireInvoiceApproval,
+  setRequireInvoiceApproval,
+} from "@/lib/billing/invoice-approval";
+import {
+  getRequireClearConflict,
+  setRequireClearConflict,
+} from "@/lib/conflict/require-clear";
 
 export type FirmProfileDto = {
   id: string;
@@ -45,6 +54,10 @@ export type FirmProfileDto = {
   invoicePaymentNote: string | null;
   invoiceClosingNote: string | null;
   invoiceBanking: InvoiceBankingDetails;
+  /** Default true (pilot). When false, draft can Mark sent without approval. */
+  requireInvoiceApproval: boolean;
+  /** Default true (pilot). When false, matter can open without clear conflict check. */
+  requireClearConflict: boolean;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -59,8 +72,17 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
   const firm = rows[0];
   if (!firm) return null;
 
-  const [prefix, dueDays, confirmed, attorneyLine, paymentNote, closingNote, bankingRaw] =
-    await Promise.all([
+  const [
+    prefix,
+    dueDays,
+    confirmed,
+    attorneyLine,
+    paymentNote,
+    closingNote,
+    bankingRaw,
+    requireInvoiceApproval,
+    requireClearConflict,
+  ] = await Promise.all([
       getFirmSetting(firmId, INVOICE_PREFIX_KEY),
       getInvoiceDueDays(firmId),
       getFirmSetting(firmId, ONBOARDING_PROFILE_CONFIRMED_AT_KEY),
@@ -68,6 +90,8 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
       getFirmSetting(firmId, INVOICE_PAYMENT_NOTE_KEY),
       getFirmSetting(firmId, INVOICE_CLOSING_NOTE_KEY),
       getFirmSetting(firmId, INVOICE_BANKING_KEY),
+      getRequireInvoiceApproval(firmId),
+      getRequireClearConflict(firmId),
     ]);
 
   return {
@@ -86,9 +110,11 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
     invoiceDueDays: dueDays,
     profileConfirmedAt: confirmed,
     invoiceAttorneyLine: attorneyLine,
-    invoicePaymentNote: paymentNote,
+    invoicePaymentNote: sanitizeInvoicePaymentNote(paymentNote),
     invoiceClosingNote: closingNote,
     invoiceBanking: parseInvoiceBanking(bankingRaw),
+    requireInvoiceApproval,
+    requireClearConflict,
   };
 }
 
@@ -108,6 +134,8 @@ export type UpdateFirmProfileInput = {
   invoicePaymentNote?: string | null;
   invoiceClosingNote?: string | null;
   invoiceBanking?: Partial<InvoiceBankingDetails> | null;
+  requireInvoiceApproval?: boolean;
+  requireClearConflict?: boolean;
 };
 
 export async function updateFirmProfile(
@@ -165,7 +193,7 @@ export async function updateFirmProfile(
     await upsertFirmSetting(
       firmId,
       INVOICE_PAYMENT_NOTE_KEY,
-      trimOrNull(input.invoicePaymentNote) ?? "",
+      sanitizeInvoicePaymentNote(input.invoicePaymentNote) ?? "",
     );
   }
   if (input.invoiceClosingNote !== undefined) {
@@ -182,6 +210,12 @@ export async function updateFirmProfile(
       ...(input.invoiceBanking ?? {}),
     };
     await upsertFirmSetting(firmId, INVOICE_BANKING_KEY, serializeInvoiceBanking(next));
+  }
+  if (input.requireInvoiceApproval !== undefined) {
+    await setRequireInvoiceApproval(firmId, Boolean(input.requireInvoiceApproval));
+  }
+  if (input.requireClearConflict !== undefined) {
+    await setRequireClearConflict(firmId, Boolean(input.requireClearConflict));
   }
 
   await db

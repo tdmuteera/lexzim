@@ -36,7 +36,16 @@ Ticks on **User access** control what appears in the menu. Do not share Managing
 | Contracts | `/hr/contracts` | `hr.view` / `hr.manage` |
 | Leave | `/hr/leave` | `hr.view` (submit own if linked); `hr.manage` (approve) |
 
-**Payroll** (payslips, PAYE, NSSA) is **not** in Phase 6. Coming in **Phase 6B**. See `docs/PHASE6B_PAYROLL_HANDOFF.md`.
+**Payroll** (payslips, PAYE, NSSA) is **not** full statutory yet. Phase 10 adds payroll **MVP** and salary advances under HR; Phase 6B remains the handoff for PAYE/NSSA. See `HR_Quickstart.md` and `docs/PHASE6B_PAYROLL_HANDOFF.md`.
+
+## Sessions (idle logout)
+
+Staff web signs out after **30 minutes of inactivity** (mouse, keyboard, or touch). This is not a fixed clock from login. See `Security_Password_Policy.md`.
+
+## Archive vs platform purge
+
+- **Soft archive** (firm product): normal path for clients/matters you no longer want active. Finance history is retained; outstanding KPIs should ignore archived clients where designed.
+- **Platform purge** (LexZim ops only): hard wipe of a test/dummy client and related finance so KPIs drop to zero. Firm Managing Partners cannot hard-delete live money history from the product UI.
 
 ## Finance administration
 
@@ -62,7 +71,7 @@ Complete in order near calendar month-end:
 10. **GL trial balance** — `/finance/gl` (or trial balance report): debits equal credits as of month-end. Export PDF/Excel for the bookkeeper.
 11. **P&L and balance sheet** — same GL desk; review gross profit and equity. Compare to cash P&L on **Finance → Reports** if you still use that pack.
 12. **Lock period** — **Finance → Reports → Monthly close → Lock period** (`finance.close_month`). Locked months block new expenses and cashbook entries dated in that month.
-13. **HR** — leave approved; contracts current for key staff (optional but recommended). Payroll remains Phase 6B.
+13. **HR** — leave approved; advances and payroll MVP reviewed if used; contracts current for key staff (optional but recommended). Full PAYE/NSSA remains Phase 6B.
 
 Reopen a locked period is not in self-service UI v1; contact LexZim support if a correction is required (audited).
 
@@ -111,13 +120,13 @@ Schedule a regular export (for example weekly) as part of firm risk management.
 Configure your firm SMTP server so LexZim can email documents to clients:
 
 - **SMTP server**: host, port (587 for STARTTLS, 465 for SSL/TLS), username, password.
-- **Sender identity**: from name, from email, and optional reply-to.
+- **Sender identity**: from name, from email, and optional reply-to. Each firm sets its own From (pilot firms configure their address here; LexZim does not force one firm’s address onto every tenant).
 - The SMTP **password is stored encrypted** and is never sent back to the browser. Leaving the password blank on save keeps the existing one.
 - Use **Send test email** to confirm the settings work before sending real documents.
 
 Once configured, you can send documents as **PDF attachments**:
 
-- **Quotation, invoice, receipt** detail pages have a **Send email** action. It defaults to the client's email on file; you can override the recipient and add a short note.
+- **Quotation, invoice, receipt** detail pages have a **Send email** action. Review **To**, **Subject**, note, and attachment name, then click Send. LexZim does not auto-email clients.
 - **Client profile** has an **Email client** button (Managing Partner or accounts) for a generic notification to the client's email.
 
 Every send is written to the audit log as `email.sent` with the recipient, template type, and entity id. SMTP secrets are never exposed to the browser or included in firm exports.
@@ -150,4 +159,4 @@ The Dashboard checklist is optional. Dismiss or restore it anytime. Details: `do
 - Post firm expenses or cashbook entries against client trust
 - Share API keys in chat, email, or tickets without redaction
 - Rely on AI as the sole source for court filings or advice
-- Expect payroll or statutory payslip engines in Phase 6 (Phase 6B)
+- Expect full statutory payroll or payslip engines yet (Phase 10 MVP + Phase 6B handoff)

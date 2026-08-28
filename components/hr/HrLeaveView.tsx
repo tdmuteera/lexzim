@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Can } from "@/components/auth/Can";
 import { HrAccessCallout } from "@/components/hr/HrAccessCallout";
+import { HrPageShell } from "@/components/hr/HrPageShell";
+import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,7 +34,18 @@ type AnnualBalance = {
   remainingDays: number | null;
 };
 
-type Tab = "requests" | "away";
+type LedgerRow = {
+  leaveTypeId: string;
+  leaveTypeCode: string;
+  leaveTypeName: string;
+  year: number;
+  entitlementDays: number;
+  usedDays: number;
+  pendingDays: number;
+  remainingDays: number;
+};
+
+type Tab = "requests" | "away" | "ledger";
 
 function todayInput() {
   const d = new Date();
@@ -80,8 +94,9 @@ function monthRange(): { from: string; to: string } {
 }
 
 export function HrLeaveView() {
-  const { can } = useAuth();
+  const { can, canAny } = useAuth();
   const canManage = can("hr.manage");
+  const canApproveLeave = canAny(["leave.approve", "hr.manage"]);
   const now = new Date();
 
   const [tab, setTab] = useState<Tab>("requests");
@@ -101,6 +116,11 @@ export function HrLeaveView() {
 
   const [awayFrom, setAwayFrom] = useState(weekRange().from);
   const [awayTo, setAwayTo] = useState(weekRange().to);
+
+  const [ledgerStaffId, setLedgerStaffId] = useState("");
+  const [ledgerYear, setLedgerYear] = useState(String(now.getFullYear()));
+  const [ledgerRows, setLedgerRows] = useState<LedgerRow[]>([]);
+  const [entitlementEdits, setEntitlementEdits] = useState<Record<string, string>>({});
 
   const [formOpen, setFormOpen] = useState(false);
   const [staffProfileId, setStaffProfileId] = useState("");
@@ -157,12 +177,15 @@ export function HrLeaveView() {
       if (!staffProfileId && body.data.selfStaffProfileId) {
         setStaffProfileId(body.data.selfStaffProfileId);
       }
+      if (!ledgerStaffId && body.data.selfStaffProfileId) {
+        setLedgerStaffId(body.data.selfStaffProfileId);
+      }
     } catch {
       setError("Could not load leave requests.");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, staffFilter, now]);
+  }, [statusFilter, staffFilter, now, staffProfileId, ledgerStaffId]);
 
   const loadAway = useCallback(async () => {
     setLoading(true);
@@ -193,14 +216,52 @@ export function HrLeaveView() {
     }
   }, [awayFrom, awayTo]);
 
+  const loadLedger = useCallback(async () => {
+    if (!ledgerStaffId) {
+      setLedgerRows([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        staffProfileId: ledgerStaffId,
+        year: ledgerYear,
+      });
+      const res = await fetch(`/api/hr/leave-ledger?${params.toString()}`, {
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        data?: { items: LedgerRow[] };
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok || !body.data) {
+        setError(body.error?.message ?? "Could not load leave ledger.");
+        return;
+      }
+      setLedgerRows(body.data.items);
+      const edits: Record<string, string> = {};
+      for (const row of body.data.items) {
+        edits[row.leaveTypeId] = String(row.entitlementDays);
+      }
+      setEntitlementEdits(edits);
+    } catch {
+      setError("Could not load leave ledger.");
+    } finally {
+      setLoading(false);
+    }
+  }, [ledgerStaffId, ledgerYear]);
+
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
 
   useEffect(() => {
     if (tab === "requests") void loadRequests();
-    else void loadAway();
-  }, [tab, loadRequests, loadAway]);
+    else if (tab === "away") void loadAway();
+    else void loadLedger();
+  }, [tab, loadRequests, loadAway, loadLedger]);
 
   useEffect(() => {
     if (leaveTypes.length && !leaveTypeId) {
@@ -280,45 +341,138 @@ export function HrLeaveView() {
     }
   }
 
+  async function onSaveEntitlement(leaveTypeIdToSave: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const entitlementDays = Number(entitlementEdits[leaveTypeIdToSave]);
+      if (!Number.isInteger(entitlementDays) || entitlementDays < 0) {
+        setError("Entitlement must be a whole number of days.");
+        return;
+      }
+      const res = await fetch("/api/hr/leave-ledger", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffProfileId: ledgerStaffId,
+          leaveTypeId: leaveTypeIdToSave,
+          year: Number(ledgerYear),
+          entitlementDays,
+        }),
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: { message: string } };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not save entitlement.");
+        return;
+      }
+      await loadLedger();
+    } catch {
+      setError("Could not save entitlement.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const canSubmit =
     canManage || (selfStaffProfileId !== null && staffProfileId === selfStaffProfileId);
 
-  return (
-    <section className="view active scrollable finance-desk-view" aria-label="HR leave">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h3>Leave</h3>
-            <p className="panel-subtitle muted">
-              Requests · approvals · who is away
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            {(canManage || selfStaffProfileId) ? (
-              <Button size="sm" onClick={() => setFormOpen(true)} disabled={loading}>
-                Request leave
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => (tab === "requests" ? loadRequests() : loadAway())}
-              disabled={loading}
-            >
-              Refresh
-            </Button>
-          </div>
-        </div>
-        <div className="panel-body">
-          <HrAccessCallout />
+  const summaryStats = useMemo(() => {
+    if (tab === "away") {
+      return [
+        { label: "Away this period", value: loading ? "—" : awayItems.length, icon: "AW" },
+        {
+          label: "Period",
+          value: `${awayFrom} to ${awayTo}`,
+          hint: "Selected date range",
+          icon: "DT",
+        },
+      ];
+    }
+    if (tab === "ledger") {
+      const totalRemaining = ledgerRows.reduce((sum, r) => sum + r.remainingDays, 0);
+      return [
+        { label: "Leave types", value: loading ? "—" : ledgerRows.length, icon: "TY" },
+        { label: "Year", value: ledgerYear, icon: "YR" },
+        {
+          label: "Total remaining",
+          value: loading ? "—" : totalRemaining,
+          hint: "Days across types",
+          icon: "RM",
+        },
+      ];
+    }
+    const pending = requests.filter((r) => r.status === "requested").length;
+    const approved = requests.filter((r) => r.status === "approved").length;
+    return [
+      { label: "Requests", value: loading ? "—" : requests.length, icon: "RQ" },
+      { label: "Pending", value: loading ? "—" : pending, icon: "PD" },
+      { label: "Approved", value: loading ? "—" : approved, icon: "OK" },
+      {
+        label: "Annual remaining",
+        value:
+          annualBalance?.remainingDays != null ? annualBalance.remainingDays : "—",
+        hint: annualBalance?.entitledDays != null ? `${annualBalance.year} entitlement` : undefined,
+        icon: "AL",
+      },
+    ];
+  }, [
+    tab,
+    loading,
+    awayItems.length,
+    awayFrom,
+    awayTo,
+    ledgerRows,
+    ledgerYear,
+    requests,
+    annualBalance,
+  ]);
 
-          <div className="toolbar" style={{ marginTop: "1rem", marginBottom: "1rem" }}>
+  return (
+    <HrPageShell
+      title="Leave"
+      subtitle="Requests · ledger · who is away"
+      ariaLabel="HR leave"
+      actions={
+        <>
+          {(canManage || selfStaffProfileId) ? (
+            <Button size="sm" onClick={() => setFormOpen(true)} disabled={loading}>
+              Request leave
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (tab === "requests") void loadRequests();
+              else if (tab === "away") void loadAway();
+              else void loadLedger();
+            }}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </>
+      }
+      summary={<HrStatStrip stats={summaryStats} />}
+    >
+      <HrAccessCallout />
+      <p className="muted hr-aging-note">Leave approval is discretionary.</p>
+
+      <div className="hr-subtabs">
             <button
               type="button"
               className={`tab-btn${tab === "requests" ? " active" : ""}`}
               onClick={() => setTab("requests")}
             >
               Requests
+            </button>
+            <button
+              type="button"
+              className={`tab-btn${tab === "ledger" ? " active" : ""}`}
+              onClick={() => setTab("ledger")}
+            >
+              Ledger
             </button>
             <button
               type="button"
@@ -331,10 +485,10 @@ export function HrLeaveView() {
 
           {error ? <p className="form-error" role="alert">{error}</p> : null}
 
-          {formOpen ? (
-            <form className="panel" style={{ padding: "1rem", marginBottom: "1rem" }} onSubmit={onSubmit}>
-              <h4 style={{ marginBottom: "0.75rem" }}>New leave request</h4>
-              <div className="form-grid" style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
+      {formOpen ? (
+        <form className="hr-form-panel" onSubmit={onSubmit}>
+          <h4>New leave request</h4>
+          <div className="hr-form-grid">
                 {canManage ? (
                   <label>
                     Staff
@@ -377,20 +531,20 @@ export function HrLeaveView() {
                   <textarea className="filter-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </label>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                <Button type="submit" size="sm" disabled={saving || !canSubmit}>
-                  {saving ? "Submitting…" : "Submit"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setFormOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
+          <div className="hr-form-actions">
+            <Button type="submit" size="sm" disabled={saving || !canSubmit}>
+              {saving ? "Submitting…" : "Submit"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setFormOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
-          {tab === "requests" ? (
-            <>
-              <div className="toolbar">
+      {tab === "requests" ? (
+        <>
+          <div className="hr-toolbar">
                 <select
                   className="filter-select"
                   value={statusFilter}
@@ -416,7 +570,7 @@ export function HrLeaveView() {
               </div>
 
               {annualBalance && annualBalance.entitledDays != null ? (
-                <p className="muted finance-aging-note" style={{ marginBottom: "1rem" }}>
+                <p className="muted hr-aging-note">
                   Annual leave {annualBalance.year}: {annualBalance.takenDays} days taken of{" "}
                   {annualBalance.entitledDays} entitled
                   {annualBalance.remainingDays != null
@@ -426,11 +580,12 @@ export function HrLeaveView() {
               ) : null}
 
               {loading ? (
-                <p className="muted">Loading requests…</p>
+                <p className="hr-empty-loading">Loading requests…</p>
               ) : requests.length === 0 ? (
                 <EmptyState title="No leave requests" />
               ) : (
-                <table className="data data-dense">
+                <div className="hr-table-wrap">
+                  <table className="data data-dense hr-data-table">
                   <thead>
                     <tr>
                       <th>Staff</th>
@@ -453,34 +608,129 @@ export function HrLeaveView() {
                         <td>
                           <Badge tone={statusTone(row.status)}>{row.status}</Badge>
                         </td>
-                        <td style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                          {canManage && row.status === "requested" ? (
-                            <>
-                              <Button size="sm" onClick={() => onDecision(row.id, "approved")}>
-                                Approve
+                        <td>
+                          <div className="hr-panel-actions">
+                            {canApproveLeave && row.status === "requested" ? (
+                              <>
+                                <Button size="sm" onClick={() => onDecision(row.id, "approved")}>
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => onDecision(row.id, "rejected")}>
+                                  Reject
+                                </Button>
+                              </>
+                            ) : null}
+                            {(canManage || selfStaffProfileId === row.staffProfileId) &&
+                            row.status !== "cancelled" &&
+                            row.status !== "rejected" ? (
+                              <Button size="sm" variant="outline" onClick={() => onCancel(row.id)}>
+                                Cancel
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => onDecision(row.id, "rejected")}>
-                                Reject
-                              </Button>
-                            </>
-                          ) : null}
-                          {(canManage || selfStaffProfileId === row.staffProfileId) &&
-                          row.status !== "cancelled" &&
-                          row.status !== "rejected" ? (
-                            <Button size="sm" variant="outline" onClick={() => onCancel(row.id)}>
-                              Cancel
-                            </Button>
-                          ) : null}
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : tab === "ledger" ? (
+            <>
+              <div className="hr-toolbar">
+                <select
+                  className="filter-select"
+                  value={ledgerStaffId}
+                  onChange={(e) => setLedgerStaffId(e.target.value)}
+                  aria-label="Ledger staff"
+                >
+                  <option value="">Select staff…</option>
+                  {staffOptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.fullName}</option>
+                  ))}
+                </select>
+                <input
+                  className="filter-input"
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={ledgerYear}
+                  onChange={(e) => setLedgerYear(e.target.value)}
+                  aria-label="Ledger year"
+                  style={{ width: "6rem" }}
+                />
+              </div>
+
+              {loading ? (
+                <p className="hr-empty-loading">Loading ledger…</p>
+              ) : !ledgerStaffId ? (
+                <EmptyState title="Select a staff member" />
+              ) : ledgerRows.length === 0 ? (
+                <EmptyState title="No leave types" />
+              ) : (
+                <div className="hr-table-wrap">
+                  <table className="data data-dense hr-data-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Entitlement</th>
+                      <th>Used</th>
+                      <th>Pending</th>
+                      <th>Remaining</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledgerRows.map((row) => (
+                      <tr key={row.leaveTypeId}>
+                        <td>{row.leaveTypeName}</td>
+                        <td>
+                          <Can
+                            permission="hr.manage"
+                            fallback={<span>{row.entitlementDays}</span>}
+                          >
+                            <input
+                              className="filter-input"
+                              type="number"
+                              min={0}
+                              max={365}
+                              style={{ width: "5rem" }}
+                              value={entitlementEdits[row.leaveTypeId] ?? String(row.entitlementDays)}
+                              onChange={(e) =>
+                                setEntitlementEdits((prev) => ({
+                                  ...prev,
+                                  [row.leaveTypeId]: e.target.value,
+                                }))
+                              }
+                            />
+                          </Can>
+                        </td>
+                        <td>{row.usedDays}</td>
+                        <td>{row.pendingDays}</td>
+                        <td>{row.remainingDays}</td>
+                        <td>
+                          <Can permission="hr.manage">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saving}
+                              onClick={() => void onSaveEntitlement(row.leaveTypeId)}
+                            >
+                              Save
+                            </Button>
+                          </Can>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  </table>
+                </div>
               )}
             </>
           ) : (
             <>
-              <div className="toolbar">
+              <div className="hr-toolbar">
                 <Button size="sm" variant="outline" onClick={() => {
                   const w = weekRange();
                   setAwayFrom(w.from);
@@ -506,11 +756,12 @@ export function HrLeaveView() {
               </div>
 
               {loading ? (
-                <p className="muted">Loading away list…</p>
+                <p className="hr-empty-loading">Loading away list…</p>
               ) : awayItems.length === 0 ? (
                 <EmptyState title="Nobody away in this period" />
               ) : (
-                <table className="data data-dense">
+                <div className="hr-table-wrap">
+                  <table className="data data-dense hr-data-table">
                   <thead>
                     <tr>
                       <th>Staff</th>
@@ -531,12 +782,11 @@ export function HrLeaveView() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               )}
             </>
           )}
-        </div>
-      </div>
-    </section>
+    </HrPageShell>
   );
 }

@@ -6,6 +6,7 @@ import { aiEmbeddings, knowledgeChunks, knowledgeSources } from "@/lib/db/schema
 import { AiProviderError } from "@/lib/ai/errors";
 import { getProvider } from "@/lib/ai/providers";
 import { GEMINI_EMBEDDINGS_MODEL_ID } from "@/lib/ai/types";
+import { deepenAuthorityUrl } from "@/lib/ai/citations/authority-urls";
 import type { AiCitation } from "@/lib/db/ai-types";
 
 export const RAG_DEFAULT_TOP_K = 6;
@@ -62,6 +63,19 @@ function excerpt(text: string, max = 180): string {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
+}
+
+/** Prefer Act/source label plus heading/section path when present. */
+export function preciseCitationLabel(
+  baseLabel: string,
+  headingPath: string | null | undefined,
+): string {
+  const base = baseLabel.trim();
+  const path = headingPath?.trim();
+  if (!path) return base;
+  if (!base) return path;
+  if (base.toLowerCase().includes(path.toLowerCase())) return base;
+  return `${base} — ${path}`;
 }
 
 /**
@@ -182,18 +196,21 @@ export async function retrieveLegalContext(input: {
     .orderBy(desc(similarity))
     .limit(candidateK);
 
-  const candidates = rows.map((row) => ({
-    chunkId: row.chunkId,
-    sourceId: row.sourceId,
-    score: Number(row.score),
-    headingPath: row.headingPath,
-    text: row.text,
-    citationLabel: row.citationLabel,
-    title: row.title,
-    sourceUrl: row.sourceUrl,
-    sourceType: row.sourceType,
-    publisher: row.publisher,
-  }));
+  const candidates = rows.map((row) => {
+    const citationLabel = preciseCitationLabel(row.citationLabel, row.headingPath);
+    return {
+      chunkId: row.chunkId,
+      sourceId: row.sourceId,
+      score: Number(row.score),
+      headingPath: row.headingPath,
+      text: row.text,
+      citationLabel,
+      title: row.title,
+      sourceUrl: deepenAuthorityUrl(row.sourceUrl, citationLabel),
+      sourceType: row.sourceType,
+      publisher: row.publisher,
+    };
+  });
 
   const above = candidates.filter((c) => Number.isFinite(c.score) && c.score >= minSimilarity);
 

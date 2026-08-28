@@ -31,6 +31,10 @@ HR staff records (`/hr/staff`) are not logins. See `HR_Quickstart.md`.
 
 There is no reset email. That is deliberate so account recovery stays under firm control.
 
+## Session timeout
+
+Staff sessions end after **30 minutes of inactivity** (no mouse, keyboard, or touch). Active work does not log you out on a fixed clock from sign-in. After idle sign-out, the login screen shows a calm message so you can sign in again. Same rule as `FAQ.md`.
+
 ## Related
 
 - `Admin_Guide.md`

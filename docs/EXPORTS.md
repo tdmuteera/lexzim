@@ -100,6 +100,10 @@ Keep **formatting in the document builder** (currency, dates, labels). Renderers
 
 Legacy `GET /api/finance/debtors?format=csv` remains for backward compatibility.
 
+## Invoice letterhead (fee notes)
+
+Kinds `invoice` PDF/DOCX/XLSX use `lib/export/invoice-letterhead-model.ts` (Trebuchet MS). Body ~11.5pt. **Payment note + banking details are 9pt.** Line work dates are optional (blank when unset). Firm payment notes strip the retired contested / pro forma sentence (default keeps cash + Zimbabwe Nostro bank wording).
+
 ## Related
 
 - `docs/PHASE7_ADR.md` §8 (export rule)

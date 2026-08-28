@@ -6,7 +6,8 @@ Practical day-to-day use for associates and partners working files in LexZim.
 
 1. Open **Dashboard** for overdue procedures, hearings, and reminders (scoped to your matters unless you can view firm-wide).
 2. Open **Reminders** for a focused list of what is due soon.
-3. Open **Calendar** for hearings and appointments.
+3. Open **Calendar** for hearings and appointments (My / Firm / Shared tabs).
+4. Check **Tasks** / Workflow for items assigned to you and pending approvals.
 
 ## Clients
 
@@ -38,9 +39,15 @@ Statuses typically move from prospective or open through on hold to closed or ar
 
 ## Calendar and deadlines
 
-- Diary hearings and appointments on **Calendar**.
+- Diary hearings and appointments on **Calendar**. New events default to **Private**. Share with **Firm** or **Specific people** when others should see them.
+- Tabs: **My**, **Firm**, **Shared with me**. Managing Partner does not auto-see others’ private events.
+- Title and location are required; other fields (including matter/client) are optional. Day click opens create for that date.
 - Track filing deadlines and matter procedures so the Dashboard and Reminders stay useful.
 - Browser notifications (if enabled by the firm) only work while LexZim is open in the browser. There is no separate mobile push in the MVP.
+
+## Tasks and workflow
+
+Open **Tasks** (Workflow) to assign work to colleagues, set due dates, and complete with optional feedback. Approvals (invoices, leave, advances) sit in the shared approvals inbox when you have rights.
 
 ## Time and costs on a matter
 

@@ -1,6 +1,8 @@
-# Outbound email + user security (P7-11)
+# Outbound email + user security (P7-11 / P10-14)
 
 LexZim sends transactional documents (quotations, invoices, receipts) and generic client notifications by email, and gates password recovery behind admin approval.
+
+**Manual send only.** Staff review To, Subject, body note, and attachment, then click Send. There is no silent cron or auto-email to clients (birthdays/newsletters remain export-only until an explicit send flow is approved).
 
 ## Email transport: firm BYO vs server env
 
@@ -16,6 +18,12 @@ We use **nodemailer** with SMTP. There are two ways to configure a transport, re
 **EMAIL_MOCK=1** (or `SMTP_MOCK=1`) uses nodemailer `jsonTransport` so CI and `npm run smoke:phase7` can exercise send paths without a live SMTP server.
 
 **Why BYO-first?** Each firm sends from its own domain/deliverability reputation and keeps control of credentials. The env relay exists so managed/pilot deployments can offer email without every firm configuring SMTP first. (Resend or another API provider could be swapped in behind `lib/email/mailer.ts` without changing callers.)
+
+### Railway SMTP (pilot)
+
+Prefer firm **Settings → Email** BYO SMTP for production pilots. Optional shared relay: set `SMTP_*` on Railway **Variables** (never commit passwords). Use `EMAIL_MOCK=1` for CI only.
+
+For the **T Pfigu Attorneys** pilot, set that firm’s From/Reply-To in **that firm’s Settings** after credentials arrive (commonly their public info mailbox). LexZim never hardcodes a pilot address as a global default for other tenants.
 
 ### Secret handling
 
@@ -33,7 +41,7 @@ We use **nodemailer** with SMTP. There are two ways to configure a transport, re
 | Document recipient resolver | `lib/email/document-send.ts` |
 | Settings API (GET/PUT) | `app/api/settings/email/route.ts` |
 | Test send | `app/api/settings/email/test/route.ts` |
-| Send document (PDF attach) | `app/api/email/send/route.ts` |
+| Send document (PDF attach) + preview GET | `app/api/email/send/route.ts` |
 | Generic client notification | `app/api/email/compose/route.ts` |
 | Settings panel | `components/settings/EmailSettingsPanel.tsx` |
 | Send button (docs) | `components/email/SendDocumentButton.tsx` |
@@ -41,10 +49,10 @@ We use **nodemailer** with SMTP. There are two ways to configure a transport, re
 
 ## Send actions
 
-- **Quotation / invoice / receipt** detail pages expose **Send email** (permission `billing.view`). LexZim renders the document to PDF via the export engine and attaches it. Recipient defaults to the client email on file.
-- **Client profile** exposes **Email client** (permission `users.manage` or `billing.manage`) for a free-text notification.
+- **Quotation / invoice / receipt** detail pages expose **Send email** (permission `billing.view`). Modal: editable To (prefilled from client email when known), editable Subject (default `{DocumentLabel} — {FirmName}`), optional body note, attachment filename preview, explicit **Send**. LexZim renders the document to PDF and attaches it.
+- **Client profile** exposes **Email client** (permission `users.manage` or `billing.manage`) for a free-text notification (editable subject).
 
-Every send writes an audit row: `email.sent` with `{ recipient, templateType, entityId, ... }`.
+Every successful send writes `email.sent` with `{ recipient, subject, templateType, documentNumber, status: "sent", transport, messageId }`. Failed SMTP attempts after send write `email.failed` with a safe error message (no secrets). API errors always include `requestId` via the Phase 8 envelope.
 
 ## User security
 

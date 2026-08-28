@@ -9,6 +9,7 @@ LexZim uses email and password sign-in (Supabase Auth).
 - If you know your password but cannot sign in, confirm you are on the correct firm URL.
 - If you forgot your password, click **Forgot / request password reset** on the login screen. A **Managing Partner** approves the request in **Settings → Security** and issues a temporary password (shown once). There is no automatic reset email.
 - Passwords must be at least 10 characters. Change a temporary password when the app prompts you.
+- After **30 minutes without activity**, LexZim signs you out for security. Sign in again when prompted.
 
 Never send passwords through public chat channels. Full policy: `Security_Password_Policy.md`.
 

@@ -1,44 +1,24 @@
 import "server-only";
 
 import type { AiCitation } from "@/lib/db/ai-types";
+import { resolveProviderApiKey } from "@/lib/ai/secrets";
+import {
+  runOpenAiWebSearch,
+  type OpenAiWebSearchHit,
+} from "@/lib/ai/web/openai-web-search";
+import {
+  findTrustedSiteForHost,
+  TRUSTED_SITES,
+  type TrustedSite,
+} from "@/lib/ai/web/trusted-sites";
 
-export type TrustedSite = {
-  id: string;
-  host: string;
-  label: string;
-  searchUrl: (query: string) => string;
-};
+export type { TrustedSite };
+export { TRUSTED_SITES };
 
-/** Allowlisted Zimbabwe research sites only (P2-13). */
-export const TRUSTED_SITES: TrustedSite[] = [
-  {
-    id: "zimlii",
-    host: "zimlii.org",
-    label: "ZimLII",
-    searchUrl: (q) => `https://zimlii.org/search?q=${encodeURIComponent(q)}`,
-  },
-  {
-    id: "veritas",
-    host: "veritaszim.net",
-    label: "Veritas Zimbabwe",
-    searchUrl: (q) =>
-      `https://www.veritaszim.net/search/node/${encodeURIComponent(q)}`,
-  },
-  {
-    id: "parliament",
-    host: "parlzim.gov.zw",
-    label: "Parliament of Zimbabwe",
-    searchUrl: (q) =>
-      `https://www.parlzim.gov.zw/?s=${encodeURIComponent(q)}`,
-  },
-];
-
-export type WebLookupHit = {
-  siteId: string;
-  siteLabel: string;
-  title: string;
-  url: string;
-  excerpt: string;
+export type WebLookupHit = OpenAiWebSearchHit & {
+  siteId: string | null;
+  siteLabel: string | null;
+  sourceKind: "primary" | "secondary";
   unverified: true;
 };
 
@@ -47,84 +27,41 @@ export type WebLookupResult = {
   attempted: boolean;
   hits: WebLookupHit[];
   citations: AiCitation[];
+  /** The web-search model's own synthesized answer — extra grounding context only. */
+  answerText: string;
   errorCode?: string;
   message?: string;
   latencyMs: number;
 };
 
-const FETCH_TIMEOUT_MS = 4500;
-const MAX_HITS = 3;
+const PREFERRED_DOMAIN_HINT = TRUSTED_SITES.map((s) => s.host).join(", ");
 
-function hostAllowed(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^www\./, "");
-  return TRUSTED_SITES.some(
-    (s) => h === s.host || h.endsWith(`.${s.host}`),
-  );
-}
-
-function stripTags(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractLinks(html: string, baseHost: string): Array<{ href: string; title: string }> {
-  const out: Array<{ href: string; title: string }> = [];
-  const re = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const href = m[1];
-    const title = stripTags(m[2]);
-    if (!title || title.length < 4) continue;
-    try {
-      const url = new URL(href, `https://${baseHost}`);
-      if (!hostAllowed(url.hostname)) continue;
-      if (url.protocol !== "https:" && url.protocol !== "http:") continue;
-      out.push({ href: url.toString(), title: title.slice(0, 160) });
-    } catch {
-      /* skip */
-    }
-    if (out.length >= 6) break;
-  }
-  return out;
-}
-
-async function fetchText(url: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+function classifyHit(url: string): {
+  siteId: string | null;
+  siteLabel: string | null;
+  sourceKind: "primary" | "secondary";
+} {
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "LexZimLegalResearchBot/1.0 (+practice aid; contact firm admin)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      redirect: "follow",
-    });
-    if (!res.ok) return null;
-    const ctype = res.headers.get("content-type") ?? "";
-    if (!ctype.includes("text") && !ctype.includes("html")) return null;
-    return await res.text();
+    const site = findTrustedSiteForHost(new URL(url).hostname);
+    if (site) return { siteId: site.id, siteLabel: site.label, sourceKind: site.kind };
   } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+    /* not a parseable URL — treat as unranked */
   }
+  return { siteId: null, siteLabel: null, sourceKind: "secondary" };
 }
 
 /**
- * Optional allowlisted web lookup. Failures return empty hits (local RAG only).
- * All hits are UNVERIFIED and must never silently override local grounding.
+ * Independent live-web research step (P-AI-reset).
+ *
+ * Runs whenever the firm has an OpenAI key configured, regardless of which
+ * provider (OpenAI/Claude/Gemini) ultimately writes the chat answer — this is
+ * the "full web access" mechanism so brand-new gazetted law can still be
+ * found. Reliable Zimbabwe sources (`trusted-sites.ts`) are only a ranking
+ * hint, never a hard restriction: any verifiable page the model actually
+ * retrieves may be cited. Every hit carries a real URL; nothing is invented.
  */
 export async function lookupTrustedWeb(input: {
+  firmId: string;
   query: string;
   enabled: boolean;
 }): Promise<WebLookupResult> {
@@ -137,8 +74,9 @@ export async function lookupTrustedWeb(input: {
       attempted: false,
       hits: [],
       citations: [],
+      answerText: "",
       latencyMs: Date.now() - started,
-      message: "Web lookup is disabled for this firm (default).",
+      message: "Web lookup is disabled for this firm.",
     };
   }
 
@@ -148,52 +86,61 @@ export async function lookupTrustedWeb(input: {
       attempted: false,
       hits: [],
       citations: [],
+      answerText: "",
       latencyMs: Date.now() - started,
       errorCode: "empty_query",
     };
   }
 
-  const hits: WebLookupHit[] = [];
-  let networkFailures = 0;
-
-  for (const site of TRUSTED_SITES) {
-    if (hits.length >= MAX_HITS) break;
-    const searchUrl = site.searchUrl(query.slice(0, 120));
-    const html = await fetchText(searchUrl);
-    if (!html) {
-      networkFailures += 1;
-      continue;
-    }
-
-    const links = extractLinks(html, site.host);
-    for (const link of links) {
-      if (hits.length >= MAX_HITS) break;
-      if (hits.some((h) => h.url === link.href)) continue;
-
-      let excerpt = "";
-      const page = await fetchText(link.href);
-      if (page) {
-        excerpt = stripTags(page).slice(0, 280);
-      }
-      if (!excerpt) excerpt = `Search result from ${site.label} (open URL to verify).`;
-
-      hits.push({
-        siteId: site.id,
-        siteLabel: site.label,
-        title: link.title,
-        url: link.href,
-        excerpt,
-        unverified: true,
-      });
-    }
+  const resolved = await resolveProviderApiKey(input.firmId, "openai");
+  if (!resolved.key) {
+    return {
+      enabled: true,
+      attempted: false,
+      hits: [],
+      citations: [],
+      answerText: "",
+      latencyMs: Date.now() - started,
+      errorCode: "missing_key",
+      message:
+        "No OpenAI key configured for this firm — live web search is unavailable this turn.",
+    };
   }
 
+  const result = await runOpenAiWebSearch({
+    apiKey: resolved.key,
+    query,
+    preferredDomainHint: PREFERRED_DOMAIN_HINT,
+  });
+
+  if (!result.ok) {
+    return {
+      enabled: true,
+      attempted: result.attempted,
+      hits: [],
+      citations: [],
+      answerText: "",
+      latencyMs: Date.now() - started,
+      errorCode: result.errorCode,
+      message:
+        "Live web search did not return results this turn (network or provider issue). Using local knowledge only.",
+    };
+  }
+
+  const hits: WebLookupHit[] = result.hits.map((h) => ({
+    ...h,
+    ...classifyHit(h.url),
+    unverified: true,
+  }));
+
   const citations: AiCitation[] = hits.map((h) => ({
-    citationLabel: `[UNVERIFIED] ${h.siteLabel}: ${h.title}`,
+    citationLabel: h.siteLabel ? `${h.siteLabel}: ${h.title}` : h.title,
     title: h.title,
-    excerpt: h.excerpt,
+    excerpt: h.snippet,
     sourceUrl: h.url,
     verified: false,
+    sourceKind: h.sourceKind,
+    verificationStatus: "web_consulted",
   }));
 
   return {
@@ -201,26 +148,25 @@ export async function lookupTrustedWeb(input: {
     attempted: true,
     hits,
     citations,
+    answerText: result.answerText,
     latencyMs: Date.now() - started,
-    errorCode:
-      hits.length === 0 && networkFailures === TRUSTED_SITES.length
-        ? "network_error"
-        : hits.length === 0
-          ? "no_web_hits"
-          : undefined,
     message:
       hits.length === 0
-        ? "No allowlisted web results (or sites unreachable). Using local knowledge only."
-        : `Found ${hits.length} UNVERIFIED allowlisted web snippet(s).`,
+        ? "Live web search ran but found no verifiable results for this question."
+        : `Found ${hits.length} live web result(s).`,
   };
 }
 
+/** Context block fed to the chat model — never shown to the user verbatim. */
 export function formatWebLookupBlock(hits: WebLookupHit[]): string {
   if (hits.length === 0) return "";
-  return hits
+  const header =
+    "Live web search results (UNVERIFIED — real URLs from this turn's search; cite them exactly, never invent or alter a link).";
+  const body = hits
     .map(
       (h, i) =>
-        `[UNVERIFIED web ${i + 1}] ${h.siteLabel}\nTitle: ${h.title}\nURL: ${h.url}\n${h.excerpt}`,
+        `[web ${i + 1}] ${h.siteLabel ?? "web"}\nTitle: ${h.title}\nURL: ${h.url}\n${h.snippet}`,
     )
     .join("\n\n---\n\n");
+  return `${header}\n\n${body}`;
 }

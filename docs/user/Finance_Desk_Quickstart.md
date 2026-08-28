@@ -2,7 +2,7 @@
 
 LexZim **Finance** is the practice money desk: fee invoicing, debtors, client trust, reconciliations, firm expenses, business cashbook, quotations, petty cash, creditors, and a **double-entry general ledger**. **Trust and fees stay separate.**
 
-Payroll is **not** in Phase 6 or Phase 7. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
+Payroll full statutory (PAYE/NSSA) is **not** in Phase 6 or Phase 7. Phase 10 adds payroll **MVP** and advances under HR. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
 
 Phase 6 deferred a full GL. **Phase 7 supersedes that**: chart of accounts, journals, trial balance, P&L, and balance sheet are live. See `Finance_Phase7_Guide.md` and `docs/PHASE7_ADR.md`.
 
@@ -37,8 +37,9 @@ See also `Billing_Trust_Quickstart.md` and `Finance_Trust_Quickstart.md`.
 
 1. Capture billable time and costs on the matter.
 2. **Finance → Invoicing → New from unbilled** to create a draft fee note.
-3. Mark **sent** when issued; record **fee payments** when the client pays the firm.
-4. **Finance → Debtors** for weekly collections: ageing buckets use **due date** (current, 1 to 30, 31 to 60, 61 to 90, 90+ days past due).
+3. If approval is required, submit → approve, then mark **sent**; line work dates are optional.
+4. Record **fee payments** when the client pays the firm.
+5. **Finance → Debtors** for weekly collections: ageing buckets use **due date** (current, 1 to 30, 31 to 60, 61 to 90, 90+ days past due). Log debtor communication notes on the timeline.
 
 ## Trust, vault, and client ledgers
 

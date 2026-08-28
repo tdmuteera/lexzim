@@ -164,7 +164,11 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
         return;
       }
       const id = body.data?.client?.id ?? clientId;
-      router.push(id ? `/clients/${id}` : "/clients");
+      if (mode === "create" && id) {
+        router.push(`/clients/${id}?conflict=1`);
+      } else {
+        router.push(id ? `/clients/${id}` : "/clients");
+      }
       router.refresh();
     } catch {
       setError("Could not save client. Check your connection.");

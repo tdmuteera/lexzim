@@ -8,7 +8,7 @@ import { aiSettings } from "@/lib/db/schema";
 export type AiRoutingMode = "auto" | "manual";
 export type AiKeyMode = "direct" | "proxy";
 
-const DEFAULT_MAX_OUTPUT_TOKENS = 2200;
+const DEFAULT_MAX_OUTPUT_TOKENS = 3600;
 
 export function normalizeRoutingMode(raw: string | null | undefined): AiRoutingMode {
   return raw === "manual" ? "manual" : "auto";
@@ -48,7 +48,7 @@ export async function upsertAiSettings(
         providerDefault: input.providerDefault ?? "gemini",
         modelDefault: input.modelDefault ?? "gemini-3.6-flash",
         embeddingsModel: input.embeddingsModel ?? "gemini-embedding-001",
-        webLookupEnabled: input.webLookupEnabled ?? false,
+        webLookupEnabled: input.webLookupEnabled ?? true,
         routingMode: input.routingMode ?? "auto",
         monthlySoftBudget:
           input.monthlySoftBudget === undefined ? 500 : input.monthlySoftBudget,

@@ -11,6 +11,7 @@ import {
   listAwayInPeriod,
   listLeaveRequests,
 } from "@/lib/repos/hr-leave";
+import { notifyLeaveApprovers } from "@/lib/repos/hr-leave-ledger";
 import { hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -131,6 +132,13 @@ export async function POST(request: Request) {
     });
 
     const full = await getLeaveRequest(firmId, leave.id);
+    await notifyLeaveApprovers({
+      firmId,
+      requestId: leave.id,
+      staffName: full?.staffName ?? "staff",
+      excludeUserId: session.id,
+    });
+
     return jsonOk(
       { request: full ? serializeRequest(full) : null },
       { status: 201 },

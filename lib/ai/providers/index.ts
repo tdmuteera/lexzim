@@ -7,6 +7,7 @@ import {
   createProxyProvider,
   resolveProxyBaseUrl,
 } from "@/lib/ai/providers/proxy";
+import { withChatProviderFallback } from "@/lib/ai/providers/with-chat-fallback";
 import { resolveAiRoute } from "@/lib/ai/routing";
 import { getProxyClientToken, resolveProviderApiKey } from "@/lib/ai/secrets";
 import { MissingKeyError } from "@/lib/ai/errors";
@@ -31,6 +32,7 @@ function buildDirectProvider(opts: {
       apiKey: opts.apiKey,
       chatModel: opts.chatModel,
       embeddingsModel: opts.embeddingsModel,
+      embedFallback: opts.embedFallback,
     });
   }
   if (opts.id === "claude") {
@@ -80,23 +82,45 @@ export async function getProvider(
   const resolved = await resolveProviderApiKey(firmId, route.providerId);
 
   let embedFallback: LlmProvider | null = null;
-  if (route.providerId === "claude") {
-    const geminiResolved = await resolveProviderApiKey(firmId, "gemini");
-    embedFallback = geminiResolved.key
-      ? createGeminiProvider({
-          apiKey: geminiResolved.key,
-          embeddingsModel: DEFAULT_MODELS.gemini.embeddings,
-        })
-      : null;
+  if (route.providerId === "claude" || route.providerId === "openai") {
+    const embedModel =
+      route.embeddingsModel || DEFAULT_MODELS[route.providerId].embeddings;
+    if (route.providerId === "claude" || /gemini|embedding-001/i.test(embedModel)) {
+      const geminiResolved = await resolveProviderApiKey(firmId, "gemini");
+      embedFallback = geminiResolved.key
+        ? createGeminiProvider({
+            apiKey: geminiResolved.key,
+            embeddingsModel: DEFAULT_MODELS.gemini.embeddings,
+          })
+        : null;
+    }
   }
 
-  return buildDirectProvider({
+  const primary = buildDirectProvider({
     id: route.providerId,
     apiKey: resolved.key,
     chatModel: route.chatModel,
-    embeddingsModel: route.embeddingsModel || DEFAULT_MODELS[route.providerId].embeddings,
+    embeddingsModel:
+      route.embeddingsModel || DEFAULT_MODELS[route.providerId].embeddings,
     embedFallback,
   });
+
+  // Preferred OpenAI/Claude chat fails (blocked model / outage) → try Gemini when keyed.
+  const chatFallbacks: LlmProvider[] = [];
+  if (route.providerId !== "gemini") {
+    const geminiResolved = await resolveProviderApiKey(firmId, "gemini");
+    if (geminiResolved.key) {
+      chatFallbacks.push(
+        createGeminiProvider({
+          apiKey: geminiResolved.key,
+          chatModel: DEFAULT_MODELS.gemini.chat,
+          embeddingsModel: DEFAULT_MODELS.gemini.embeddings,
+        }),
+      );
+    }
+  }
+
+  return withChatProviderFallback(primary, chatFallbacks);
 }
 
 export {

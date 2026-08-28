@@ -62,6 +62,15 @@ export function hrContractStoragePath(input: {
   return `${firmStoragePrefix(input.firmId)}/hr/contracts/${input.contractId}/${sanitizeFileName(input.fileName)}`;
 }
 
+/** P10-13: firm event / BD / training reports (not AI knowledge_sources). */
+export function knowledgeReportStoragePath(input: {
+  firmId: string;
+  reportId: string;
+  fileName: string;
+}): string {
+  return `${firmStoragePrefix(input.firmId)}/knowledge-reports/${input.reportId}/${sanitizeFileName(input.fileName)}`;
+}
+
 export function assertPathBelongsToFirm(storagePath: string, firmId: string): void {
   const prefix = `${firmStoragePrefix(firmId)}/`;
   if (!storagePath.startsWith(prefix)) {

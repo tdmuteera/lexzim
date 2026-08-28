@@ -42,7 +42,7 @@ Grounded answers and embeddings require `GEMINI_API_KEY` in `.env.local` (or Rai
 | 8 | Matter Assist | `/ai` Matter Assist: summarise / pending procedures | |
 | 9 | Unauthorized matter rejected | Isolation user matter-ask on pilot matter → 403 | |
 | 10 | Draft merge ± AI | Matter Documents → Build preview → optional polish → Save; merge-only still works | |
-| 11 | Web lookup default off | Settings → AI unchecked; `GET /api/ai/status` → `webLookupEnabled=false` | |
+| 11 | Web lookup default on | Settings → AI checked by default; `GET /api/ai/status` → `webLookupEnabled=true` | |
 | 12 | Web UNVERIFIED (optional) | Enable toggle: web citations show `[UNVERIFIED]`; local RAG still primary | |
 | 13 | AI down UX | Missing key: Legal Research Ask disabled; Matter Assist + core practice still work | |
 | 14 | Audit events | Sensitive AI actions appear in audit (`ai.legal_ask`, `ai.matter_ask`, `ai.draft_*`, KB, firm memory) | |

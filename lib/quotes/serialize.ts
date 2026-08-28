@@ -39,6 +39,7 @@ export function serializeQuotationDetail(row: {
   lines: LineRow[];
   clientDisplayLabel: string;
   clientNumber: string;
+  clientEmail?: string | null;
   matterTitle: string | null;
   matterNumber: string | null;
   subtotalCents: number;
@@ -48,6 +49,7 @@ export function serializeQuotationDetail(row: {
   return {
     ...serializeQuotationListItem(row),
     clientNumber: row.clientNumber,
+    clientEmail: row.clientEmail?.trim() || null,
     discountCents: row.quote.discountCents,
     discountPct: row.quote.discountPct,
     notes: row.quote.notes,

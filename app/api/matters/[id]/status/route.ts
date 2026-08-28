@@ -3,6 +3,7 @@ import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { serializeMatter } from "@/lib/matters/serialize";
 import { parseMatterStatus, statusLabel } from "@/lib/matters/validation";
+import { assertClearConflictForOpenMatter } from "@/lib/repos/conflict-checks";
 import { createMatterEvent } from "@/lib/repos/matter-workflow";
 import {
   getMatterById,
@@ -41,6 +42,8 @@ export async function POST(request: Request, context: RouteContext) {
         }),
       });
     }
+
+    await assertClearConflictForOpenMatter(firmId, existing.clientId, status);
 
     const row = await updateMatterStatus(firmId, id, status);
     if (!row) {

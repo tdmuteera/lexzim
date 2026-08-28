@@ -41,6 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
         amountCents: payment.amountCents,
         currency: payment.currency,
         receiptNumber: payment.receiptNumber,
+        method: payment.method,
         note: "Fee receipt with GL posting Dr cash Cr AR.",
       },
       ipOrUserAgent: clientInfo(request),

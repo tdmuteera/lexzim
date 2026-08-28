@@ -276,7 +276,10 @@ export async function authLogin(
   }
 }
 
-export async function authLogout(opts?: { ipOrUserAgent?: string | null }): Promise<void> {
+export async function authLogout(opts?: {
+  ipOrUserAgent?: string | null;
+  reason?: string | null;
+}): Promise<void> {
   // Prefer audit metadata when DB is healthy, but never block Sign out on pooler timeouts.
   const current = await Promise.race([
     authCurrentUser().catch(() => null),
@@ -288,10 +291,13 @@ export async function authLogout(opts?: { ipOrUserAgent?: string | null }): Prom
 
   if (current) {
     await writeAuditLog({
-      action: "auth.logout",
+      action: opts?.reason === "idle" ? "auth.idle_logout" : "auth.logout",
       firmId: current.firm.id,
       userId: current.id,
-      metadata: { email: current.email },
+      metadata: {
+        email: current.email,
+        ...(opts?.reason ? { reason: opts.reason } : {}),
+      },
       ipOrUserAgent: opts?.ipOrUserAgent ?? null,
     }).catch(() => undefined);
   }

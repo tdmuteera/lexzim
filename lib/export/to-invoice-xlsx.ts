@@ -6,6 +6,7 @@ import {
   INVOICE_BODY_PT,
   INVOICE_FIRM_PT,
   INVOICE_FONT_FAMILY,
+  INVOICE_FOOTER_PT,
   INVOICE_TITLE_PT,
   buildInvoiceLetterheadModel,
 } from "@/lib/export/invoice-letterhead-model";
@@ -186,19 +187,19 @@ export async function exportInvoiceLetterheadXlsx(
 
   const note = sheet.getCell(r, 1);
   note.value = model.paymentNote;
-  applyFont(note, { italic: true, size: INVOICE_BODY_PT - 1 });
+  applyFont(note, { italic: true, size: INVOICE_FOOTER_PT });
   sheet.mergeCells(r, 1, r, 4);
   r += 2;
 
   if (model.bankingRows.length > 0) {
     const head = sheet.getCell(r, 1);
     head.value = "Banking Details:";
-    applyFont(head, { bold: true, size: INVOICE_BODY_PT });
+    applyFont(head, { bold: true, size: INVOICE_FOOTER_PT });
     r += 1;
     for (const [label, value] of model.bankingRows) {
       const cell = sheet.getCell(r, 1);
       cell.value = `${label}: ${value}`;
-      applyFont(cell, { bold: true, size: INVOICE_BODY_PT });
+      applyFont(cell, { bold: true, size: INVOICE_FOOTER_PT });
       r += 1;
     }
     r += 1;

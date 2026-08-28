@@ -3,6 +3,10 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import { and, eq } from "drizzle-orm";
 import { hasAnyBanking, type InvoiceBankingDetails } from "@/lib/billing/invoice-banking";
+import {
+  feePaymentChannelLabel,
+  isBankFeePaymentMethod,
+} from "@/lib/billing/fee-payment-methods";
 import { clientDisplayName } from "@/lib/clients/display";
 import { getDb } from "@/lib/db";
 import { clients, feePayments, invoices, matters } from "@/lib/db/schema";
@@ -89,8 +93,9 @@ export async function exportReceiptLetterheadPdf(
         ].filter((l): l is string => Boolean(l?.trim()));
 
   const receiptNo = row.payment.receiptNumber ?? row.payment.id.slice(0, 8);
-  const method = row.payment.method?.trim() || "Bank deposit";
-  const bankConfirmed = /bank|eft|deposit|rtgs|nostro|confirmed/i.test(method);
+  const method = row.payment.method?.trim() || "Cash";
+  const channel = feePaymentChannelLabel(method);
+  const bankConfirmed = isBankFeePaymentMethod(method);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: MARGIN });
@@ -162,16 +167,19 @@ export async function exportReceiptLetterheadPdf(
         [row.matterNumber, row.matterTitle].filter(Boolean).join(" · ") || "—",
       ],
       ["Amount received", moneyUs(row.payment.amountCents, row.payment.currency)],
+      ["Channel", channel],
       ["Payment method", method],
-      [
-        "Bank confirmation",
-        bankConfirmed ? "Confirmed (funds received in firm bank account)" : "Recorded",
-      ],
       ["Invoice total", moneyUs(row.invoice.totalCents, row.invoice.currency)],
       ["Balance remaining", moneyUs(balanceCents, row.invoice.currency)],
     ];
+    if (bankConfirmed) {
+      fields.splice(5, 0, [
+        "Bank confirmation",
+        "Confirmed (funds received in firm bank account)",
+      ]);
+    }
     if (row.payment.reference?.trim()) {
-      fields.splice(4, 0, ["Reference", row.payment.reference.trim()]);
+      fields.splice(5, 0, ["Reference", row.payment.reference.trim()]);
     }
 
     for (const [label, value] of fields) {
@@ -188,9 +196,11 @@ export async function exportReceiptLetterheadPdf(
 
     y += 10;
     doc.font("Helvetica-Oblique").fontSize(9).text(
-      bankConfirmed
-        ? "This receipt confirms that the payment above has been received into the firm bank account and is included in fee revenue."
-        : "This receipt confirms that the payment above has been recorded against the invoice and is included in fee revenue.",
+      channel === "Cash"
+        ? "This receipt confirms that cash was received at the office against the invoice and is included in fee revenue."
+        : channel === "Bank"
+          ? "This receipt confirms that the payment above has been received into the firm bank account and is included in fee revenue."
+          : "This receipt confirms that the payment above has been recorded against the invoice and is included in fee revenue.",
       MARGIN,
       y,
       { width: pageWidth, align: "justify" },

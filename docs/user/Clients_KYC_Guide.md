@@ -34,6 +34,15 @@ Overview, KYC, Matters, Billing, Trust. Use **Edit KYC** (`clients.kyc.manage`) 
 
 Managing Partners and accounts can **Email client** from the profile once SMTP is set (`Email_Setup.md`).
 
+## Conflict check
+
+Before (or when) opening a new client relationship, run the conflict check and record the result: **Clear**, **Potential**, or **Blocked**. A **Blocked** result gates opening a matter until resolved per firm policy.
+
+## Soft archive vs purge
+
+- **Archive** a client when the relationship ends: soft archive keeps finance history.
+- Firm users cannot hard-wipe live money history. Full purge of test/dummy clients is **platform ops only**.
+
 ## Permissions
 
 | Permission | Use |
@@ -41,7 +50,7 @@ Managing Partners and accounts can **Email client** from the profile once SMTP i
 | `clients.view` | List and profile |
 | `clients.create` | New client (compulsory fields enforced) |
 | `clients.edit` / `clients.kyc.manage` | KYC wizard |
-| `clients.delete` | Archive / restore |
+| `clients.delete` | Soft archive / restore (not platform purge) |
 
 ## Related
 

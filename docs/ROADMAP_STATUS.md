@@ -1,10 +1,11 @@
 # LexZim web phase roadmap status
 
-Status of the hosted LexZim SaaS roadmap (Phases 0 to 9). Desktop / Tauri / SQLite paths are cancelled and out of scope.
+Status of the hosted LexZim SaaS roadmap (Phases 0 to 10). Desktop / Tauri / SQLite paths are cancelled and out of scope.
 
 **App version:** see `package.json` / Settings → About  
-**Last roadmap closeout:** Phase 9 (P9-06)  
-**Next product track:** **Phase 6B payroll** (deferred) unless partners define otherwise.
+**Last roadmap closeout:** Phase 10 (P10-16)  
+**Current product track:** **Phase 10 COMPLETE / Phase 11 candidates**  
+**Note:** Phase 6B full statutory payroll remains deferred; Phase 10 shipped payroll **MVP** + salary advances only (see `docs/PHASE10_ADR.md`, `docs/PHASE11_CANDIDATES.md`).
 
 ## Phase summary
 
@@ -17,10 +18,11 @@ Status of the hosted LexZim SaaS roadmap (Phases 0 to 9). Desktop / Tauri / SQLi
 | 4 | Sell & Ship (licences, seats, pilot pack, Railway harden) | COMPLETE |
 | 5 | Portal & Scale (limited client portal, privacy, ops) | COMPLETE |
 | 6 | Finance desk & HR (trust depth, firm books, HR v1; payroll deferred) | **COMPLETE** |
-| 6B | Payroll (PAYE/NSSA, payslips) | **DEFERRED** |
+| 6B | Payroll (PAYE/NSSA, payslips) | **DEFERRED** (full statutory; MVP advances in Phase 10) |
 | 7 | Practice Suite: full GL, KYC, quotes, CRM, exports, email, security | **COMPLETE** |
 | 8 | Diagnostics, observability, controlled self-healing | **COMPLETE** |
 | 9 | Practice polish, login, calendar modal, motion, per-person access | **COMPLETE** |
+| 10 | LPMS spine: mobile, idle logout, purge rules, HR/payroll MVP, invoice approval, calendar privacy, tasks, AI grounding | **COMPLETE** |
 
 ## Phase 7 deliverables (shipped)
 
@@ -116,12 +118,48 @@ Source: `docs/PHASE9_ADR.md`. Practice polish and per-person access. No named cu
 
 Trial seats: **10** (was 3). Hosting files (`railway.toml`, `Dockerfile`) unchanged. No new env vars.
 
+## Phase 10 (complete)
+
+Source: `docs/PHASE10_ADR.md`. Partner-locked LPMS spine. Docs and smoke: `docs/PHASE10_SMOKE_TEST.md`. Candidates only: `docs/PHASE11_CANDIDATES.md`.
+
+| Prompt | Task | Status |
+|--------|------|--------|
+| P10-01 | ADR + gap map vs live LexZim | **DONE** |
+| P10-02 | Data lifecycle: archive, retain revenue, platform purge | **DONE** |
+| P10-03 | Idle logout (30 min inactivity) | **DONE** |
+| P10-04 | Collapsible sidebar + mobile bottom nav | **DONE** |
+| P10-05 | Delegation grants | **DONE** |
+| P10-06 | Invoice polish: dates, footer, 9pt banking | **DONE** |
+| P10-07 | Invoice approval state machine | **DONE** |
+| P10-08 | Payments, receipts, revenue consistency | **DONE** |
+| P10-09 | Employee spine, next of kin, lawyer eligibility | **DONE** |
+| P10-10 | Leave ledger + salary advances + payroll MVP | **DONE** |
+| P10-11 | Tasks, approvals inbox, notifications | **DONE** |
+| P10-12 | Calendar privacy, day-click create, colours | **DONE** |
+| P10-13 | Debtor timeline + conflict check + knowledge reports | **DONE** |
+| P10-14 | Firm email (T Pfigu From) + manual send UX | **DONE** (manual send only; no auto client email; pilot From via settings) |
+| P10-15 | AI grounding, citations, document house style | **DONE** |
+| P10-16 | Docs, smoke, closeout | **DONE** |
+
+**Pilot email:** T Pfigu Attorneys From `info@tpfiguattorneys.com` via firm settings only (not a global default).
+
+### Honest deferred (still out of Phase 10)
+
+- Phase 6B full statutory payroll (PAYE/NSSA filings and payslips beyond MVP deductions)
+- Silent / scheduled client email campaigns (birthdays, newsletters). Send stays manual unless a partner later insists on cron
+- Full AI research database / zero-hallucination promise (retrieve → generate → verify → cite only)
+- Firm users cannot hard-delete live financial history. Soft archive retains revenue; full wipe is platform purge only (`requireOpsAccess`)
+
 ## What comes next
 
-**Phase 6B payroll** stays deferred until partners reopen it. No new LexZim product phase is queued beyond that unless partners define otherwise.
+Phase 10 is complete. See `docs/PHASE11_CANDIDATES.md` for short candidate ideas (not a commitment). Full statutory **Phase 6B payroll** remains deferred beyond the Phase 10 payroll MVP.
 
 ## Related
 
+- `docs/PHASE10_ADR.md` ← Phase 10 architecture
+- `docs/PHASE10_SMOKE_TEST.md` ← Phase 10 closeout smoke
+- `docs/PHASE11_CANDIDATES.md` ← Phase 11 candidates (not committed)
+- `docs/CONFLICT.md` ← conflict check + debtor timeline + knowledge reports (P10-13)
 - `docs/PHASE9_ADR.md` ← Phase 9 architecture and access model
 - `docs/PHASE9_SMOKE_TEST.md` ← closeout smoke
 - `docs/PHASE9_DID_YOU_KNOW.md` ← 50 login facts
@@ -146,6 +184,7 @@ Trial seats: **10** (was 3). Hosting files (`railway.toml`, `Dockerfile`) unchan
 - `docs/PHASE6B_PAYROLL_HANDOFF.md`
 - `PHASE 7 - Practice Suite Prompts.md` (PROMPTS repo)
 - `PHASE 8 - Diagnostics & Self-Healing Prompts.md` (PROMPTS repo)
+- `PHASE 10 - LPMS Spine and Operations Prompts.md` (PROMPTS repo)
 
 ## Final statements
 
@@ -153,6 +192,8 @@ Trial seats: **10** (was 3). Hosting files (`railway.toml`, `Dockerfile`) unchan
 
 **PHASE 7 COMPLETE — full accounting and practice suite shipped; payroll still deferred to Phase 6B**
 
-**PHASE 8 COMPLETE — diagnostics, observability, controlled self-healing shipped; next remains Phase 6B payroll unless partners say otherwise**
+**PHASE 8 COMPLETE — diagnostics, observability, controlled self-healing shipped**
 
-**PHASE 9 COMPLETE — practice polish and per-person access shipped; named custom roles rejected for v1; next remains Phase 6B payroll unless partners say otherwise**
+**PHASE 9 COMPLETE — practice polish and per-person access shipped; named custom roles rejected for v1**
+
+**PHASE 10 COMPLETE — LPMS spine and operations shipped (idle logout, archive vs platform purge, invoice approval, HR leave ledger and advances, payroll MVP, tasks, calendar privacy, conflict/debtor notes, firm email From, AI verify/citations); Phase 6B statutory payroll and silent email campaigns remain deferred**

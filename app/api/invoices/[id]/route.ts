@@ -40,6 +40,9 @@ export async function GET(request: Request, context: RouteContext) {
       sumFeePayments(firmId, id),
     ]);
 
+    const { getRequireInvoiceApproval } = await import("@/lib/billing/invoice-approval");
+    const requireInvoiceApproval = await getRequireInvoiceApproval(firmId);
+
     const balanceCents = Math.max(0, full.invoice.totalCents - paidCents);
 
     return jsonOk({
@@ -55,10 +58,12 @@ export async function GET(request: Request, context: RouteContext) {
             })
           : null,
         clientNumber: full.clientNumber,
+        clientEmail: full.clientEmail,
         paidCents,
       }),
       lines: lines.map(serializeInvoiceLine),
       payments: payments.map((p) => serializeFeePayment(p, { balanceCents })),
+      requireInvoiceApproval,
     });
   } catch (err) {
     return jsonError(err, request);

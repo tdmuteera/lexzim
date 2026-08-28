@@ -7,14 +7,19 @@ import { resolveCalendarClientId } from "@/lib/calendar/resolve-client";
 import {
   isCalendarEventType,
   parseCalendarEventInput,
+  DEFAULT_CALENDAR_COLOR,
 } from "@/lib/calendar/validation";
 import {
+  assertSharedUsersInFirm,
+  canEditCalendarEvent,
   createCalendarEvent,
   getCalendarEvent,
+  getUserCalendarColor,
   listCalendarEvents,
+  type CalendarListScope,
 } from "@/lib/repos/calendar";
 import { userCanAccessMatter } from "@/lib/repos/matters";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import { canViewAllMatters, hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 function parseOptionalDate(value: string | null, label: string): Date | undefined {
@@ -26,11 +31,17 @@ function parseOptionalDate(value: string | null, label: string): Date | undefine
   return d;
 }
 
+function parseScope(value: string | null): CalendarListScope {
+  if (value === "firm" || value === "shared" || value === "mine") return value;
+  return "mine";
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("calendar.view");
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
+    const canManage = hasPermission(session, "calendar.manage");
     const url = new URL(request.url);
     const from = parseOptionalDate(url.searchParams.get("from"), "from");
     const to = parseOptionalDate(url.searchParams.get("to"), "to");
@@ -38,6 +49,7 @@ export async function GET(request: Request) {
     const eventType =
       eventTypeRaw && isCalendarEventType(eventTypeRaw) ? eventTypeRaw : undefined;
     const matterId = url.searchParams.get("matterId")?.trim() || undefined;
+    const scope = parseScope(url.searchParams.get("scope"));
 
     if (matterId) {
       const allowed = await userCanAccessMatter(
@@ -58,12 +70,29 @@ export async function GET(request: Request) {
       matterId,
       viewAll,
       userId: session.id,
+      scope,
     });
+
+    const myCalendarColor = await getUserCalendarColor(firmId, session.id);
+    const effectiveMyColor = myCalendarColor ?? DEFAULT_CALENDAR_COLOR;
 
     void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
 
     return jsonOk({
-      items: rows.map((r) => serializeCalendarEventRow(r)),
+      items: rows.map((r) => {
+        const creatorCalendarColor =
+          r.creatorCalendarColor ??
+          (r.event.createdBy === session.id ? effectiveMyColor : null);
+        return serializeCalendarEventRow({
+          ...r,
+          creatorCalendarColor,
+          canEdit: canEditCalendarEvent(r.event, session.id, {
+            canManage,
+            sharedUserIds: r.sharedUserIds ?? [],
+          }),
+        });
+      }),
+      myCalendarColor: effectiveMyColor,
     });
   } catch (err) {
     return jsonError(err, request);
@@ -91,8 +120,14 @@ export async function POST(request: Request) {
       }
     }
 
+    if (input.visibility === "people") {
+      await assertSharedUsersInFirm(firmId, input.sharedUserIds);
+    }
+
     const row = await createCalendarEvent(firmId, session.id, input);
     const full = await getCalendarEvent(firmId, row.id);
+    const myColor =
+      (await getUserCalendarColor(firmId, session.id)) ?? DEFAULT_CALENDAR_COLOR;
 
     if (row.eventType === "appointment") {
       void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
@@ -109,13 +144,25 @@ export async function POST(request: Request) {
         title: row.title,
         matterId: row.matterId,
         startsAt: row.startsAt.toISOString(),
+        visibility: row.visibility,
+        sharedUserIds: input.sharedUserIds,
       },
       ipOrUserAgent: clientInfo(request),
     });
 
     return jsonOk(
       {
-        event: full ? serializeCalendarEventRow(full) : serializeCalendarEventRow({ event: row }),
+        event: full
+          ? serializeCalendarEventRow({
+              ...full,
+              creatorCalendarColor: full.creatorCalendarColor ?? myColor,
+              canEdit: true,
+            })
+          : serializeCalendarEventRow({
+              event: row,
+              creatorCalendarColor: myColor,
+              canEdit: true,
+            }),
       },
       { status: 201 },
     );

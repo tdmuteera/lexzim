@@ -39,7 +39,7 @@ function serializeSettings(
     providerDefault: row?.providerDefault ?? "gemini",
     modelDefault: row?.modelDefault ?? DEFAULT_GEMINI_CHAT_MODEL,
     embeddingsModel: row?.embeddingsModel ?? DEFAULT_GEMINI_EMBEDDINGS_MODEL,
-    webLookupEnabled: row?.webLookupEnabled ?? false,
+    webLookupEnabled: row?.webLookupEnabled ?? true,
     routingMode: normalizeRoutingMode(row?.routingMode),
     monthlySoftBudget: row ? row.monthlySoftBudget : 500,
     maxOutputTokens: row?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -112,9 +112,9 @@ export async function GET(request: Request) {
         embeddings:
           "Claude has no embeddings API: LexZim falls back to Gemini embeddings when a Gemini key is present. OpenAI embeddings use dimensions=768 to match the database.",
         routing:
-          "To drive chat with Claude: paste a Claude key (ANTHROPIC_API_KEY in .env.local, or Settings → Claude BYO), set Default provider to Claude, and set Routing to Manual. Auto still prefers Claude for legal questions when a Claude key exists.",
+          "Auto Legal Research order: Claude key → OpenAI key → Gemini. To force OpenAI for every chat, set Routing to Manual and Default provider to OpenAI, then Save settings. Embeddings can stay on gemini-embedding-001 while chat uses gpt-4.1.",
         safety:
-          "Web lookup stays off unless enabled. Matter context can be turned off firm-wide.",
+          "Assistive only: lawyers must verify primary sources before relying on answers. There is no correctness guarantee. Web lookup stays off unless enabled and is limited to allowlisted sites (results labelled [UNVERIFIED]). Matter context can be turned off firm-wide.",
         keyMode:
           "Direct: firm BYO or server managed keys. LexZim Proxy: Firm-edition licence token; master keys stay on the proxy (never in the browser).",
       },

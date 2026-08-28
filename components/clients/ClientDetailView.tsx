@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ClientEmailButton } from "@/components/email/ClientEmailButton";
 import { ClientDocumentsPanel } from "@/components/clients/ClientDocumentsPanel";
+import { ConflictCheckPanel } from "@/components/clients/ConflictCheckPanel";
+import { DebtorCommunicationsPanel } from "@/components/finance/DebtorCommunicationsPanel";
 import { RelatedPartiesPanel } from "@/components/parties/RelatedPartiesPanel";
 import {
   KYC_STATUS_OPTIONS,
@@ -106,6 +108,8 @@ export function ClientDetailView({
 }) {
   const { can } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightConflict = searchParams.get("conflict") === "1";
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +122,7 @@ export function ClientDetailView({
     const action = isArchived ? "restore" : "archive";
     if (action === "archive") {
       const ok = window.confirm(
-        `Delete client "${client.displayName}"?\n\nThis archives the client (soft delete). You can restore them later from Archived clients.`,
+        `Archive client "${client.displayName}"?\n\nThis soft-archives the client. They leave Active lists and cannot get new matters.\n\nFee invoices and payments are KEPT for revenue history. Outstanding fees for this client stop counting on the dashboard while archived.\n\nPermanent wipe (including money history) is LexZim development/ops only, not available here.`,
       );
       if (!ok) return;
     } else {
@@ -246,6 +250,13 @@ export function ClientDetailView({
                 </div>
               )}
               <RelatedPartiesPanel scope="client" scopeId={client.id} />
+              {highlightConflict ? (
+                <p className="muted" style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
+                  Next step: run a conflict search and record Clear, Potential, or Blocked before
+                  opening a matter.
+                </p>
+              ) : null}
+              <ConflictCheckPanel clientId={client.id} highlight={highlightConflict} />
             </>
           ) : null}
 
@@ -378,6 +389,10 @@ export function ClientDetailView({
               >
                 View debtors
               </Link>
+              <DebtorCommunicationsPanel
+                clientId={client.id}
+                clientName={client.displayName}
+              />
             </div>
           ) : null}
 

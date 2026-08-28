@@ -253,6 +253,69 @@
       "when": 1787994000000,
       "tag": "0035_directory_lawyers",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1787995000000,
+      "tag": "0036_delegation_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787996000000,
+      "tag": "0037_invoice_payment_note_strip",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787997000000,
+      "tag": "0038_invoice_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1787998000000,
+      "tag": "0039_employee_spine",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787999000000,
+      "tag": "0040_leave_advances_payroll",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0041_firm_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788001000000,
+      "tag": "0042_calendar_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788002000000,
+      "tag": "0043_p10_13_ops",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788003000000,
+      "tag": "0044_ai_web_lookup_default_on",
+      "breakpoints": true
     }
   ]
 }

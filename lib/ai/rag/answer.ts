@@ -3,12 +3,27 @@ import "server-only";
 import { getProvider } from "@/lib/ai/providers";
 import { assertAiSoftBudget } from "@/lib/ai/budget";
 import { loadChatHistory } from "@/lib/ai/chat-history";
-import { maybePackChatDocument } from "@/lib/ai/drafting/maybe-pack";
-import { classifyChatIntent } from "@/lib/ai/intent";
+import {
+  isPromiseOnlyDraft,
+  maybePackChatDocument,
+} from "@/lib/ai/drafting/maybe-pack";
+import { classifyChatIntent, wantsDocumentExport } from "@/lib/ai/intent";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
 } from "@/lib/ai/rag/retrieve";
+import { verifyGroundedAnswer, type VerifyGrounding } from "@/lib/ai/rag/verify";
+import {
+  buildSourceTiers,
+  type ExploreSource,
+  type ResearchStatus,
+  type SourceTiers,
+} from "@/lib/ai/citations/tiers";
+import {
+  formatWebLookupBlock,
+  lookupTrustedWeb,
+  type WebLookupResult,
+} from "@/lib/ai/web/trusted-lookup";
 import type { AiCitation } from "@/lib/db/ai-types";
 import {
   createConversation,
@@ -22,47 +37,12 @@ import {
 import { recordAiUsageEvent } from "@/lib/repos/ai-usage";
 import { AiProviderError } from "@/lib/ai/errors";
 import {
-  formatWebLookupBlock,
-  lookupTrustedWeb,
-  type WebLookupResult,
-} from "@/lib/ai/web/trusted-lookup";
+  CHAT_SYSTEM_PROMPT,
+  DOCUMENT_PROMPT_ADDENDUM,
+} from "@/lib/ai/rag/legal-research-prompt";
 
 export const LEGAL_DISCLAIMER =
-  "Disclaimer: LexZim AI is a research aid for Zimbabwe legal practitioners. It is not final legal advice. Verify all authorities against primary sources (ZimLII, Veritas, official gazettes) before relying on this answer in practice or court.";
-
-const SYSTEM_PROMPT = `You are LexZim, a Zimbabwe-focused assistant for legal practitioners. Talk like a capable modern chat AI: natural, clear, and useful.
-
-Voice
-- Answer greetings and ordinary conversation normally (weather, how you are, general knowledge, brainstorming).
-- Write in clean Markdown: short paragraphs, bullets when they help, bold for key terms. Do not stack many headings. Never output a wall of # hashes.
-- Do not lecture about being an AI, about "verification", or about disclaimers on casual chat.
-
-Legal caution (quiet)
-- When the user asks about law, procedure, rights, a case, or a filing: stay careful. Prefer Zimbabwe law. Never invent statute numbers, SI numbers, case names, or holdings.
-- If you are unsure, say so in one short sentence and give practical next steps. Do not refuse ordinary chat because the knowledge pack had no hit.
-- After a legal or case-specific answer, do not dump excerpts or a Disclaimer paragraph. The app may attach a short source list separately.
-
-Documents
-- If asked to draft a letter, notice, affidavit, or Word document, write the full document body. Follow font and spacing requests.`;
-
-function looksCutOff(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed || trimmed.length < 180) return false;
-  if (/[.!?)]["']?\s*$/.test(trimmed)) return false;
-  const tail = trimmed.slice(-240);
-  if (/[,:;(]\s*$/.test(trimmed)) return true;
-  if (/\n(?:-|\d+\.)\s+[^\n.!?]{1,80}$/.test(tail)) return true;
-  if (/\([^)]{0,80}$/.test(tail)) return true;
-  return true;
-}
-
-function mergeContinuation(base: string, continuation: string): string {
-  const first = base.trimEnd();
-  const second = continuation.trim();
-  if (!second) return first;
-  if (first.includes(second)) return first;
-  return `${first}\n\n${second}`;
-}
+  "Assistive only. Verify primary sources before relying on this answer.";
 
 export type ConfidenceLabel = "high" | "medium" | "low";
 
@@ -73,6 +53,16 @@ export type LegalAskDocument = {
   lineSpacing: number;
 };
 
+const EMPTY_TIERS: SourceTiers = { primary: [], supporting: [], furtherReading: [] };
+const EMPTY_RESEARCH_STATUS: ResearchStatus = {
+  webConsulted: false,
+  webUnavailable: false,
+  currentnessChecked: false,
+  currentnessUnverified: true,
+  fabricatedRejected: false,
+  verifiedPrimary: false,
+};
+
 export type LegalAskResult = {
   conversationId: string;
   userMessageId: string;
@@ -81,75 +71,109 @@ export type LegalAskResult = {
   confidence: ConfidenceLabel;
   confidenceScore: number;
   citations: AiCitation[];
+  grounding: VerifyGrounding | "skipped";
+  sourceTiers: SourceTiers;
+  exploreSources: ExploreSource[];
   retrievalMeta: RetrieveLegalContextResult["retrievalMeta"] & {
-    webLookupEnabled?: boolean;
-    webHitCount?: number;
-    webErrorCode?: string | null;
     intent?: string;
     showCitations?: boolean;
+    chatLatencyMs?: number;
+    grounding?: string;
+    researchStatus?: ResearchStatus;
   };
   notFound: boolean;
   disclaimer: string;
   document?: LegalAskDocument | null;
-  webLookup: Pick<
-    WebLookupResult,
-    "enabled" | "attempted" | "errorCode" | "message" | "latencyMs"
-  > & { hitCount: number };
 };
 
-function confidenceFromHits(hitCount: number, topScore: number | null): {
-  label: ConfidenceLabel;
-  score: number;
-} {
-  if (hitCount <= 0) return { label: "low", score: 0.2 };
-  if (hitCount >= 3 && (topScore ?? 0) >= 0.55) return { label: "high", score: 0.85 };
-  if ((topScore ?? 0) >= 0.45) return { label: "medium", score: 0.6 };
-  return { label: "low", score: 0.35 };
+type ChatQuality = "budget" | "standard" | "capable" | "max";
+
+function estimateChatQuality(
+  question: string,
+  intent: string,
+  wantDoc: boolean,
+): ChatQuality {
+  const words = question.split(/\s+/).filter(Boolean).length;
+  if (wantDoc || words > 140) return "capable";
+  if (intent === "chat") return "budget";
+  return "standard";
 }
 
-function buildContextBlock(retrieval: RetrieveLegalContextResult): string {
+function priorSubstantialAssistantDraft(
+  history: Array<{ role: string; content: string }>,
+): string | null {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const m = history[i];
+    if (m.role !== "assistant") continue;
+    if (isPromiseOnlyDraft(m.content)) continue;
+    if (m.content.trim().length >= 200) return m.content;
+  }
+  return null;
+}
+
+function extractDocumentOutline(body: string): string[] {
+  const titles: string[] = [];
+  for (const raw of body.replace(/\r\n/g, "\n").split("\n")) {
+    const line = raw.trim();
+    const md = line.match(/^#{1,4}\s+(.{3,60})$/);
+    if (md && !titles.includes(md[1])) titles.push(md[1]);
+    if (titles.length >= 6) break;
+  }
+  return titles;
+}
+
+function summarizeDocumentForChat(
+  body: string,
+  doc: { fileName: string; font: string; lineSpacing: number } | null,
+): string {
+  const outline = extractDocumentOutline(body);
+  const wordCount = body.split(/\s+/).filter(Boolean).length;
+  const approxPages = Math.max(1, Math.round(wordCount / 500));
+  const lead = `I've drafted a ${approxPages}-page document for you.`;
+  const covers =
+    outline.length > 0
+      ? `\n\nIt covers:\n${outline.map((t) => `- ${t}`).join("\n")}`
+      : "";
+  const style = doc
+    ? `\n\nFormatted in ${doc.font}, ${doc.lineSpacing} line spacing. Download it below and edit bracketed placeholders before sending.`
+    : "";
+  return `${lead}${covers}${style}`;
+}
+
+function buildOptionalContext(retrieval: RetrieveLegalContextResult): string {
+  if (retrieval.hits.length === 0) return "";
   return retrieval.hits
-    .map(
-      (h, i) =>
-        `[${i + 1}] ${h.citationLabel}\n${h.text}`,
-    )
+    .map((h, i) => `[${i + 1}] ${h.citationLabel}\n${h.text}`)
     .join("\n\n---\n\n");
 }
 
-function webMeta(web: WebLookupResult) {
-  return {
-    enabled: web.enabled,
-    attempted: web.attempted,
-    hitCount: web.hits.length,
-    errorCode: web.errorCode,
-    message: web.message,
-    latencyMs: web.latencyMs,
-  };
-}
-
-function isAuthorityCitation(c: AiCitation): boolean {
-  const label = `${c.citationLabel} ${c.title ?? ""}`;
-  if (c.sourceUrl) return true;
-  return /\b(act|si\b|constitution|court|v\.|versus|cap\.|chapter|zimlii|veritas)\b/i.test(
-    label,
+/** Ground-truth hint about what retrieval actually found — never shown to the user verbatim. */
+function buildGroundingHint(
+  intent: string,
+  retrieval: RetrieveLegalContextResult,
+  web: WebLookupResult,
+): string {
+  if (intent === "chat") return "";
+  const packHits = retrieval.hits.length;
+  const webHits = web.hits.length;
+  if (packHits === 0 && webHits === 0) {
+    return (
+      "[Research status: the local knowledge base and a live web search found nothing " +
+      "relevant this turn. If your answer depends on a specific Act, section, or case, say " +
+      "plainly that you found no verifiable source for that point, then give your best " +
+      "general-knowledge answer.]"
+    );
+  }
+  return (
+    `[Research status: local knowledge base hits=${packHits}, live web hits=${webHits}. ` +
+    "Only name authorities that are actually supported by the excerpts/results provided " +
+    "below — do not add others from memory.]"
   );
 }
 
-function slimCitation(c: AiCitation): AiCitation {
-  return {
-    citationLabel: c.citationLabel,
-    title: c.title,
-    sourceUrl: c.sourceUrl ?? null,
-  };
-}
-
-function citationsForUi(intent: string, citations: AiCitation[]): AiCitation[] {
-  if (intent !== "legal") return [];
-  return citations.filter(isAuthorityCitation).slice(0, 6).map(slimCitation);
-}
-
 /**
- * Conversational ask with optional Zimbabwe grounding. Greetings never 404.
+ * LexZim legal chat: history + local knowledge base + live web search + model,
+ * with a verify pass gating what reaches "Show sources".
  */
 export async function aiLegalAsk(input: {
   firmId: string;
@@ -157,16 +181,20 @@ export async function aiLegalAsk(input: {
   question: string;
   conversationId?: string | null;
   attachmentContext?: string | null;
+  skipCreateUserMessage?: boolean;
+  existingUserMessageId?: string;
 }): Promise<LegalAskResult> {
   const question = input.question.trim();
-  if (!question) {
-    throw new Error("question is required");
-  }
+  if (!question) throw new Error("question is required");
 
   const intent = classifyChatIntent(question);
+  const wantDoc = wantsDocumentExport(question) || intent === "document";
   const attachmentContext = input.attachmentContext?.trim() || "";
+  const skipUser = Boolean(input.skipCreateUserMessage);
 
   let conversationId = input.conversationId?.trim() || null;
+  if (skipUser && !conversationId) throw new Error("conversation_required");
+
   if (conversationId) {
     const existing = await getConversation(input.firmId, conversationId);
     if (!existing || existing.userId !== input.userId) {
@@ -189,20 +217,20 @@ export async function aiLegalAsk(input: {
     ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
     : question;
 
-  const userMessage = await createMessage({
-    firmId: input.firmId,
-    conversationId,
-    role: "user",
-    content: storedUser,
-  });
+  const userMessage = skipUser
+    ? { id: input.existingUserMessageId?.trim() || "existing-user" }
+    : await createMessage({
+        firmId: input.firmId,
+        conversationId,
+        role: "user",
+        content: storedUser,
+      });
 
   const settings = await getAiSettings(input.firmId);
-  const webEnabled = Boolean(settings?.webLookupEnabled) && intent === "legal";
-  const configuredMaxOutputTokens = Math.min(
-    4096,
+  const maxOutputTokens = Math.min(
+    8192,
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
-  const maxOutputTokens = intent === "legal" ? Math.max(1400, configuredMaxOutputTokens) : configuredMaxOutputTokens;
 
   let retrieval: RetrieveLegalContextResult = {
     hits: [],
@@ -221,6 +249,15 @@ export async function aiLegalAsk(input: {
     },
   };
 
+  let web: WebLookupResult = {
+    enabled: false,
+    attempted: false,
+    hits: [],
+    citations: [],
+    answerText: "",
+    latencyMs: 0,
+  };
+
   if (intent !== "chat") {
     try {
       retrieval = await retrieveLegalContext({
@@ -228,53 +265,35 @@ export async function aiLegalAsk(input: {
         query: question,
       });
     } catch {
-      /* chat still proceeds without RAG */
+      /* proceed without pack */
+    }
+
+    try {
+      web = await lookupTrustedWeb({
+        firmId: input.firmId,
+        query: question,
+        enabled: settings?.webLookupEnabled !== false,
+      });
+    } catch {
+      /* proceed without live web results */
     }
   }
 
-  const web = await lookupTrustedWeb({
-    query: question,
-    enabled: webEnabled,
-  });
-
-  const mergeMeta = {
-    ...retrieval.retrievalMeta,
-    webLookupEnabled: web.enabled,
-    webHitCount: web.hits.length,
-    webErrorCode: web.errorCode ?? null,
-    intent,
-  };
-
-  const localConf = confidenceFromHits(
-    retrieval.hits.length,
-    retrieval.hits[0]?.score ?? null,
-  );
-  const conf =
-    intent === "chat"
-      ? { label: "high" as const, score: 0.9 }
-      : retrieval.hits.length === 0
-        ? { label: "medium" as const, score: 0.5 }
-        : localConf;
-
-  const rawCitations: AiCitation[] = [...retrieval.citations, ...web.citations];
-  const citations = citationsForUi(intent, rawCitations);
-  const contextBlock =
-    retrieval.hits.length > 0
-      ? buildContextBlock(retrieval)
-      : "(No matching pack excerpt. Answer from general knowledge; do not invent Zimbabwe authorities.)";
-  const webBlock = formatWebLookupBlock(web.hits);
+  const mergeMeta = { ...retrieval.retrievalMeta, intent };
 
   let provider;
   try {
     await assertAiSoftBudget(input.firmId);
     provider = await getProvider(input.firmId, { mode: "legal_research" });
   } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "budget_exceeded") {
-      throw err;
-    }
-    const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
+    const errorCode =
+      err && typeof err === "object" && "code" in err && err.code === "budget_exceeded"
+        ? "budget_exceeded"
+        : err instanceof AiProviderError
+          ? err.code
+          : "provider_error";
     const fallback =
-      "I cannot reach the language model right now. Check the API key under Settings → AI, then try again.";
+      "I cannot reach the language model right now. Check Settings → AI, then try again.";
     const assistantMessage = await createMessage({
       firmId: input.firmId,
       conversationId,
@@ -282,24 +301,7 @@ export async function aiLegalAsk(input: {
       content: fallback,
       confidence: 0.2,
       citationsJson: [],
-      retrievalMetaJson: {
-        ...mergeMeta,
-        notFound: false,
-        generatorError: errorCode,
-        confidenceLabel: "low",
-        showCitations: false,
-        webLookup: webMeta(web),
-      },
-    });
-    await recordAiUsageEvent({
-      firmId: input.firmId,
-      userId: input.userId,
-      provider: settings?.providerDefault ?? "gemini",
-      model: retrieval.retrievalMeta.embeddingsModel,
-      mode: "legal_research",
-      success: false,
-      errorCode,
-      latencyMs: retrieval.retrievalMeta.latencyMs + web.latencyMs,
+      retrievalMetaJson: { ...mergeMeta, generatorError: errorCode, grounding: "skipped" },
     });
     return {
       conversationId,
@@ -309,10 +311,12 @@ export async function aiLegalAsk(input: {
       confidence: "low",
       confidenceScore: 0.2,
       citations: [],
-      retrievalMeta: { ...mergeMeta, showCitations: false },
+      grounding: "skipped",
+      sourceTiers: EMPTY_TIERS,
+      exploreSources: [],
+      retrievalMeta: mergeMeta,
       notFound: false,
       disclaimer: LEGAL_DISCLAIMER,
-      webLookup: webMeta(web),
     };
   }
 
@@ -321,61 +325,64 @@ export async function aiLegalAsk(input: {
     conversationId,
     limit: 12,
   });
-
-  const grounding =
-    intent === "chat"
-      ? "This turn is ordinary conversation. Reply naturally. Do not add citations or a disclaimer."
-      : `Optional Zimbabwe pack excerpts (use if relevant; do not invent citations):\n${contextBlock}\n\nOptional web excerpts (unverified):\n${webBlock || "(none)"}`;
-
+  const priorDraft = priorSubstantialAssistantDraft(history);
+  const packContext = intent === "chat" ? "" : buildOptionalContext(retrieval);
+  const webContextBlock = intent === "chat" ? "" : formatWebLookupBlock(web.hits);
+  const groundingHint = buildGroundingHint(intent, retrieval, web);
+  const systemPrompt = wantDoc
+    ? `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_PROMPT_ADDENDUM}`
+    : CHAT_SYSTEM_PROMPT;
   const attachmentBlock = attachmentContext
-    ? `\n\nUser attached file text (OCR or extracted). Use it when answering or converting to Word:\n${attachmentContext.slice(0, 24_000)}`
+    ? `\n\n${attachmentContext.slice(0, 24_000)}`
     : "";
 
   let answerText: string;
   let chatLatency = 0;
-  const chatTemperature = intent === "chat" ? 0.6 : 0.3;
   try {
     const chat = await provider.chat(
       [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...history.slice(0, -1),
         {
           role: "user",
           content:
-            `${question}${attachmentBlock}\n\n${grounding}` +
-            (intent === "legal"
-              ? "\n\nFor legal/procedural questions, give a complete step-by-step answer with practical detail. If listing steps, finish every step cleanly."
-              : ""),
+            `${question}${attachmentBlock}` +
+            (packContext ? `\n\n[Optional firm pack excerpts]\n${packContext}` : "") +
+            (webContextBlock ? `\n\n${webContextBlock}` : "") +
+            (groundingHint ? `\n\n${groundingHint}` : ""),
         },
       ],
-      { temperature: chatTemperature, maxOutputTokens },
+      {
+        temperature: 0.7,
+        maxOutputTokens,
+        quality: estimateChatQuality(question, intent, wantDoc),
+      },
     );
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
 
-    if (intent === "legal" && looksCutOff(answerText)) {
-      const continuation = await provider.chat(
+    if (wantDoc && isPromiseOnlyDraft(answerText)) {
+      const forced = await provider.chat(
         [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           ...history.slice(0, -1),
-          { role: "assistant", content: answerText },
-          {
-            role: "user",
-            content:
-              "Continue exactly where you stopped. Do not repeat earlier text. Finish incomplete lines and steps only.",
-          },
+          ...(priorDraft
+            ? [{ role: "assistant" as const, content: priorDraft.slice(0, 8000) }]
+            : []),
+          { role: "user", content: question },
         ],
         {
-          temperature: chatTemperature,
-          maxOutputTokens: Math.max(900, Math.floor(maxOutputTokens / 2)),
+          temperature: 0.3,
+          maxOutputTokens: Math.max(4096, maxOutputTokens),
+          quality: "capable",
         },
       );
-      answerText = mergeContinuation(answerText, continuation.text);
-      chatLatency += continuation.latencyMs;
+      answerText = forced.text.trim() || answerText;
+      chatLatency += forced.latencyMs;
     }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
-    const fallback = "The model did not finish that reply. Please try again in a moment.";
+    const fallback = "The model did not finish that reply. Please try again.";
     const assistantMessage = await createMessage({
       firmId: input.firmId,
       conversationId,
@@ -383,14 +390,7 @@ export async function aiLegalAsk(input: {
       content: fallback,
       confidence: 0.2,
       citationsJson: [],
-      retrievalMetaJson: {
-        ...mergeMeta,
-        notFound: false,
-        generatorError: errorCode,
-        confidenceLabel: "low",
-        showCitations: false,
-        webLookup: webMeta(web),
-      },
+      retrievalMetaJson: { ...mergeMeta, generatorError: errorCode, grounding: "skipped" },
     });
     await recordAiUsageEvent({
       firmId: input.firmId,
@@ -400,7 +400,7 @@ export async function aiLegalAsk(input: {
       mode: "legal_research",
       success: false,
       errorCode,
-      latencyMs: retrieval.retrievalMeta.latencyMs + web.latencyMs,
+      latencyMs: retrieval.retrievalMeta.latencyMs + chatLatency,
     });
     return {
       conversationId,
@@ -410,10 +410,12 @@ export async function aiLegalAsk(input: {
       confidence: "low",
       confidenceScore: 0.2,
       citations: [],
-      retrievalMeta: { ...mergeMeta, showCitations: false },
+      grounding: "skipped",
+      sourceTiers: EMPTY_TIERS,
+      exploreSources: [],
+      retrievalMeta: mergeMeta,
       notFound: false,
       disclaimer: LEGAL_DISCLAIMER,
-      webLookup: webMeta(web),
     };
   }
 
@@ -423,24 +425,83 @@ export async function aiLegalAsk(input: {
     question,
     answerText,
     attachmentContext,
+    priorDraftText: priorDraft,
   });
 
-  const showCitations = citations.length > 0 && intent === "legal";
+  const finalAnswer =
+    wantDoc && document
+      ? summarizeDocumentForChat(answerText, document)
+      : answerText;
+
+  // Verify + tier sources for legal and document intents; plain chat skips grounding entirely.
+  let grounding: VerifyGrounding | "skipped" = "skipped";
+  let sourceTiers: SourceTiers = EMPTY_TIERS;
+  let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;
+  let confidenceScore: number;
+
+  if (intent === "chat") {
+    confidenceScore = 0.9;
+  } else {
+    const verified = verifyGroundedAnswer({
+      answer: answerText,
+      question,
+      retrievedChunks: retrieval.hits.map((h) => ({
+        text: h.text,
+        citationLabel: h.citationLabel,
+      })),
+      webExcerpts: web.hits.map((h) => ({
+        text: h.snippet,
+        citationLabel: h.siteLabel ? `${h.siteLabel}: ${h.title}` : h.title,
+      })),
+      citations: [...retrieval.citations, ...web.citations],
+    });
+    grounding = verified.grounding;
+    confidenceScore = verified.confidence;
+    const built = buildSourceTiers({
+      verified,
+      question,
+      answer: answerText,
+      webAttempted: web.attempted,
+      webHitCount: web.hits.length,
+    });
+    sourceTiers = built.tiers;
+    researchStatus = built.researchStatus;
+  }
+
+  const confidenceLabel: ConfidenceLabel =
+    confidenceScore >= 0.75 ? "high" : confidenceScore >= 0.45 ? "medium" : "low";
+  const showCitations =
+    intent !== "chat" &&
+    (sourceTiers.primary.length > 0 || sourceTiers.supporting.length > 0);
+  const notFound =
+    intent !== "chat" && retrieval.hits.length === 0 && web.hits.length === 0;
+
   const assistantMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "assistant",
-    content: answerText,
-    confidence: conf.score,
-    citationsJson: showCitations ? citations : [],
+    content: finalAnswer,
+    confidence: confidenceScore,
+    citationsJson: showCitations ? sourceTiers.primary : [],
     retrievalMetaJson: {
       ...mergeMeta,
-      notFound: false,
-      confidenceLabel: conf.label,
+      confidenceLabel,
       chatLatencyMs: chatLatency,
       showCitations,
-      webLookup: webMeta(web),
+      grounding,
+      sourceTiers,
+      researchStatus,
       document,
+      wantDoc,
+      notFound,
+      webLookup: {
+        enabled: web.enabled,
+        attempted: web.attempted,
+        hitCount: web.hits.length,
+        errorCode: web.errorCode,
+        message: web.message,
+        latencyMs: web.latencyMs,
+      },
     },
   });
 
@@ -451,21 +512,29 @@ export async function aiLegalAsk(input: {
     model: provider.defaultChatModel,
     mode: "legal_research",
     success: true,
-    latencyMs: retrieval.retrievalMeta.latencyMs + web.latencyMs + chatLatency,
+    latencyMs: retrieval.retrievalMeta.latencyMs + chatLatency,
   });
 
   return {
     conversationId,
     userMessageId: userMessage.id,
     assistantMessageId: assistantMessage.id,
-    answer: answerText,
-    confidence: conf.label,
-    confidenceScore: conf.score,
-    citations: showCitations ? citations : [],
-    retrievalMeta: { ...mergeMeta, showCitations },
-    notFound: false,
+    answer: finalAnswer,
+    confidence: confidenceLabel,
+    confidenceScore,
+    citations: showCitations ? sourceTiers.primary : [],
+    grounding,
+    sourceTiers,
+    exploreSources: sourceTiers.furtherReading,
+    retrievalMeta: {
+      ...mergeMeta,
+      chatLatencyMs: chatLatency,
+      showCitations,
+      grounding,
+      researchStatus,
+    },
+    notFound,
     disclaimer: LEGAL_DISCLAIMER,
     document,
-    webLookup: webMeta(web),
   };
 }

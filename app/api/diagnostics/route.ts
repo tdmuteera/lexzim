@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         providerDefault: aiRow?.providerDefault ?? null,
         routingMode: aiRow?.routingMode ?? null,
         keyMode: aiRow?.keyMode ?? null,
-        webLookupEnabled: aiRow?.webLookupEnabled ?? false,
+        webLookupEnabled: aiRow?.webLookupEnabled ?? true,
         matterContextEnabled: aiRow?.matterContextEnabled ?? true,
         monthlySoftBudget: aiRow ? aiRow.monthlySoftBudget : null,
         keyStatus: keys.status,

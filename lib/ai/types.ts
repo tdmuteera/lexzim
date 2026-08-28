@@ -35,6 +35,12 @@ export type ChatOptions = {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * OpenAI escalation start tier (quiet): budget = cheapest (gpt-4o-mini),
+   * standard = gpt-4.1-mini, capable = gpt-4.1, max = gpt-5. On failure the
+   * provider escalates up the ladder automatically.
+   */
+  quality?: "budget" | "standard" | "capable" | "max";
 };
 
 export type ChatResult = {

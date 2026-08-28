@@ -10,6 +10,19 @@ import { retrieveFirmContext } from "@/lib/ai/firm-memory/retrieve";
 import { retrieveLegalContext } from "@/lib/ai/rag/retrieve";
 import type { ConfidenceLabel } from "@/lib/ai/rag/answer";
 import { buildMatterAssistSnapshot } from "@/lib/ai/rag/matter-snapshot";
+import { deepenAuthorityUrl } from "@/lib/ai/citations/authority-urls";
+import { verifyGroundedAnswer } from "@/lib/ai/rag/verify";
+import {
+  buildSourceTiers,
+  type ExploreSource,
+  type ResearchStatus,
+  type SourceTiers,
+} from "@/lib/ai/citations/tiers";
+import {
+  formatWebLookupBlock,
+  lookupTrustedWeb,
+  type WebLookupResult,
+} from "@/lib/ai/web/trusted-lookup";
 import type { AiCitation } from "@/lib/db/ai-types";
 import {
   createConversation,
@@ -26,6 +39,16 @@ import { userCanAccessMatter } from "@/lib/repos/matters";
 export const MATTER_ASSIST_DISCLAIMER =
   "Disclaimer: LexZim Matter Assist is a read-only research aid for this matter file. It is not final legal advice and does not change the matter record. Verify facts and authorities before relying on this answer in practice or court.";
 
+const EMPTY_TIERS: SourceTiers = { primary: [], supporting: [], furtherReading: [] };
+const EMPTY_RESEARCH_STATUS: ResearchStatus = {
+  webConsulted: false,
+  webUnavailable: false,
+  currentnessChecked: false,
+  currentnessUnverified: true,
+  fabricatedRejected: false,
+  verifiedPrimary: false,
+};
+
 const SYSTEM_PROMPT = `You are LexZim Matter Assist. Talk like a capable modern chat AI, using only this matter's live facts plus any snippets provided.
 
 Voice
@@ -40,13 +63,17 @@ Rules
 
 function looksCutOff(text: string): boolean {
   const trimmed = text.trim();
-  if (!trimmed || trimmed.length < 180) return false;
+  if (!trimmed) return false;
   if (/[.!?)]["']?\s*$/.test(trimmed)) return false;
+  if (/\*\*[^*]+\*\*\s*$/.test(trimmed)) return false;
+  if (/\*\*[^*]*$/.test(trimmed)) return true;
+  if (/\bAct\s*$/i.test(trimmed) && !/\.\s*$/.test(trimmed)) return true;
+  if (/[,:;(—–-]\s*$/.test(trimmed)) return true;
   const tail = trimmed.slice(-240);
-  if (/[,:;(]\s*$/.test(trimmed)) return true;
-  if (/\n(?:-|\d+\.)\s+[^\n.!?]{1,80}$/.test(tail)) return true;
+  if (/\n(?:-|\d+\.|#{1,3})\s+[^\n.!?]{1,120}$/.test(tail)) return true;
   if (/\([^)]{0,80}$/.test(tail)) return true;
-  return true;
+  if (trimmed.length >= 80) return true;
+  return false;
 }
 
 function mergeContinuation(base: string, continuation: string): string {
@@ -65,6 +92,9 @@ export type MatterAskResult = {
   confidence: ConfidenceLabel;
   confidenceScore: number;
   citations: AiCitation[];
+  grounding: "strong" | "weak" | "unsupported" | "skipped";
+  sourceTiers: SourceTiers;
+  exploreSources: ExploreSource[];
   matterId: string;
   matterHeader: {
     title: string;
@@ -81,6 +111,8 @@ export type MatterAskResult = {
     emptyReason: string | null;
     errorCode?: string;
     latencyMs: number;
+    grounding?: string;
+    researchStatus?: ResearchStatus;
   };
   notFound: boolean;
   disclaimer: string;
@@ -91,6 +123,12 @@ export type MatterAskResult = {
     lineSpacing: number;
   } | null;
 };
+
+function confidenceLabelFromScore(score: number): ConfidenceLabel {
+  if (score >= 0.75) return "high";
+  if (score >= 0.45) return "medium";
+  return "low";
+}
 
 function confidenceLabel(
   firmHits: number,
@@ -134,6 +172,9 @@ export async function aiMatterAsk(input: {
   conversationId?: string | null;
   includeLegal?: boolean;
   attachmentContext?: string | null;
+  /** When true, do not insert a user row (edit/regenerate already persisted it). */
+  skipCreateUserMessage?: boolean;
+  existingUserMessageId?: string;
 }): Promise<MatterAskResult> {
   const started = Date.now();
   const question = input.question.trim();
@@ -143,6 +184,7 @@ export async function aiMatterAsk(input: {
   if (!matterId) throw new Error("matter_id_required");
 
   const intent = classifyChatIntent(question);
+  const skipUser = Boolean(input.skipCreateUserMessage);
 
   const allowed = await userCanAccessMatter(
     input.firmId,
@@ -157,15 +199,19 @@ export async function aiMatterAsk(input: {
     throw new Error("matter_context_disabled");
   }
   const configuredMaxOutputTokens = Math.min(
-    4096,
+    8192,
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
-  const maxOutputTokens = intent === "legal" ? Math.max(1400, configuredMaxOutputTokens) : configuredMaxOutputTokens;
+  const maxOutputTokens =
+    intent === "legal" ? Math.max(6144, configuredMaxOutputTokens) : configuredMaxOutputTokens;
 
   const snapshot = await buildMatterAssistSnapshot(input.firmId, matterId);
   if (!snapshot) throw new Error("matter_not_found");
 
   let conversationId = input.conversationId?.trim() || null;
+  if (skipUser && !conversationId) {
+    throw new Error("conversation_required");
+  }
   if (conversationId) {
     const existing = await getConversation(input.firmId, conversationId);
     if (!existing || existing.userId !== input.userId) {
@@ -192,12 +238,16 @@ export async function aiMatterAsk(input: {
     ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
     : question;
 
-  const userMessage = await createMessage({
-    firmId: input.firmId,
-    conversationId,
-    role: "user",
-    content: storedUser,
-  });
+  const userMessage = skipUser
+    ? {
+        id: input.existingUserMessageId?.trim() || "existing-user",
+      }
+    : await createMessage({
+        firmId: input.firmId,
+        conversationId,
+        role: "user",
+        content: storedUser,
+      });
 
   const firm =
     intent === "chat"
@@ -213,7 +263,9 @@ export async function aiMatterAsk(input: {
   let legalHits: Awaited<ReturnType<typeof retrieveLegalContext>>["hits"] = [];
   let legalCitations: AiCitation[] = [];
   let legalError: string | undefined;
-  if (intent === "legal" && input.includeLegal !== false) {
+  const wantsLegalResearch =
+    (intent === "legal" || intent === "document") && input.includeLegal !== false;
+  if (wantsLegalResearch) {
     try {
       const legal = await retrieveLegalContext({
         firmIdForProvider: input.firmId,
@@ -224,7 +276,10 @@ export async function aiMatterAsk(input: {
       legalCitations = legal.citations.map((c) => ({
         citationLabel: c.citationLabel,
         title: c.title,
-        sourceUrl: c.sourceUrl ?? null,
+        excerpt: c.excerpt,
+        sourceUrl:
+          deepenAuthorityUrl(c.sourceUrl, c.citationLabel) ?? c.sourceUrl ?? null,
+        verified: true,
       }));
       legalError = legal.retrievalMeta.errorCode;
     } catch {
@@ -232,7 +287,29 @@ export async function aiMatterAsk(input: {
     }
   }
 
-  const citations: AiCitation[] = intent === "legal" ? legalCitations.slice(0, 6) : [];
+  let web: WebLookupResult = {
+    enabled: false,
+    attempted: false,
+    hits: [],
+    citations: [],
+    answerText: "",
+    latencyMs: 0,
+  };
+  if (wantsLegalResearch) {
+    try {
+      web = await lookupTrustedWeb({
+        firmId: input.firmId,
+        query: question,
+        enabled: settings?.webLookupEnabled !== false,
+      });
+    } catch {
+      /* proceed without live web results */
+    }
+  }
+
+  const citations: AiCitation[] = wantsLegalResearch
+    ? [...legalCitations, ...web.citations].slice(0, 8)
+    : [];
 
   const conf = confidenceLabel(
     firm.hits.length,
@@ -286,6 +363,7 @@ export async function aiMatterAsk(input: {
         usedSnapshot: true,
         usedLlm: false,
         errorCode,
+        grounding: "skipped",
       },
     });
     await recordAiUsageEvent({
@@ -305,6 +383,9 @@ export async function aiMatterAsk(input: {
       confidence: conf.label,
       confidenceScore: conf.score,
       citations,
+      grounding: "skipped",
+      sourceTiers: EMPTY_TIERS,
+      exploreSources: [],
       matterId,
       matterHeader: snapshot.header,
       retrievalMeta: {
@@ -334,17 +415,22 @@ export async function aiMatterAsk(input: {
     const attachmentBlock = attachmentContext
       ? `\n\nUser attached file text (OCR or extracted):\n${attachmentContext.slice(0, 24_000)}`
       : "";
-    const grounding =
+    const webBlock = wantsLegalResearch ? formatWebLookupBlock(web.hits) : "";
+    const noResearchHint =
+      wantsLegalResearch && legalHits.length === 0 && web.hits.length === 0
+        ? "\n\n[Research status: no local knowledge-base or live web results this turn. If you rely on a specific Act, section, or case, say plainly you found no verifiable source for it.]"
+        : "";
+    const groundingContext =
       intent === "chat"
         ? "This turn is ordinary conversation. Reply naturally. You may offer to help with this matter file."
-        : `Live matter facts:\n${snapshot.combinedText}\n\nFirm-memory snippets:\n${firmBlock}\n\nOptional Zimbabwe legal snippets (do not invent authorities beyond these):\n${legalBlock}`;
+        : `Live matter facts:\n${snapshot.combinedText}\n\nFirm-memory snippets:\n${firmBlock}\n\nOptional Zimbabwe legal snippets (do not invent authorities beyond these):\n${legalBlock}${webBlock ? `\n\n${webBlock}` : ""}${noResearchHint}`;
     const chat = await provider.chat(
       [
         { role: "system", content: SYSTEM_PROMPT },
         ...history.slice(0, -1),
         {
           role: "user",
-          content: `${question}${attachmentBlock}\n\n${grounding}`,
+          content: `${question}${attachmentBlock}\n\n${groundingContext}`,
         },
       ],
       { temperature: chatTemperature, maxOutputTokens },
@@ -352,7 +438,9 @@ export async function aiMatterAsk(input: {
     answerText = chat.text.trim();
     chatLatency = chat.latencyMs;
 
-    if (intent === "legal" && looksCutOff(answerText)) {
+    let contPasses = 0;
+    while (intent === "legal" && looksCutOff(answerText) && contPasses < 2) {
+      contPasses += 1;
       const continuation = await provider.chat(
         [
           { role: "system", content: SYSTEM_PROMPT },
@@ -361,12 +449,12 @@ export async function aiMatterAsk(input: {
           {
             role: "user",
             content:
-              "Continue exactly where you stopped. Do not repeat earlier text. Finish incomplete lines and steps only.",
+              "Continue exactly where you stopped. Do not repeat earlier text. Finish incomplete lines and cover every part of the user's question.",
           },
         ],
         {
           temperature: chatTemperature,
-          maxOutputTokens: Math.max(900, Math.floor(maxOutputTokens / 2)),
+          maxOutputTokens: Math.max(2048, Math.floor(maxOutputTokens / 2)),
         },
       );
       answerText = mergeContinuation(answerText, continuation.text);
@@ -392,6 +480,7 @@ export async function aiMatterAsk(input: {
         usedLlm: false,
         generatorError: errorCode,
         legalError: legalError ?? null,
+        grounding: "skipped",
       },
     });
     await recordAiUsageEvent({
@@ -412,6 +501,9 @@ export async function aiMatterAsk(input: {
       confidence: conf.label,
       confidenceScore: conf.score,
       citations,
+      grounding: "skipped",
+      sourceTiers: EMPTY_TIERS,
+      exploreSources: [],
       matterId,
       matterHeader: snapshot.header,
       retrievalMeta: {
@@ -436,24 +528,95 @@ export async function aiMatterAsk(input: {
     attachmentContext,
   });
 
-  const notFound = !snapshot.hasContent && firm.hits.length === 0 && legalHits.length === 0;
+  let finalAnswer = answerText;
+  let finalConf = conf;
+  let grounding: "strong" | "weak" | "unsupported" | "skipped" = "skipped";
+  let verifyMeta: Record<string, unknown> | null = null;
+  let sourceTiers: SourceTiers = EMPTY_TIERS;
+  let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;
+
+  if (intent === "chat") {
+    grounding = "skipped";
+  } else if (wantsLegalResearch) {
+    const verified = verifyGroundedAnswer({
+      answer: answerText,
+      question,
+      retrievedChunks: [
+        ...firm.hits.map((h) => ({
+          text: h.text,
+          citationLabel: h.citationLabel,
+        })),
+        ...legalHits.map((h) => ({
+          text: h.text,
+          citationLabel: h.citationLabel,
+        })),
+        { text: snapshot.combinedText, citationLabel: "Matter snapshot" },
+      ],
+      webExcerpts: web.hits.map((h) => ({
+        text: h.snippet,
+        citationLabel: h.siteLabel ? `${h.siteLabel}: ${h.title}` : h.title,
+      })),
+      citations,
+    });
+    finalAnswer = verified.answer;
+    finalConf = {
+      label: confidenceLabelFromScore(verified.confidence),
+      score: verified.confidence,
+    };
+    grounding = verified.grounding;
+    verifyMeta = {
+      grounding: verified.grounding,
+      hedgeNote: verified.hedgeNote ?? null,
+      ...verified.summary,
+    };
+    const built = buildSourceTiers({
+      verified,
+      question,
+      answer: answerText,
+      webAttempted: web.attempted,
+      webHitCount: web.hits.length,
+    });
+    sourceTiers = built.tiers;
+    researchStatus = built.researchStatus;
+  }
+
+  const notFound =
+    !snapshot.hasContent &&
+    firm.hits.length === 0 &&
+    legalHits.length === 0 &&
+    web.hits.length === 0;
+  const showCitations =
+    intent !== "chat" &&
+    (sourceTiers.primary.length > 0 || sourceTiers.supporting.length > 0);
   const assistantMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "assistant",
-    content: answerText,
-    confidence: conf.score,
-    citationsJson: citations,
+    content: finalAnswer,
+    confidence: finalConf.score,
+    citationsJson: showCitations ? sourceTiers.primary : [],
     retrievalMetaJson: {
       notFound,
-      confidenceLabel: conf.label,
+      confidenceLabel: finalConf.label,
       firmHitCount: firm.hits.length,
       legalHitCount: legalHits.length,
       usedSnapshot: true,
       usedLlm,
       chatLatencyMs: chatLatency,
       legalError: legalError ?? null,
+      grounding,
+      verify: verifyMeta,
+      sourceTiers,
+      researchStatus,
       document,
+      webLookup: {
+        enabled: web.enabled,
+        attempted: web.attempted,
+        hitCount: web.hits.length,
+        errorCode: web.errorCode,
+        message: web.message,
+        latencyMs: web.latencyMs,
+      },
     },
   });
 
@@ -471,10 +634,13 @@ export async function aiMatterAsk(input: {
     conversationId,
     userMessageId: userMessage.id,
     assistantMessageId: assistantMessage.id,
-    answer: answerText,
-    confidence: conf.label,
-    confidenceScore: conf.score,
-    citations,
+    answer: finalAnswer,
+    confidence: finalConf.label,
+    confidenceScore: finalConf.score,
+    citations: showCitations ? sourceTiers.primary : [],
+    grounding,
+    sourceTiers,
+    exploreSources: sourceTiers.furtherReading,
     matterId,
     matterHeader: snapshot.header,
     retrievalMeta: {
@@ -484,6 +650,8 @@ export async function aiMatterAsk(input: {
       usedLlm,
       emptyReason: notFound ? "no_matter_context" : null,
       latencyMs: Date.now() - started,
+      grounding,
+      researchStatus,
     },
     notFound,
     disclaimer: MATTER_ASSIST_DISCLAIMER,

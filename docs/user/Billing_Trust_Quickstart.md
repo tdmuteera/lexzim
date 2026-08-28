@@ -24,9 +24,22 @@ Recording a **fee payment** does **not** post to trust. Posting a **trust receip
 
 1. On a **matter**, capture billable **time** (with rate) and fee-side **costs**.
 2. Open **Finance → Invoicing → New from unbilled** for that matter.
-3. Review the **draft** fee note, then mark it **sent** when ready.
-4. Record **fee payments** against the fee note until it is paid.
-5. Use **Print** on the fee note when you need a paper or PDF copy from the browser.
+3. Review the **draft** fee note. If the firm requires approval (default on), submit for approval, wait for **Approved**, then mark **sent**.
+4. Line **work dates** are optional (ongoing work need not invent a date).
+5. **Record payment** (Cash or Bank) against the fee note until it is paid. Each payment issues an **RCP** receipt you can download.
+6. Fee payments update the invoice balance, debtors, and fee revenue. They do **not** post to trust.
+
+### Invoice approval (short)
+
+Draft → Pending approval → Approved (ready to send) → Sent → Partially paid / Paid. Rejected and Void remain available. Approvers use invoice approve rights or delegation. Send stays manual after approval.
+
+### Debtor communication
+
+On **Debtors**, log calls and notes (who contacted, channel, outcome, next follow-up) on the debtor timeline so collections history is shared.
+
+### Payment → Receipt → Revenue (short)
+
+**Payment** (cash at office or confirmed bank) → **fee receipt** (RCP number + download) → invoice balance / paid → **fee revenue**, debtors, dashboard. Trust stays separate.
 
 Voiding a draft or unused note can unlock source time and costs for re-billing. Ask Accounts if unsure.
 
@@ -57,4 +70,4 @@ If a menu is missing, you do not have that permission. Ask your Managing Partner
 
 ## HR
 
-Employment records, contracts, and leave are under **Firm → HR**, separate from **User access**. Payroll is planned for Phase 6B. See `HR_Quickstart.md`.
+Employment records, contracts, leave ledger, salary advances, and payroll **MVP** are under **Firm → HR**, separate from **User access**. Full PAYE/NSSA remains Phase 6B. See `HR_Quickstart.md`.

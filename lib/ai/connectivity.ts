@@ -4,7 +4,6 @@ import { AiProviderError } from "@/lib/ai/errors";
 import { getProvider } from "@/lib/ai/providers";
 import { withAiRetry } from "@/lib/ai/retry";
 import { resolveProviderApiKey } from "@/lib/ai/secrets";
-import { getAiSettings } from "@/lib/repos/ai-settings";
 import type { LlmProviderId } from "@/lib/ai/types";
 
 export type AiConnectivityState =
@@ -52,16 +51,15 @@ function messageFor(state: AiConnectivityState, provider: LlmProviderId): string
 
 /**
  * Classify AI readiness. When probe=true, performs a tiny embed round-trip with retries.
+ * Uses the same auto-route as Legal Research when possible (Claude → OpenAI → Gemini).
  */
 export async function getAiConnectivityReport(input: {
   firmId: string;
   probe?: boolean;
 }): Promise<AiConnectivityReport> {
-  const settings = await getAiSettings(input.firmId);
-  const providerId = (settings?.providerDefault?.trim().toLowerCase() ||
-    "gemini") as LlmProviderId;
-  const normalized: LlmProviderId =
-    providerId === "claude" || providerId === "openai" ? providerId : "gemini";
+  const { resolveAiRoute } = await import("@/lib/ai/routing");
+  const route = await resolveAiRoute(input.firmId, "legal_research");
+  const normalized = route.providerId;
 
   const resolved = await resolveProviderApiKey(input.firmId, normalized);
   const keyStatus = resolved.key ? ("present" as const) : ("missing" as const);
@@ -96,7 +94,7 @@ export async function getAiConnectivityReport(input: {
   }
 
   try {
-    const provider = await getProvider(input.firmId);
+    const provider = await getProvider(input.firmId, { mode: "legal_research" });
     try {
       await withAiRetry(() => provider.embed("lexzim connectivity probe", {}));
     } catch (embedErr) {

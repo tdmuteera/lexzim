@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { HrAccessCallout } from "@/components/hr/HrAccessCallout";
+import { HrPageShell } from "@/components/hr/HrPageShell";
+import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -254,31 +256,40 @@ export function HrContractsView() {
     }
   }
 
-  return (
-    <section className="view active scrollable finance-desk-view" aria-label="HR contracts">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h3>Contracts</h3>
-            <p className="panel-subtitle muted">
-              Employment contracts per staff record · document upload
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            <Can permission="hr.manage">
-              <Button size="sm" onClick={() => openCreate()} disabled={loading}>
-                Add contract
-              </Button>
-            </Can>
-            <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
-              Refresh
-            </Button>
-          </div>
-        </div>
-        <div className="panel-body">
-          <HrAccessCallout />
+  const summaryStats = useMemo(() => {
+    const active = contracts.filter((c) => c.status === "active").length;
+    const withDoc = contracts.filter((c) => c.hasDocument).length;
+    const staffCovered = new Set(contracts.map((c) => c.staffProfileId)).size;
+    return [
+      { label: "Contracts", value: loading ? "—" : contracts.length, icon: "CT" },
+      { label: "Active", value: loading ? "—" : active, icon: "OK" },
+      { label: "With document", value: loading ? "—" : withDoc, icon: "DOC" },
+      { label: "Staff covered", value: loading ? "—" : staffCovered, icon: "ST" },
+    ];
+  }, [contracts, loading]);
 
-          <div className="toolbar" style={{ marginTop: "1rem" }}>
+  return (
+    <HrPageShell
+      title="Contracts"
+      subtitle="Employment contracts per staff record · document upload"
+      ariaLabel="HR contracts"
+      actions={
+        <>
+          <Can permission="hr.manage">
+            <Button size="sm" onClick={() => openCreate()} disabled={loading}>
+              Add contract
+            </Button>
+          </Can>
+          <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
+            Refresh
+          </Button>
+        </>
+      }
+      summary={<HrStatStrip stats={summaryStats} />}
+    >
+      <HrAccessCallout />
+
+      <div className="hr-toolbar">
             <select
               className="filter-select"
               value={staffFilter}
@@ -305,12 +316,10 @@ export function HrContractsView() {
 
           {error ? <p className="form-error" role="alert">{error}</p> : null}
 
-          {formOpen && canManage ? (
-            <form className="panel" style={{ padding: "1rem", marginBottom: "1rem" }} onSubmit={onSubmit}>
-              <h4 style={{ marginBottom: "0.75rem" }}>
-                {editingId ? "Edit contract" : "New contract"}
-              </h4>
-              <div className="form-grid" style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
+      {formOpen && canManage ? (
+        <form className="hr-form-panel" onSubmit={onSubmit}>
+          <h4>{editingId ? "Edit contract" : "New contract"}</h4>
+          <div className="hr-form-grid">
                 <label>
                   Staff
                   <select
@@ -350,23 +359,24 @@ export function HrContractsView() {
                   <textarea className="filter-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </label>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => resetForm()}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
+          <div className="hr-form-actions">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => resetForm()}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
-          {loading ? (
-            <p className="muted">Loading contracts…</p>
-          ) : contracts.length === 0 ? (
-            <EmptyState title="No contracts yet" />
-          ) : (
-            <table className="data data-dense">
+      {loading ? (
+        <p className="hr-empty-loading">Loading contracts…</p>
+      ) : contracts.length === 0 ? (
+        <EmptyState title="No contracts yet" />
+      ) : (
+        <div className="hr-table-wrap">
+          <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
                   <th>Staff</th>
@@ -381,7 +391,7 @@ export function HrContractsView() {
                 {contracts.map((row) => (
                   <tr key={row.id}>
                     <td>{row.staffName}</td>
-                    <td><strong>{row.title}</strong></td>
+                    <td><div className="hr-cell-primary">{row.title}</div></td>
                     <td>
                       {formatShortDate(row.startDate)}
                       {row.endDate ? ` to ${formatShortDate(row.endDate)}` : ""}
@@ -414,22 +424,23 @@ export function HrContractsView() {
                       ) : null}
                     </td>
                     {canManage ? (
-                      <td style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onDelete(row.id)}>
-                          Delete
-                        </Button>
+                      <td>
+                        <div className="hr-panel-actions">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => onDelete(row.id)}>
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     ) : null}
                   </tr>
                 ))}
               </tbody>
-            </table>
-          )}
+          </table>
         </div>
-      </div>
-    </section>
+      )}
+    </HrPageShell>
   );
 }

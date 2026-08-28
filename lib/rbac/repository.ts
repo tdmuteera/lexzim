@@ -64,36 +64,48 @@ export async function getEffectivePermissionCodes(input: {
   userId: string;
   roleId: string;
   roleCode: string;
+  firmId: string;
+  /** Default true. Set false when editing per-person ticks (exclude overlay). */
+  includeDelegations?: boolean;
 }): Promise<string[]> {
   const {
     getCachedUserPermissionCodes,
     setCachedUserPermissionCodes,
   } = await import("@/lib/auth/hot-cache");
   const cached = getCachedUserPermissionCodes(input.userId);
+  let base: string[];
   if (cached !== undefined) {
     if (cached === null) {
       const roleCodes = await getPermissionCodesForRole(input.roleId);
-      return withProtectedMp(input.roleCode, roleCodes);
+      base = withProtectedMp(input.roleCode, roleCodes);
+    } else {
+      base = withProtectedMp(input.roleCode, expandAccessTicks(cached));
     }
-    return withProtectedMp(input.roleCode, expandAccessTicks(cached));
+  } else {
+    const db = getDb();
+    const rows = await db
+      .select({ code: permissions.code })
+      .from(userPermissions)
+      .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+      .where(eq(userPermissions.userId, input.userId));
+
+    if (rows.length === 0) {
+      setCachedUserPermissionCodes(input.userId, null);
+      const roleCodes = await getPermissionCodesForRole(input.roleId);
+      base = withProtectedMp(input.roleCode, roleCodes);
+    } else {
+      const codes = rows.map((r) => r.code);
+      setCachedUserPermissionCodes(input.userId, codes);
+      base = withProtectedMp(input.roleCode, expandAccessTicks(codes));
+    }
   }
 
-  const db = getDb();
-  const rows = await db
-    .select({ code: permissions.code })
-    .from(userPermissions)
-    .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-    .where(eq(userPermissions.userId, input.userId));
+  if (input.includeDelegations === false) return base;
 
-  if (rows.length === 0) {
-    setCachedUserPermissionCodes(input.userId, null);
-    const roleCodes = await getPermissionCodesForRole(input.roleId);
-    return withProtectedMp(input.roleCode, roleCodes);
-  }
-
-  const codes = rows.map((r) => r.code);
-  setCachedUserPermissionCodes(input.userId, codes);
-  return withProtectedMp(input.roleCode, expandAccessTicks(codes));
+  const { listActiveDelegationCapabilities } = await import("@/lib/rbac/delegation");
+  const delegated = await listActiveDelegationCapabilities(input.firmId, input.userId);
+  if (delegated.length === 0) return base;
+  return [...new Set([...base, ...delegated])];
 }
 
 export async function replaceUserPermissionCodes(input: {

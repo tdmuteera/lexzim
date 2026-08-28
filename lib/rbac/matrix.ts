@@ -130,6 +130,36 @@ export const PERMISSION_DEFS: {
   { code: "settings.manage", name: "Manage settings", description: "Firm settings and exports", module: "settings" },
   { code: "users.manage", name: "Manage users", description: "Invite/deactivate users", module: "users" },
   { code: "reports.view", name: "View reports", description: "Run management reports", module: "reports" },
+  {
+    code: "knowledge.reports.view",
+    name: "View knowledge reports",
+    description: "List and download event / BD / training reports",
+    module: "knowledge",
+  },
+  {
+    code: "knowledge.reports.manage",
+    name: "Manage knowledge reports",
+    description: "Upload and manage event / BD / training reports",
+    module: "knowledge",
+  },
+  {
+    code: "invoice.approve",
+    name: "Approve invoices",
+    description: "Approve fee invoices pending send (delegable)",
+    module: "billing",
+  },
+  {
+    code: "leave.approve",
+    name: "Approve leave",
+    description: "Approve staff leave requests (delegable)",
+    module: "hr",
+  },
+  {
+    code: "payroll.advance.approve",
+    name: "Approve salary advances",
+    description: "Approve salary advance requests (delegable)",
+    module: "hr",
+  },
 ];
 
 const allCodes = PERMISSION_DEFS.map((p) => p.code);
@@ -163,6 +193,7 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "calendar.manage",
     "crm.view",
     "ai.use",
+    "knowledge.reports.view",
   ],
   secretary: [
     "dashboard.view",
@@ -179,6 +210,8 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "crm.view",
     "crm.manage",
     "ai.use",
+    "knowledge.reports.view",
+    "knowledge.reports.manage",
   ],
   accounts: [
     "dashboard.view",
@@ -201,5 +234,6 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "crm.view",
     "crm.manage",
     "reports.view",
+    "knowledge.reports.view",
   ],
 };

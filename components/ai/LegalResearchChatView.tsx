@@ -22,6 +22,23 @@ type Citation = {
   excerpt?: string;
   sourceUrl?: string | null;
   verified?: boolean;
+  verificationStatus?: string;
+};
+
+type ExploreSource = {
+  category: "statute" | "case_law" | "treaty" | "secondary";
+  title: string;
+  relevance: string;
+  sourceUrl: string;
+};
+
+type ResearchStatus = {
+  webConsulted?: boolean;
+  webUnavailable?: boolean;
+  currentnessChecked?: boolean;
+  currentnessUnverified?: boolean;
+  fabricatedRejected?: boolean;
+  verifiedPrimary?: boolean;
 };
 
 type ChatBubble = {
@@ -31,8 +48,26 @@ type ChatBubble = {
   confidence?: string | null;
   notFound?: boolean;
   citations?: Citation[];
+  supportingSources?: Citation[];
+  exploreSources?: ExploreSource[];
   document?: { id: string; fileName: string; font?: string; lineSpacing?: number } | null;
+  grounding?: "strong" | "weak" | "unsupported" | "skipped" | null;
+  showDisclaimer?: boolean;
+  researchStatus?: ResearchStatus | null;
 };
+
+function researchStatusFromMeta(
+  meta: Record<string, unknown> | null | undefined,
+): ResearchStatus | null {
+  const verify = meta?.verify;
+  const fromVerify =
+    verify && typeof verify === "object"
+      ? (verify as Record<string, unknown>).researchStatus
+      : null;
+  const raw = (fromVerify ?? meta?.researchStatus) as ResearchStatus | null | undefined;
+  if (!raw || typeof raw !== "object") return null;
+  return raw;
+}
 
 type ConversationItem = {
   id: string;
@@ -75,7 +110,12 @@ type AiStatus = {
 function confidenceFromMeta(
   confidence: number | null | undefined,
   meta: Record<string, unknown> | null | undefined,
-): { label: string | null; notFound: boolean } {
+): {
+  label: string | null;
+  notFound: boolean;
+  grounding: ChatBubble["grounding"];
+  showDisclaimer: boolean;
+} {
   const notFound = Boolean(meta?.notFound);
   const label =
     typeof meta?.confidenceLabel === "string"
@@ -87,7 +127,221 @@ function confidenceFromMeta(
           : confidence >= 0.5
             ? "medium"
             : "low";
-  return { label, notFound };
+  const groundingRaw = meta?.grounding;
+  const grounding =
+    groundingRaw === "strong" ||
+    groundingRaw === "weak" ||
+    groundingRaw === "unsupported" ||
+    groundingRaw === "skipped"
+      ? groundingRaw
+      : null;
+  const intent = typeof meta?.intent === "string" ? meta.intent : null;
+  const showCitations = Boolean(meta?.showCitations);
+  const showDisclaimer =
+    intent === "legal" ||
+    showCitations ||
+    grounding === "weak" ||
+    grounding === "unsupported" ||
+    grounding === "strong";
+  return { label, notFound, grounding, showDisclaimer };
+}
+
+const LEGAL_FOOTER_DISCLAIMER =
+  "Assistive only. Verify authorities against primary sources before relying on this answer. LexZim does not guarantee correctness.";
+
+function buildCopyText(message: ChatBubble): string {
+  let text = message.content.trim();
+  if (message.citations && message.citations.length > 0) {
+    const lines = message.citations.map((c) => `- ${c.citationLabel}`);
+    text += `\n\nSources:\n${lines.join("\n")}`;
+  }
+  return text;
+}
+
+function CopyAssistantButton({ message }: { message: ChatBubble }) {
+  const [copied, setCopied] = useState(false);
+
+  async function onCopy() {
+    const payload = buildCopyText(message);
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore clipboard failures */
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="ai-copy-btn"
+      onClick={() => void onCopy()}
+      aria-label="Copy message"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function CitationsList({
+  messageId,
+  prefix,
+  citations,
+}: {
+  messageId: string;
+  prefix: string;
+  citations: Citation[];
+}) {
+  return (
+    <ul>
+      {citations.map((c, i) => (
+        <li key={`${messageId}-${prefix}-c-${i}`}>
+          {c.sourceUrl ? (
+            <a href={c.sourceUrl} target="_blank" rel="noreferrer">
+              {c.citationLabel}
+            </a>
+          ) : (
+            <span>{c.citationLabel}</span>
+          )}
+          {c.verified === false ? (
+            c.verificationStatus === "web_consulted" ? (
+              <span className="muted"> (web — confirm on site)</span>
+            ) : c.verificationStatus === "requires_verification" ? (
+              <span className="muted"> (verify on publisher site)</span>
+            ) : null
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PrimarySourcesBlock({
+  messageId,
+  citations,
+}: {
+  messageId: string;
+  citations: Citation[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (!citations.length) return null;
+
+  return (
+    <div className="ai-citations">
+      <div className="ai-citations-head">
+        <div className="label">Primary sources</div>
+        <button
+          type="button"
+          className="ai-sources-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p className="ai-citations-note muted">
+        Acts, statutes, and authorities named in this answer. Click to verify on the publisher site.
+      </p>
+      {open ? <CitationsList messageId={messageId} prefix="p" citations={citations} /> : null}
+    </div>
+  );
+}
+
+function SupportingSourcesBlock({
+  messageId,
+  citations,
+}: {
+  messageId: string;
+  citations: Citation[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (!citations.length) return null;
+
+  return (
+    <div className="ai-citations ai-supporting">
+      <div className="ai-citations-head">
+        <div className="label">Other sources consulted</div>
+        <button
+          type="button"
+          className="ai-sources-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p className="ai-citations-note muted">
+        Web pages browsed this turn that informed the answer but are not primary legislation.
+      </p>
+      {open ? <CitationsList messageId={messageId} prefix="s" citations={citations} /> : null}
+    </div>
+  );
+}
+
+const EXPLORE_CATEGORY_LABEL: Record<ExploreSource["category"], string> = {
+  statute: "Statutes",
+  case_law: "Case law",
+  treaty: "Treaties / international instruments",
+  secondary: "Secondary sources",
+};
+
+function ExploreSourcesBlock({
+  messageId,
+  sources,
+}: {
+  messageId: string;
+  sources: ExploreSource[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (!sources.length) return null;
+
+  const byCategory = (Object.keys(EXPLORE_CATEGORY_LABEL) as ExploreSource["category"][])
+    .map((category) => ({
+      category,
+      items: sources.filter((s) => s.category === category),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  return (
+    <div className="ai-citations ai-explore">
+      <div className="ai-citations-head">
+        <div className="label">Sources to look into</div>
+        <button
+          type="button"
+          className="ai-sources-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p className="ai-citations-note muted">
+        Related reading and follow-up links. Not necessarily cited in the answer above.
+      </p>
+      {open ? (
+        <div className="ai-explore-body">
+          {byCategory.map((group) => (
+            <div key={`${messageId}-${group.category}`} className="ai-explore-group">
+              <div className="ai-explore-cat">{EXPLORE_CATEGORY_LABEL[group.category]}</div>
+              <ul>
+                {group.items.map((s, i) => (
+                  <li key={`${messageId}-e-${group.category}-${i}`}>
+                    <a href={s.sourceUrl} target="_blank" rel="noreferrer">
+                      {s.title}
+                    </a>
+                    {s.relevance ? (
+                      <div className="ai-citation-hint muted">{s.relevance}</div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function LegalResearchChatView() {
@@ -106,6 +360,12 @@ export function LegalResearchChatView() {
   const [loadingList, setLoadingList] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [micState, setMicState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const [matters, setMatters] = useState<MatterOption[]>([]);
   const [matterId, setMatterId] = useState("");
@@ -184,6 +444,17 @@ export function LegalResearchChatView() {
     el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
+  useEffect(() => {
+    return () => {
+      try {
+        mediaRecorderRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
   function switchMode(next: AssistantMode) {
     if (next === mode) return;
     setMode(next);
@@ -198,12 +469,16 @@ export function LegalResearchChatView() {
     setMessages([]);
     setError(null);
     setQuestion("");
+    setEditingId(null);
+    setEditDraft("");
   }
 
   async function openConversation(id: string) {
     setLoadingThread(true);
     setError(null);
     setConversationId(id);
+    setEditingId(null);
+    setEditDraft("");
     try {
       const res = await fetch(`/api/ai/conversations/${id}`, { credentials: "include" });
       const body = (await res.json()) as {
@@ -233,13 +508,35 @@ export function LegalResearchChatView() {
           .filter((m) => m.role === "user" || m.role === "assistant")
           .map((m) => {
             const conf = confidenceFromMeta(m.confidence, m.retrievalMetaJson);
+            const rawCitations = Array.isArray(m.citationsJson) ? m.citationsJson : [];
+            const tiers = m.retrievalMetaJson?.sourceTiers as
+              | { primary?: Citation[]; supporting?: Citation[]; furtherReading?: ExploreSource[] }
+              | undefined;
+            const citations =
+              conf.grounding === "skipped" ||
+              (typeof m.retrievalMetaJson?.intent === "string" &&
+                m.retrievalMetaJson.intent === "chat")
+                ? []
+                : (tiers?.primary ?? rawCitations);
+            const supportingSources =
+              conf.grounding === "skipped" || m.retrievalMetaJson?.intent === "chat"
+                ? []
+                : (tiers?.supporting ?? []);
             return {
               id: m.id,
               role: m.role as "user" | "assistant",
               content: m.content,
               confidence: conf.label,
               notFound: conf.notFound,
-              citations: Array.isArray(m.citationsJson) ? m.citationsJson : [],
+              citations,
+              supportingSources,
+              exploreSources: Array.isArray(tiers?.furtherReading)
+                ? tiers.furtherReading
+                : Array.isArray(m.retrievalMetaJson?.exploreSources)
+                  ? (m.retrievalMetaJson.exploreSources as ExploreSource[])
+                  : [],
+              grounding: conf.grounding,
+              showDisclaimer: m.role === "assistant" ? conf.showDisclaimer : false,
               document:
                 m.retrievalMetaJson &&
                 typeof m.retrievalMetaJson === "object" &&
@@ -247,6 +544,7 @@ export function LegalResearchChatView() {
                 typeof m.retrievalMetaJson.document === "object"
                   ? (m.retrievalMetaJson.document as ChatBubble["document"])
                   : null,
+              researchStatus: researchStatusFromMeta(m.retrievalMetaJson),
             };
           }),
       );
@@ -338,9 +636,24 @@ export function LegalResearchChatView() {
           confidence: string;
           citations: Citation[];
           notFound: boolean;
+          disclaimer?: string;
           matterHeader?: MatterHeader;
           document?: { id: string; fileName: string; font?: string; lineSpacing?: number } | null;
-          retrievalMeta?: { errorCode?: string; emptyReason?: string | null };
+          grounding?: "strong" | "weak" | "unsupported" | "skipped";
+          exploreSources?: ExploreSource[];
+          sourceTiers?: {
+            primary?: Citation[];
+            supporting?: Citation[];
+            furtherReading?: ExploreSource[];
+          };
+          retrievalMeta?: {
+            errorCode?: string;
+            emptyReason?: string | null;
+            grounding?: string;
+            intent?: string;
+            showCitations?: boolean;
+            exploreSources?: ExploreSource[];
+          };
         };
         error?: { message: string };
       };
@@ -355,6 +668,35 @@ export function LegalResearchChatView() {
 
       setConversationId(body.data.conversationId);
       if (body.data.matterHeader) setMatterHeader(body.data.matterHeader);
+      const grounding =
+        body.data.grounding ??
+        (body.data.retrievalMeta?.grounding as ChatBubble["grounding"]) ??
+        null;
+      const intent = body.data.retrievalMeta?.intent;
+      const tiers = body.data.sourceTiers;
+      const citations =
+        grounding === "skipped" || intent === "chat"
+          ? []
+          : tiers?.primary ?? body.data.citations ?? [];
+      const supportingSources =
+        grounding === "skipped" || intent === "chat" ? [] : tiers?.supporting ?? [];
+      const exploreSources =
+        grounding === "skipped" || intent === "chat"
+          ? []
+          : tiers?.furtherReading ??
+            body.data.exploreSources ??
+            body.data.retrievalMeta?.exploreSources ??
+            [];
+      const showDisclaimer =
+        mode === "legal_research"
+          ? intent === "legal" ||
+            citations.length > 0 ||
+            grounding === "weak" ||
+            grounding === "unsupported" ||
+            grounding === "strong"
+          : citations.length > 0 ||
+            grounding === "weak" ||
+            grounding === "unsupported";
       setMessages((prev) => [
         ...prev,
         {
@@ -363,8 +705,15 @@ export function LegalResearchChatView() {
           content: body.data!.answer,
           confidence: body.data!.confidence,
           notFound: body.data!.notFound,
-          citations: body.data!.citations,
+          citations,
+          supportingSources,
+          exploreSources,
+          grounding,
+          showDisclaimer,
           document: body.data!.document ?? null,
+          researchStatus: researchStatusFromMeta(
+            (body.data!.retrievalMeta as Record<string, unknown> | undefined) ?? null,
+          ),
         },
       ]);
 
@@ -377,6 +726,170 @@ export function LegalResearchChatView() {
       void loadStatus(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function startEdit(message: ChatBubble) {
+    if (loading || message.role !== "user" || message.id.startsWith("local-")) return;
+    setEditingId(message.id);
+    setEditDraft(message.content);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft("");
+  }
+
+  async function saveEditAndRegenerate() {
+    if (!conversationId || !editingId || loading) return;
+    const content = editDraft.trim();
+    if (!content) {
+      setError("Message cannot be empty.");
+      return;
+    }
+    if (sendBlocked) {
+      const msg = sendBlockedReason || humanAiError("AI unavailable");
+      setError(msg);
+      toast(msg);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const messageId = editingId;
+    setEditingId(null);
+    setEditDraft("");
+
+    try {
+      const res = await fetchAiJsonWithRetry(
+        `/api/ai/conversations/${conversationId}/regenerate`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId, content }),
+        },
+      );
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        const msg = humanAiError(body.error?.message, res.status);
+        setError(msg);
+        toast(msg);
+        void loadStatus(true);
+        return;
+      }
+      await openConversation(conversationId);
+      void loadConversations(mode);
+      void loadStatus(false);
+    } catch {
+      const msg = humanAiError("network error", 503);
+      setError(msg);
+      toast(msg);
+      void loadStatus(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function stopMediaTracks() {
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+  }
+
+  async function toggleMic() {
+    if (loading || extracting || sendBlocked || micState === "transcribing") return;
+
+    if (micState === "recording") {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setError("This browser does not support microphone recording.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      mediaChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) mediaChunksRef.current.push(ev.data);
+      };
+
+      recorder.onstop = () => {
+        void (async () => {
+          setMicState("transcribing");
+          stopMediaTracks();
+          const blob = new Blob(mediaChunksRef.current, {
+            type: recorder.mimeType || "audio/webm",
+          });
+          mediaChunksRef.current = [];
+          mediaRecorderRef.current = null;
+          try {
+            const form = new FormData();
+            form.append("file", blob, "recording.webm");
+            const res = await fetch("/api/ai/transcribe", {
+              method: "POST",
+              credentials: "include",
+              body: form,
+            });
+            const body = (await res.json()) as {
+              ok: boolean;
+              data?: { text?: string };
+              error?: { message?: string };
+            };
+            if (!res.ok || !body.ok || !body.data?.text) {
+              const msg =
+                body.error?.message ||
+                "Transcription failed. Check OpenAI key under Settings → AI.";
+              setError(msg);
+              toast(msg);
+              return;
+            }
+            setQuestion((prev) => {
+              const next = body.data!.text!.trim();
+              if (!prev.trim()) return next;
+              return `${prev.trim()} ${next}`;
+            });
+          } catch {
+            const msg = "Could not reach the transcription service.";
+            setError(msg);
+            toast(msg);
+          } finally {
+            setMicState("idle");
+          }
+        })();
+      };
+
+      recorder.start();
+      setMicState("recording");
+      setError(null);
+    } catch (err) {
+      stopMediaTracks();
+      setMicState("idle");
+      const name = err && typeof err === "object" && "name" in err ? String(err.name) : "";
+      const msg =
+        name === "NotAllowedError" || name === "PermissionDeniedError"
+          ? "Microphone permission denied. Allow mic access in the browser, then try again."
+          : name === "NotFoundError"
+            ? "No microphone found on this device."
+            : "Could not start recording.";
+      setError(msg);
+      toast(msg);
     }
   }
 
@@ -594,9 +1107,65 @@ export function LegalResearchChatView() {
               >
                 <div className="ai-bubble-head">
                   <strong>{m.role === "user" ? "You" : "LexZim"}</strong>
+                  {m.role === "assistant" && m.researchStatus?.webConsulted ? (
+                    <span className="ai-chip" title="Allowlisted online sources consulted">
+                      web consulted
+                    </span>
+                  ) : null}
+                  {m.role === "assistant" && m.researchStatus?.webUnavailable ? (
+                    <span className="ai-chip warn" title="Online verification failed">
+                      web unavailable
+                    </span>
+                  ) : null}
+                  {m.role === "assistant" ? (
+                    <CopyAssistantButton message={m} />
+                  ) : editingId !== m.id ? (
+                    <button
+                      type="button"
+                      className="ai-edit-btn"
+                      disabled={loading || m.id.startsWith("local-")}
+                      onClick={() => startEdit(m)}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                 </div>
                 <div className="ai-bubble-body">
-                  {m.role === "assistant" ? <ChatMarkdown text={m.content} /> : m.content}
+                  {m.role === "user" && editingId === m.id ? (
+                    <div className="ai-edit-form">
+                      <textarea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        rows={3}
+                        disabled={loading}
+                        aria-label="Edit message"
+                      />
+                      <div className="ai-edit-actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={loading}
+                          onClick={cancelEdit}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="gold"
+                          size="sm"
+                          disabled={loading || !editDraft.trim()}
+                          onClick={() => void saveEditAndRegenerate()}
+                        >
+                          Save &amp; regenerate
+                        </Button>
+                      </div>
+                    </div>
+                  ) : m.role === "assistant" ? (
+                    <ChatMarkdown text={m.content} />
+                  ) : (
+                    m.content
+                  )}
                 </div>
                 {m.document ? (
                   <p className="ai-doc-link">
@@ -612,23 +1181,26 @@ export function LegalResearchChatView() {
                     ) : null}
                   </p>
                 ) : null}
-                {m.citations && m.citations.length > 0 ? (
-                  <div className="ai-citations">
-                    <div className="label">Sources</div>
-                    <ul>
-                      {m.citations.map((c, i) => (
-                        <li key={`${m.id}-c-${i}`}>
-                          {c.sourceUrl ? (
-                            <a href={c.sourceUrl} target="_blank" rel="noreferrer">
-                              {c.citationLabel}
-                            </a>
-                          ) : (
-                            <span>{c.citationLabel}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                {m.role === "assistant" && m.citations && m.citations.length > 0 ? (
+                  <PrimarySourcesBlock messageId={m.id} citations={m.citations} />
+                ) : null}
+                {m.role === "assistant" &&
+                m.supportingSources &&
+                m.supportingSources.length > 0 ? (
+                  <SupportingSourcesBlock
+                    messageId={m.id}
+                    citations={m.supportingSources}
+                  />
+                ) : null}
+                {m.role === "assistant" &&
+                m.exploreSources &&
+                m.exploreSources.length > 0 ? (
+                  <ExploreSourcesBlock messageId={m.id} sources={m.exploreSources} />
+                ) : null}
+                {m.role === "assistant" && m.showDisclaimer ? (
+                  <p className="ai-disclaimer muted" role="note">
+                    {LEGAL_FOOTER_DISCLAIMER}
+                  </p>
                 ) : null}
               </div>
             ))}
@@ -679,6 +1251,7 @@ export function LegalResearchChatView() {
                 loading ||
                 extracting ||
                 sendBlocked ||
+                micState !== "idle" ||
                 (mode === "matter_assist" && !matterId)
               }
               onKeyDown={(e) => {
@@ -703,6 +1276,25 @@ export function LegalResearchChatView() {
               />
               Attach
             </label>
+            <button
+              type="button"
+              className={`ai-mic-btn${micState === "recording" ? " recording" : ""}`}
+              disabled={
+                loading ||
+                extracting ||
+                sendBlocked ||
+                micState === "transcribing" ||
+                (mode === "matter_assist" && !matterId)
+              }
+              onClick={() => void toggleMic()}
+              title="Dictate with microphone (does not auto-send)"
+            >
+              {micState === "recording"
+                ? "Recording…"
+                : micState === "transcribing"
+                  ? "Transcribing…"
+                  : "Mic"}
+            </button>
             <Button
               type="submit"
               variant="gold"
@@ -711,6 +1303,7 @@ export function LegalResearchChatView() {
                 extracting ||
                 sendBlocked ||
                 !question.trim() ||
+                micState !== "idle" ||
                 (mode === "matter_assist" && !matterId)
               }
               title={sendBlocked ? sendBlockedReason ?? "AI send disabled" : undefined}

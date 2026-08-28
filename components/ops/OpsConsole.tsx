@@ -46,6 +46,16 @@ export function OpsConsole() {
   const [purgeFirmId, setPurgeFirmId] = useState("");
   const [purgeSlug, setPurgeSlug] = useState("");
   const [purgePhrase, setPurgePhrase] = useState("");
+  const [clientPurgeFirmId, setClientPurgeFirmId] = useState("");
+  const [clientPurgeClientId, setClientPurgeClientId] = useState("");
+  const [clientPurgeNumber, setClientPurgeNumber] = useState("");
+  const [clientPurgePhrase, setClientPurgePhrase] = useState("");
+  const [clientPurgePreview, setClientPurgePreview] = useState<{
+    clientNumber: string | null;
+    displayName: string;
+    archivedAt: string | null;
+    counts: Record<string, number>;
+  } | null>(null);
   const [diagOk, setDiagOk] = useState<boolean | null>(null);
   const [diagFailing, setDiagFailing] = useState<string[]>([]);
 
@@ -220,6 +230,94 @@ export function OpsConsole() {
     }
   }
 
+  async function loadClientPurgePreview() {
+    if (!clientPurgeFirmId || !clientPurgeClientId.trim()) {
+      setError("Choose a firm and enter the client UUID.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setOkMsg(null);
+    setClientPurgePreview(null);
+    try {
+      const params = new URLSearchParams({
+        firmId: clientPurgeFirmId,
+        clientId: clientPurgeClientId.trim(),
+      });
+      const res = await fetch(`/api/platform/clients/purge?${params}`, {
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: {
+          preview: {
+            clientNumber: string | null;
+            displayName: string;
+            archivedAt: string | null;
+            counts: Record<string, number>;
+          };
+        };
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok || !body.data?.preview) {
+        setError(body.error?.message ?? "Could not load client purge preview.");
+        return;
+      }
+      setClientPurgePreview(body.data.preview);
+      setClientPurgeNumber(body.data.preview.clientNumber ?? "");
+      setOkMsg(
+        `Preview: ${body.data.preview.displayName} (${body.data.preview.clientNumber ?? "no number"}).`,
+      );
+    } catch {
+      setError("Could not load client purge preview.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function purgeClient() {
+    if (!clientPurgeFirmId || !clientPurgeClientId.trim()) {
+      setError("Choose a firm and client id.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const res = await fetch("/api/platform/clients/purge", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firmId: clientPurgeFirmId,
+          clientId: clientPurgeClientId.trim(),
+          confirmClientNumber: clientPurgeNumber,
+          confirmPhrase: clientPurgePhrase,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { displayName?: string; clientNumber?: string | null };
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Client purge failed.");
+        return;
+      }
+      setOkMsg(
+        `Client purged: ${body.data?.displayName ?? ""} (${body.data?.clientNumber ?? ""}). Outstanding fees for that client are gone.`,
+      );
+      setClientPurgeClientId("");
+      setClientPurgeNumber("");
+      setClientPurgePhrase("");
+      setClientPurgePreview(null);
+    } catch {
+      setError("Client purge failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <section className="ops-card">
@@ -327,6 +425,100 @@ export function OpsConsole() {
             onClick={() => void issueLicence()}
           >
             Issue / renew licence
+          </button>
+        </div>
+      </section>
+
+      <section className="ops-card">
+        <h2>Purge test client (irreversible)</h2>
+        <p className="ops-muted" style={{ marginTop: 0 }}>
+          Development / platform ops only. Removes the client, matters, invoices, payments,
+          quotations, and related trust ledger rows so dashboard outstanding fees drop. Firm
+          Managing Partner soft-archive keeps finance; this wipe does not.
+        </p>
+        <div className="ops-form">
+          <label>
+            Firm
+            <select
+              value={clientPurgeFirmId}
+              onChange={(e) => {
+                setClientPurgeFirmId(e.target.value);
+                setClientPurgePreview(null);
+              }}
+              disabled={busy}
+            >
+              <option value="">Select…</option>
+              {firms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Client UUID
+            <input
+              value={clientPurgeClientId}
+              onChange={(e) => setClientPurgeClientId(e.target.value)}
+              placeholder="Paste client id from Clients URL"
+              disabled={busy}
+            />
+          </label>
+          <button
+            type="button"
+            className="ops-btn"
+            disabled={busy || !clientPurgeFirmId || !clientPurgeClientId.trim()}
+            onClick={() => void loadClientPurgePreview()}
+          >
+            Load dependency preview
+          </button>
+          {clientPurgePreview ? (
+            <div className="ops-muted" style={{ fontSize: "0.9rem" }}>
+              <div>
+                <strong>{clientPurgePreview.displayName}</strong> ·{" "}
+                {clientPurgePreview.clientNumber ?? "no number"}
+                {clientPurgePreview.archivedAt ? " · archived" : ""}
+              </div>
+              <div>
+                matters {clientPurgePreview.counts.matters ?? 0}, invoices{" "}
+                {clientPurgePreview.counts.invoices ?? 0}, payments{" "}
+                {clientPurgePreview.counts.feePayments ?? 0}, quotes{" "}
+                {clientPurgePreview.counts.quotations ?? 0}, docs{" "}
+                {clientPurgePreview.counts.documents ?? 0}, trust ledgers{" "}
+                {clientPurgePreview.counts.trustLedgerEntries ?? 0}
+              </div>
+            </div>
+          ) : null}
+          <label>
+            Confirm client number
+            <input
+              value={clientPurgeNumber}
+              onChange={(e) => setClientPurgeNumber(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <label>
+            Confirm phrase
+            <input
+              value={clientPurgePhrase}
+              onChange={(e) => setClientPurgePhrase(e.target.value)}
+              placeholder="DELETE CLIENT"
+              disabled={busy}
+            />
+          </label>
+          <button
+            type="button"
+            className="ops-btn"
+            disabled={
+              busy ||
+              !clientPurgeFirmId ||
+              !clientPurgeClientId.trim() ||
+              !clientPurgeNumber.trim() ||
+              clientPurgePhrase !== "DELETE CLIENT"
+            }
+            onClick={() => void purgeClient()}
+          >
+            Purge client permanently
           </button>
         </div>
       </section>

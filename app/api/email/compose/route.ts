@@ -29,6 +29,9 @@ export async function POST(request: Request) {
     if (!clientId) throw new AuthError("validation", "clientId is required.");
     const subject = payload.subject?.trim();
     if (!subject) throw new AuthError("validation", "Subject is required.");
+    if (subject.length > 200) {
+      throw new AuthError("validation", "Subject must be at most 200 characters.");
+    }
     const messageBody = payload.body?.trim();
     if (!messageBody) throw new AuthError("validation", "Message body is required.");
 
@@ -72,15 +75,44 @@ export async function POST(request: Request) {
       tradingName: client.tradingName,
     });
 
-    const result = await sendFirmEmail(firmId, {
-      to,
-      subject,
-      text: `${messageBody}\n\nRegards,\n${session.firm.name}`,
-      html: `${messageBody
-        .split("\n")
-        .map((line) => (line ? `<p>${line}</p>` : "<br/>"))
-        .join("")}<p>Regards,<br/>${session.firm.name}</p>`,
-    });
+    let result: Awaited<ReturnType<typeof sendFirmEmail>>;
+    try {
+      result = await sendFirmEmail(firmId, {
+        to,
+        subject,
+        text: `${messageBody}\n\nRegards,\n${session.firm.name}`,
+        html: `${messageBody
+          .split("\n")
+          .map((line) => (line ? `<p>${line}</p>` : "<br/>"))
+          .join("")}<p>Regards,<br/>${session.firm.name}</p>`,
+      });
+    } catch (sendErr) {
+      const safeError =
+        sendErr instanceof AuthError
+          ? sendErr.message
+          : "Could not send email. Check SMTP settings or try again.";
+      try {
+        await writeAuditLog({
+          action: "email.failed",
+          firmId,
+          userId: session.id,
+          entityType: "client",
+          entityId: clientId,
+          metadata: {
+            recipient: to,
+            subject,
+            templateType: "notification",
+            status: "failed",
+            error: safeError,
+          },
+          ipOrUserAgent: clientInfo(request),
+        });
+      } catch {
+        /* audit must not block the client error envelope */
+      }
+      if (sendErr instanceof AuthError) throw sendErr;
+      throw new AuthError("validation", safeError);
+    }
 
     await writeAuditLog({
       action: "email.sent",
@@ -93,6 +125,7 @@ export async function POST(request: Request) {
         templateType: "notification",
         clientLabel: label,
         subject,
+        status: "sent",
         transport: result.transport,
         messageId: result.messageId,
       },

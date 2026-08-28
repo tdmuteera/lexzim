@@ -59,7 +59,10 @@ export async function ingestZimbabweStarterPack(): Promise<StarterIngestResult> 
     .select({ id: knowledgeSources.id })
     .from(knowledgeSources)
     .where(
-      and(isNull(knowledgeSources.firmId), eq(knowledgeSources.versionLabel, STARTER_PACK_VERSION)),
+      and(
+        isNull(knowledgeSources.firmId),
+        sql`${knowledgeSources.versionLabel} like 'lexzim-starter-pack-%'`,
+      ),
     );
 
   let embeddingsDeleted = 0;

@@ -363,6 +363,28 @@ export async function listInvoices(
     .orderBy(desc(invoices.createdAt));
 }
 
+/** Invoices awaiting pre-send approval (approval_state = pending). */
+export async function listPendingApprovalInvoices(firmId: string, limit = 50) {
+  const db = getDb();
+  return db
+    .select({
+      invoice: invoices,
+      matterTitle: matters.title,
+      matterNumber: matters.matterNumber,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      clientType: clients.clientType,
+      clientNumber: clients.clientNumber,
+    })
+    .from(invoices)
+    .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
+    .leftJoin(clients, and(eq(clients.id, invoices.clientId), eq(clients.firmId, firmId)))
+    .where(and(eq(invoices.firmId, firmId), eq(invoices.approvalState, "pending")))
+    .orderBy(desc(invoices.submittedAt), desc(invoices.createdAt))
+    .limit(limit);
+}
+
 export async function getInvoice(firmId: string, invoiceId: string) {
   const db = getDb();
   const rows = await db
@@ -375,6 +397,7 @@ export async function getInvoice(firmId: string, invoiceId: string) {
       clientTradingName: clients.tradingName,
       clientType: clients.clientType,
       clientNumber: clients.clientNumber,
+      clientEmail: clients.email,
       clientPhysicalAddress: clients.physicalAddress,
       clientPostalAddress: clients.postalAddress,
     })
@@ -767,11 +790,24 @@ export async function updateInvoiceStatus(
   const previousStatus = full.invoice.status;
   assertInvoiceStatusTransition(previousStatus, status);
 
+  if (status === "sent" && previousStatus === "draft") {
+    const { getRequireInvoiceApproval } = await import("@/lib/billing/invoice-approval");
+    const requireApproval = await getRequireInvoiceApproval(firmId);
+    if (requireApproval && full.invoice.approvalState !== "approved") {
+      throw new AuthError(
+        "validation",
+        "This fee note must be approved before it can be marked sent.",
+      );
+    }
+  }
+
   const patch: {
     status: string;
     updatedAt: Date;
     issueDate?: Date;
     dueDate?: Date | null;
+    approvalState?: string;
+    rejectionNote?: string | null;
   } = {
     status,
     updatedAt: new Date(),
@@ -807,6 +843,7 @@ export async function updateInvoiceStatus(
   const updated = rows[0] ?? null;
 
   if (updated && userId) {
+    // GL posts only on first Mark sent (from draft). Approved is pre-send only.
     if (status === "sent" && previousStatus === "draft") {
       await postInvoiceSentGl(firmId, userId, invoiceId);
     }
@@ -816,6 +853,103 @@ export async function updateInvoiceStatus(
   }
 
   return updated;
+}
+
+export async function applyInvoiceApprovalAction(
+  firmId: string,
+  invoiceId: string,
+  actorUserId: string,
+  action: "submit" | "approve" | "reject",
+  rejectionNote?: string | null,
+) {
+  const full = await getInvoice(firmId, invoiceId);
+  if (!full) {
+    throw new AuthError("not_found", "Invoice not found.");
+  }
+  if (full.invoice.status !== "draft") {
+    throw new AuthError(
+      "validation",
+      "Approval actions only apply to draft fee notes before send.",
+    );
+  }
+
+  const {
+    assertApprovalTransition,
+    getRequireInvoiceApproval,
+    notifyInvoiceApprovers,
+    notifyInvoiceCreator,
+  } = await import("@/lib/billing/invoice-approval");
+
+  if (action === "submit") {
+    const required = await getRequireInvoiceApproval(firmId);
+    if (!required) {
+      throw new AuthError(
+        "validation",
+        "Invoice approval is turned off for this firm. You can Mark sent directly.",
+      );
+    }
+  }
+
+  const nextState = assertApprovalTransition(full.invoice.approvalState, action);
+  const now = new Date();
+  const patch: {
+    approvalState: string;
+    updatedAt: Date;
+    submittedAt?: Date;
+    submittedBy?: string;
+    approvedAt?: Date | null;
+    approvedBy?: string | null;
+    rejectionNote?: string | null;
+  } = {
+    approvalState: nextState,
+    updatedAt: now,
+  };
+
+  if (action === "submit") {
+    patch.submittedAt = now;
+    patch.submittedBy = actorUserId;
+    patch.approvedAt = null;
+    patch.approvedBy = null;
+    patch.rejectionNote = null;
+  } else if (action === "approve") {
+    patch.approvedAt = now;
+    patch.approvedBy = actorUserId;
+    patch.rejectionNote = null;
+  } else {
+    patch.approvedAt = null;
+    patch.approvedBy = null;
+    patch.rejectionNote = rejectionNote?.trim() || null;
+  }
+
+  const db = getDb();
+  const rows = await db
+    .update(invoices)
+    .set(patch)
+    .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)))
+    .returning();
+  const updated = rows[0];
+  if (!updated) throw new AuthError("not_found", "Invoice not found.");
+
+  if (action === "submit") {
+    await notifyInvoiceApprovers({
+      firmId,
+      invoiceId,
+      invoiceNumber: updated.invoiceNumber,
+      excludeUserId: actorUserId,
+    });
+  } else {
+    await notifyInvoiceCreator({
+      firmId,
+      creatorUserId: full.invoice.createdBy ?? full.invoice.submittedBy,
+      invoiceId,
+      invoiceNumber: updated.invoiceNumber,
+      outcome: action === "approve" ? "approved" : "rejected",
+      rejectionNote: updated.rejectionNote,
+      actorUserId,
+    });
+  }
+
+  return { previous: full.invoice.approvalState, invoice: updated };
 }
 
 export async function createFeePayment(
@@ -856,7 +990,11 @@ export async function createFeePayment(
   await postFeePaymentGl(firmId, userId, payment!.id);
 
   const paid = await sumFeePayments(firmId, invoiceId);
-  if (paid >= full.invoice.totalCents && full.invoice.status !== "paid") {
+  const retainerApplied = full.invoice.retainerAppliedCents ?? 0;
+  if (
+    paid + retainerApplied >= full.invoice.totalCents &&
+    full.invoice.status !== "paid"
+  ) {
     await db
       .update(invoices)
       .set({ status: "paid", updatedAt: new Date() })

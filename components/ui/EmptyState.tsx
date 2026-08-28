@@ -4,7 +4,7 @@ import { Icon } from "@/components/ui/Icon";
 type EmptyStateProps = {
   title: string;
   detail?: string;
-  icon?: "search" | "folder" | "users" | "list";
+  icon?: "search" | "folder" | "users" | "list" | "check";
   action?: ReactNode;
 };
 

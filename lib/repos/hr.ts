@@ -5,8 +5,102 @@ import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { hrContracts, hrStaffProfiles, users } from "@/lib/db/schema";
+import { jobCategoryImpliesLawyer } from "@/lib/hr/job-categories";
 import type { HrContractInput, StaffProfileInput } from "@/lib/hr/validation";
 import { deleteFirmFile } from "@/lib/storage/firm-files";
+
+function profileValuesFromInput(firmId: string, input: StaffProfileInput) {
+  return {
+    firmId,
+    userId: input.userId,
+    fullName: input.fullName,
+    email: input.email,
+    phone: input.phone,
+    jobTitle: input.jobTitle,
+    jobCategory: input.jobCategory,
+    department: input.department,
+    employeeNumber: input.employeeNumber,
+    idPassport: input.idPassport,
+    workLocation: input.workLocation,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    emergencyContactName: input.emergencyContactName,
+    emergencyContactPhone: input.emergencyContactPhone,
+    nokFullName: input.nokFullName,
+    nokRelationship: input.nokRelationship,
+    nokPhone1: input.nokPhone1,
+    nokPhone2: input.nokPhone2,
+    nokAddress: input.nokAddress,
+    nokEmail: input.nokEmail,
+    nokOccupation: input.nokOccupation,
+    nokDeclaredAt: input.nokDeclaredAt,
+    nokReceivedAt: input.nokReceivedAt,
+    grossSalaryCents: input.grossSalaryCents,
+    netSalaryCents: input.netSalaryCents,
+    isActive: input.isActive,
+    annualLeaveEntitlementDays: input.annualLeaveEntitlementDays,
+    notes: input.notes,
+    updatedAt: new Date(),
+  };
+}
+
+async function syncLinkedUserFromProfile(
+  firmId: string,
+  userId: string | null | undefined,
+  input: StaffProfileInput,
+) {
+  if (!userId) return;
+  const db = getDb();
+  const patch: {
+    fullName?: string;
+    jobTitle?: string | null;
+    isLawyer?: boolean;
+    updatedAt: Date;
+  } = { updatedAt: new Date() };
+  if (input.fullName) patch.fullName = input.fullName;
+  if (input.jobTitle !== undefined) patch.jobTitle = input.jobTitle;
+  if (input.markAsLawyer !== null && input.markAsLawyer !== undefined) {
+    patch.isLawyer = input.markAsLawyer;
+  } else if (jobCategoryImpliesLawyer(input.jobCategory)) {
+    patch.isLawyer = true;
+  }
+  await db
+    .update(users)
+    .set(patch)
+    .where(and(eq(users.firmId, firmId), eq(users.id, userId)));
+}
+
+/**
+ * Ensure a system login has an HR employee profile (unless test user).
+ * Idempotent. Used on Staff create and available for scripts.
+ */
+export async function ensureEmployeeProfileForUser(input: {
+  firmId: string;
+  userId: string;
+  fullName: string;
+  email?: string | null;
+  jobTitle?: string | null;
+  isTestUser?: boolean;
+}) {
+  if (input.isTestUser) return null;
+  const existing = await getStaffProfileByUserId(input.firmId, input.userId);
+  if (existing) return existing.profile;
+
+  const db = getDb();
+  const rows = await db
+    .insert(hrStaffProfiles)
+    .values({
+      firmId: input.firmId,
+      userId: input.userId,
+      fullName: input.fullName,
+      email: input.email ?? null,
+      jobTitle: input.jobTitle ?? null,
+      isActive: true,
+      updatedAt: new Date(),
+    })
+    .returning();
+  return rows[0] ?? null;
+}
 
 export async function listStaffProfiles(
   firmId: string,
@@ -123,25 +217,11 @@ export async function createStaffProfile(firmId: string, input: StaffProfileInpu
   const db = getDb();
   const rows = await db
     .insert(hrStaffProfiles)
-    .values({
-      firmId,
-      userId: input.userId,
-      fullName: input.fullName,
-      email: input.email,
-      phone: input.phone,
-      jobTitle: input.jobTitle,
-      department: input.department,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      emergencyContactName: input.emergencyContactName,
-      emergencyContactPhone: input.emergencyContactPhone,
-      isActive: input.isActive,
-      annualLeaveEntitlementDays: input.annualLeaveEntitlementDays,
-      notes: input.notes,
-      updatedAt: new Date(),
-    })
+    .values(profileValuesFromInput(firmId, input))
     .returning();
-  return rows[0]!;
+  const row = rows[0]!;
+  await syncLinkedUserFromProfile(firmId, row.userId, input);
+  return row;
 }
 
 export async function updateStaffProfile(
@@ -161,25 +241,12 @@ export async function updateStaffProfile(
   const db = getDb();
   const rows = await db
     .update(hrStaffProfiles)
-    .set({
-      userId: input.userId,
-      fullName: input.fullName,
-      email: input.email,
-      phone: input.phone,
-      jobTitle: input.jobTitle,
-      department: input.department,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      emergencyContactName: input.emergencyContactName,
-      emergencyContactPhone: input.emergencyContactPhone,
-      isActive: input.isActive,
-      annualLeaveEntitlementDays: input.annualLeaveEntitlementDays,
-      notes: input.notes,
-      updatedAt: new Date(),
-    })
+    .set(profileValuesFromInput(firmId, input))
     .where(and(eq(hrStaffProfiles.firmId, firmId), eq(hrStaffProfiles.id, id)))
     .returning();
-  return rows[0] ?? null;
+  const row = rows[0] ?? null;
+  if (row) await syncLinkedUserFromProfile(firmId, row.userId, input);
+  return row;
 }
 
 export async function listHrContracts(

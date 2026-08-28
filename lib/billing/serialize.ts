@@ -68,6 +68,7 @@ export function serializeInvoice(
     matterNumber?: string | null;
     clientDisplayName?: string | null;
     clientNumber?: string | null;
+    clientEmail?: string | null;
     paidCents?: number;
     now?: Date;
   },
@@ -95,6 +96,12 @@ export function serializeInvoice(
     clientId: row.clientId,
     invoiceNumber: row.invoiceNumber,
     status: row.status,
+    approvalState: row.approvalState ?? "none",
+    submittedAt: row.submittedAt ? row.submittedAt.toISOString() : null,
+    submittedBy: row.submittedBy,
+    approvedAt: row.approvedAt ? row.approvedAt.toISOString() : null,
+    approvedBy: row.approvedBy,
+    rejectionNote: row.rejectionNote,
     currency: row.currency,
     issueDate: row.issueDate ? row.issueDate.toISOString() : null,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
@@ -116,6 +123,7 @@ export function serializeInvoice(
     matterNumber: opts?.matterNumber ?? null,
     clientDisplayName: opts?.clientDisplayName ?? null,
     clientNumber: opts?.clientNumber ?? null,
+    clientEmail: opts?.clientEmail?.trim() || null,
     paidCents,
     balanceCents,
     displayOverdue,

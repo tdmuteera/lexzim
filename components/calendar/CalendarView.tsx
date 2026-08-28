@@ -5,11 +5,17 @@ import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
+import { CalendarSharePeoplePicker } from "@/components/calendar/CalendarSharePeoplePicker";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import type { CalendarEventType } from "@/lib/db/ops-types";
-import { CALENDAR_EVENT_TYPES } from "@/lib/calendar/validation";
+import {
+  CALENDAR_EVENT_TYPES,
+  CALENDAR_VISIBILITIES,
+  DEFAULT_CALENDAR_COLOR,
+  type CalendarVisibility,
+} from "@/lib/calendar/validation";
 
 type SerializedEvent = {
   id: string;
@@ -25,6 +31,11 @@ type SerializedEvent = {
   startsAt: string;
   endsAt: string | null;
   allDay: boolean;
+  visibility?: string;
+  sharedUserIds?: string[];
+  creatorCalendarColor?: string | null;
+  canEdit?: boolean;
+  createdBy?: string | null;
 };
 
 type MatterOption = {
@@ -34,9 +45,15 @@ type MatterOption = {
   clientId: string;
 };
 
+type AssigneeOption = {
+  id: string;
+  fullName: string;
+  email?: string;
+};
+
 type ListResponse = {
   ok: boolean;
-  data?: { items: SerializedEvent[] };
+  data?: { items: SerializedEvent[]; myCalendarColor?: string | null };
   error?: { message: string };
 };
 
@@ -47,6 +64,8 @@ type EventResponse = {
 };
 
 type ViewMode = "month" | "agenda";
+type ScopeFilter = "mine" | "firm" | "shared";
+type CategoryFilter = "all" | "meetings" | "hearings";
 
 type FormState = {
   eventType: CalendarEventType;
@@ -58,9 +77,9 @@ type FormState = {
   startsAt: string;
   endsAt: string;
   allDay: boolean;
+  visibility: CalendarVisibility;
+  sharedUserIds: string[];
 };
-
-type CategoryFilter = "all" | "meetings" | "hearings";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -71,6 +90,14 @@ const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
   deadline: "Deadline",
   other: "Other",
 };
+
+const VISIBILITY_LABELS: Record<CalendarVisibility, string> = {
+  private: "Private",
+  firm: "Firm",
+  people: "Specific people",
+};
+
+const DEFAULT_MY_COLOUR = DEFAULT_CALENDAR_COLOR;
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -113,11 +140,16 @@ function emptyForm(defaults?: Partial<FormState>): FormState {
     startsAt: toLocalInputValue(now),
     endsAt: toLocalInputValue(end),
     allDay: false,
+    visibility: "private",
+    sharedUserIds: [],
     ...defaults,
   };
 }
 
 function formFromEvent(ev: SerializedEvent): FormState {
+  const visibility = (CALENDAR_VISIBILITIES as readonly string[]).includes(ev.visibility ?? "")
+    ? (ev.visibility as CalendarVisibility)
+    : "private";
   return {
     eventType: (CALENDAR_EVENT_TYPES.includes(ev.eventType as CalendarEventType)
       ? ev.eventType
@@ -130,6 +162,8 @@ function formFromEvent(ev: SerializedEvent): FormState {
     startsAt: toLocalInputValue(ev.startsAt),
     endsAt: ev.endsAt ? toLocalInputValue(ev.endsAt) : "",
     allDay: ev.allDay,
+    visibility,
+    sharedUserIds: ev.sharedUserIds ?? [],
   };
 }
 
@@ -162,15 +196,41 @@ function eventCssClass(eventType: string): string {
   return "appointment";
 }
 
+function eventColourStyle(
+  ev: SerializedEvent,
+  myColor: string,
+  userId?: string,
+): { backgroundColor: string; borderColor: string; color: string } | undefined {
+  const fromEvent = ev.creatorCalendarColor?.trim();
+  const colour =
+    fromEvent ||
+    (userId && ev.createdBy === userId ? myColor.trim() : "");
+  if (!colour) return undefined;
+  return {
+    backgroundColor: colour,
+    borderColor: colour,
+    color: "#fff",
+  };
+}
+
+function eventColourClass(ev: SerializedEvent, myColor: string, userId?: string) {
+  const style = eventColourStyle(ev, myColor, userId);
+  return style ? "coloured" : eventCssClass(ev.eventType);
+}
+
 export function CalendarView() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canManage = can("calendar.manage");
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [items, setItems] = useState<SerializedEvent[]>([]);
   const [matters, setMatters] = useState<MatterOption[]>([]);
+  const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
+  const [myCalendarColor, setMyCalendarColor] = useState(DEFAULT_MY_COLOUR);
+  const [pendingCalendarColor, setPendingCalendarColor] = useState(DEFAULT_MY_COLOUR);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scope, setScope] = useState<ScopeFilter>("mine");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [matterFilter, setMatterFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -179,6 +239,7 @@ export function CalendarView() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [colourSaving, setColourSaving] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const range = useMemo(() => {
@@ -208,6 +269,7 @@ export function CalendarView() {
       const params = new URLSearchParams();
       params.set("from", range.from.toISOString());
       params.set("to", range.to.toISOString());
+      params.set("scope", scope);
       if (categoryFilter === "meetings") params.set("eventType", "appointment");
       if (categoryFilter === "hearings") params.set("eventType", "hearing");
       if (matterFilter) params.set("matterId", matterFilter);
@@ -222,13 +284,16 @@ export function CalendarView() {
         return;
       }
       setItems(body.data?.items ?? []);
+      const loaded = body.data?.myCalendarColor ?? DEFAULT_MY_COLOUR;
+      setMyCalendarColor(loaded);
+      setPendingCalendarColor(loaded);
     } catch {
       setError("Could not load calendar. Check your connection.");
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [range, categoryFilter, matterFilter]);
+  }, [range, categoryFilter, matterFilter, scope]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -251,6 +316,27 @@ export function CalendarView() {
         }
       } catch {
         /* matter picker optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/workflow/assignees", { credentials: "include" });
+        const body = (await res.json()) as {
+          ok: boolean;
+          data?: { items: AssigneeOption[] };
+        };
+        if (!cancelled && res.ok && body.ok) {
+          setAssignees(body.data?.items ?? []);
+        }
+      } catch {
+        /* assignees optional for share picker */
       }
     })();
     return () => {
@@ -286,6 +372,11 @@ export function CalendarView() {
   }, [cursor]);
 
   const selected = items.find((e) => e.id === selectedId) ?? null;
+  const formValid = Boolean(form.title.trim() && form.location.trim());
+  const shareCandidates = useMemo(
+    () => assignees.filter((a) => a.id !== user?.id),
+    [assignees, user?.id],
+  );
 
   function closeForm() {
     setFormOpen(false);
@@ -295,12 +386,12 @@ export function CalendarView() {
 
   function openCreate(opts?: { day?: Date; eventType?: CalendarEventType }) {
     if (!canManage) return;
-    const defaults: Partial<FormState> = {};
+    const defaults: Partial<FormState> = { visibility: "private", sharedUserIds: [] };
     if (opts?.day) {
       const start = new Date(opts.day);
-      start.setHours(9, 0, 0, 0);
+      start.setHours(8, 0, 0, 0);
       const end = new Date(start);
-      end.setHours(10, 0, 0, 0);
+      end.setHours(9, 0, 0, 0);
       defaults.startsAt = toLocalInputValue(start);
       defaults.endsAt = toLocalInputValue(end);
     }
@@ -340,7 +431,7 @@ export function CalendarView() {
       window.location.href = `/matters/${ev.matterId}`;
       return;
     }
-    if (!canManage) {
+    if (!canManage || ev.canEdit === false) {
       setSelectedId(ev.id);
       return;
     }
@@ -352,6 +443,14 @@ export function CalendarView() {
   }
 
   async function saveEvent() {
+    if (!formValid) {
+      setFormError("Title and location are required.");
+      return;
+    }
+    if (form.visibility === "people" && form.sharedUserIds.length === 0) {
+      setFormError("Select at least one person for Specific people visibility.");
+      return;
+    }
     setSaving(true);
     setFormError(null);
     try {
@@ -359,12 +458,14 @@ export function CalendarView() {
         eventType: form.eventType,
         title: form.title,
         description: form.description || null,
-        location: form.location || null,
+        location: form.location,
         matterId: form.matterId || null,
         clientId: form.clientId || null,
         startsAt: new Date(form.startsAt).toISOString(),
         endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
         allDay: form.allDay,
+        visibility: form.visibility,
+        sharedUserIds: form.visibility === "people" ? form.sharedUserIds : [],
       };
       const url = editingId ? `/api/calendar/${editingId}` : "/api/calendar";
       const method = editingId ? "PATCH" : "POST";
@@ -414,6 +515,43 @@ export function CalendarView() {
     }
   }
 
+  async function saveMyColour(next: string) {
+    setMyCalendarColor(next);
+    setColourSaving(true);
+    try {
+      const res = await fetch("/api/calendar/color", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarColor: next }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { myCalendarColor?: string | null };
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not save calendar colour.");
+        return;
+      }
+      if (body.data?.myCalendarColor) {
+        setMyCalendarColor(body.data.myCalendarColor);
+        setPendingCalendarColor(body.data.myCalendarColor);
+      }
+      await load();
+    } catch {
+      setError("Could not save calendar colour.");
+    } finally {
+      setColourSaving(false);
+    }
+  }
+
+  function setSharedUserIds(ids: string[]) {
+    setForm((f) => ({ ...f, sharedUserIds: ids }));
+  }
+
+  const colourDirty = pendingCalendarColor !== myCalendarColor;
+
   const monthLabel = cursor.toLocaleString(undefined, { month: "long", year: "numeric" });
   const todayKey = toDateKey(new Date());
   const formTitle = editingId
@@ -423,6 +561,10 @@ export function CalendarView() {
     : form.eventType === "appointment"
       ? "New meeting"
       : "New event";
+
+  const canEditSelected = selected
+    ? selected.canEdit !== false && canManage && !selected.id.startsWith("matter-hearing:")
+    : false;
 
   return (
     <section className="view active scrollable" aria-label="Court Calendar">
@@ -442,9 +584,57 @@ export function CalendarView() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "0.8rem" }}>
-            Firm diary for hearings, appointments, and filing deadlines. Google and Outlook sync
-            coming later.
+            Private by default. Share with the firm or specific people. Click a day to create.
+            Google and Outlook sync coming later.
           </p>
+
+          <div
+            className="toolbar"
+            style={{ marginBottom: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+          >
+            <div style={{ display: "flex", gap: "0.35rem" }}>
+              {(
+                [
+                  ["mine", "My calendar"],
+                  ["firm", "Firm calendar"],
+                  ["shared", "Shared with me"],
+                ] as const
+              ).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={scope === key ? "primary" : "outline"}
+                  onClick={() => setScope(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <span className="toolbar-spacer" />
+            <div className="cal-colour-picker">
+              <label className="cal-colour-picker-label" htmlFor="cal-my-colour">
+                My colour
+              </label>
+              <input
+                id="cal-my-colour"
+                type="color"
+                className="cal-colour-input"
+                value={pendingCalendarColor}
+                disabled={colourSaving}
+                onChange={(e) => setPendingCalendarColor(e.target.value.toUpperCase())}
+                aria-label="My calendar colour"
+              />
+              <span className="cal-colour-value muted">{pendingCalendarColor}</span>
+              <Button
+                size="sm"
+                variant={colourDirty ? "primary" : "outline"}
+                disabled={!colourDirty || colourSaving}
+                onClick={() => void saveMyColour(pendingCalendarColor)}
+              >
+                {colourSaving ? "Saving…" : "Save colour"}
+              </Button>
+            </div>
+          </div>
 
           <div className="toolbar">
             <div style={{ display: "flex", gap: "0.35rem" }}>
@@ -557,13 +747,15 @@ export function CalendarView() {
                   <div
                     key={key}
                     className={`cal-day${inMonth ? "" : " muted"}${isToday ? " today" : ""}`}
+                    onClick={() => openCreate({ day: date })}
                     onDoubleClick={() => openCreate({ day: date })}
                   >
                     <div className="cal-day-num">{date.getDate()}</div>
                     {dayEvents.slice(0, 3).map((ev) => (
                       <div
                         key={ev.id}
-                        className={`cal-event ${eventCssClass(ev.eventType)}`}
+                        className={`cal-event ${eventColourClass(ev, myCalendarColor, user?.id)}`}
+                        style={eventColourStyle(ev, myCalendarColor, user?.id)}
                         title={ev.title}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -600,6 +792,7 @@ export function CalendarView() {
                       <th>When</th>
                       <th>Type</th>
                       <th>Title</th>
+                      <th>Visibility</th>
                       <th>Matter</th>
                       <th>Location</th>
                     </tr>
@@ -617,12 +810,20 @@ export function CalendarView() {
                       >
                         <td>{formatWhen(ev)}</td>
                         <td>
-                          <span className={`badge badge-${eventCssClass(ev.eventType)}`}>
+                          <span
+                            className={`badge badge-${eventCssClass(ev.eventType)}`}
+                            style={eventColourStyle(ev, myCalendarColor, user?.id)}
+                          >
                             {EVENT_TYPE_LABELS[ev.eventType as CalendarEventType] ??
                               ev.eventType}
                           </span>
                         </td>
                         <td>{ev.title}</td>
+                        <td>
+                          {VISIBILITY_LABELS[(ev.visibility as CalendarVisibility) ?? "private"] ??
+                            ev.visibility ??
+                            "Private"}
+                        </td>
                         <td>
                           {ev.matterId ? (
                             <Link href={`/matters/${ev.matterId}`}>
@@ -647,7 +848,7 @@ export function CalendarView() {
             <div className="panel" style={{ marginTop: "1rem" }}>
               <div className="panel-head">
                 <h3>{selected.title}</h3>
-                <Can permission="calendar.manage">
+                {canEditSelected ? (
                   <div style={{ display: "flex", gap: "0.35rem" }}>
                     <Button size="sm" variant="outline" onClick={() => openEdit(selected)}>
                       Edit
@@ -661,13 +862,21 @@ export function CalendarView() {
                       Delete
                     </Button>
                   </div>
-                </Can>
+                ) : null}
               </div>
               <div className="panel-body" style={{ fontSize: "0.85rem" }}>
                 <p>
                   <strong>Type:</strong>{" "}
                   {EVENT_TYPE_LABELS[selected.eventType as CalendarEventType] ??
                     selected.eventType}
+                </p>
+                <p>
+                  <strong>Visibility:</strong>{" "}
+                  <span className="badge">
+                    {VISIBILITY_LABELS[(selected.visibility as CalendarVisibility) ?? "private"] ??
+                      selected.visibility ??
+                      "Private"}
+                  </span>
                 </p>
                 <p>
                   <strong>When:</strong> {formatWhen(selected)}
@@ -726,6 +935,68 @@ export function CalendarView() {
                   required
                 />
               </div>
+              <div className="form-group">
+                <label htmlFor="cal-location">Location</label>
+                <input
+                  id="cal-location"
+                  value={form.location}
+                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                  placeholder="Court, chambers, Zoom…"
+                  required
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label htmlFor="cal-type">Type</label>
+                  <select
+                    id="cal-type"
+                    value={form.eventType}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        eventType: e.target.value as CalendarEventType,
+                      }))
+                    }
+                  >
+                    {CALENDAR_EVENT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {EVENT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="cal-visibility">Visibility</label>
+                  <select
+                    id="cal-visibility"
+                    value={form.visibility}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        visibility: e.target.value as CalendarVisibility,
+                        sharedUserIds:
+                          e.target.value === "people" ? f.sharedUserIds : [],
+                      }))
+                    }
+                  >
+                    {CALENDAR_VISIBILITIES.map((v) => (
+                      <option key={v} value={v}>
+                        {VISIBILITY_LABELS[v]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {form.visibility === "people" ? (
+                <div className="form-group">
+                  <label htmlFor="cal-share-people-search">Share with</label>
+                  <CalendarSharePeoplePicker
+                    people={shareCandidates}
+                    selectedIds={form.sharedUserIds}
+                    onChange={setSharedUserIds}
+                  />
+                </div>
+              ) : null}
               {form.eventType === "appointment" ? (
                 <div className="form-group">
                   <ClientSearchPicker
@@ -741,57 +1012,33 @@ export function CalendarView() {
                             : f.matterId,
                       }))
                     }
-                    label="Client"
+                    label="Client (optional)"
                     placeholder="Search client for this meeting…"
                   />
                 </div>
               ) : null}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                <div className="form-group">
-                  <label htmlFor="cal-type">Type</label>
-                  <select
-                    id="cal-type"
-                    value={form.eventType}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        eventType: e.target.value as CalendarEventType,
-                        clientId: e.target.value === "appointment" ? f.clientId : "",
-                      }))
-                    }
-                  >
-                    {CALENDAR_EVENT_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {EVENT_TYPE_LABELS[t]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="cal-matter">Matter (optional)</label>
-                  <select
-                    id="cal-matter"
-                    value={form.matterId}
-                    onChange={(e) => {
-                      const matterId = e.target.value;
-                      const matter = matters.find((m) => m.id === matterId);
-                      setForm((f) => ({
-                        ...f,
-                        matterId,
-                        clientId:
-                          matter?.clientId ??
-                          (f.eventType === "appointment" ? f.clientId : ""),
-                      }));
-                    }}
-                  >
-                    <option value="">No matter</option>
-                    {filteredMatters.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="form-group">
+                <label htmlFor="cal-matter">Matter (optional)</label>
+                <select
+                  id="cal-matter"
+                  value={form.matterId}
+                  onChange={(e) => {
+                    const matterId = e.target.value;
+                    const matter = matters.find((m) => m.id === matterId);
+                    setForm((f) => ({
+                      ...f,
+                      matterId,
+                      clientId: matter?.clientId ?? f.clientId,
+                    }));
+                  }}
+                >
+                  <option value="">No matter</option>
+                  {filteredMatters.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                 <div className="form-group">
@@ -825,15 +1072,6 @@ export function CalendarView() {
                 </label>
               </div>
               <div className="form-group">
-                <label htmlFor="cal-location">Location</label>
-                <input
-                  id="cal-location"
-                  value={form.location}
-                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                  placeholder="Court, chambers, Zoom…"
-                />
-              </div>
-              <div className="form-group">
                 <label htmlFor="cal-desc">Notes</label>
                 <textarea
                   id="cal-desc"
@@ -843,7 +1081,7 @@ export function CalendarView() {
                 />
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <Button onClick={saveEvent} disabled={saving || !form.title.trim()}>
+                <Button onClick={saveEvent} disabled={saving || !formValid}>
                   {saving
                     ? "Saving…"
                     : editingId

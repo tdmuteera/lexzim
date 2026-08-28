@@ -88,6 +88,8 @@ export async function PATCH(
         userId: target.id,
         roleId: target.roleId,
         roleCode: target.roleCode,
+        firmId,
+        includeDelegations: false,
       });
       const expanded = expandAccessTicks(tickCodes);
       const merged = mergePreservedGrants(expanded, existing);

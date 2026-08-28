@@ -36,6 +36,18 @@ export type AiCitation = {
   excerpt?: string;
   sourceUrl?: string | null;
   verified?: boolean;
+  /** Optional research metadata (no DB migration; stored in JSON). */
+  tier?: 1 | 2 | 3 | 4;
+  sourceKind?: "primary" | "secondary" | "general" | "pack";
+  verificationStatus?:
+    | "verified_primary"
+    | "verified_secondary"
+    | "web_consulted"
+    | "requires_verification"
+    | "unverified"
+    | "fabricated_suspect"
+    | "general_background"
+    | "web_unavailable";
 };
 
 export type AiSettings = {

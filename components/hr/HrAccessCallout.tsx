@@ -5,8 +5,8 @@ import Link from "next/link";
  */
 export function HrAccessCallout() {
   return (
-    <div className="finance-desk-callout firm-desk-callout" role="note">
-      <div className="finance-desk-callout-title">HR staff records</div>
+    <div className="finance-desk-callout firm-desk-callout hr-callout" role="note">
+      <div className="finance-desk-callout-title hr-callout-title">HR staff records</div>
       <p>
         Employment profiles and contracts for everyone who works at the firm, including staff
         without a LexZim login. This is separate from platform access and roles.

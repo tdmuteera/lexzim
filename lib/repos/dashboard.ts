@@ -374,7 +374,14 @@ export async function listDashboardOverdueInvoices(
     })
     .from(invoices)
     .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
-    .leftJoin(clients, and(eq(clients.id, invoices.clientId), eq(clients.firmId, firmId)))
+    .innerJoin(
+      clients,
+      and(
+        eq(clients.id, invoices.clientId),
+        eq(clients.firmId, firmId),
+        isNull(clients.archivedAt),
+      ),
+    )
     .where(
       and(
         eq(invoices.firmId, firmId),

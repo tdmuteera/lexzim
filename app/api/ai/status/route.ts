@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       canSendMatterAssist: connectivity.canSendMatterAssist,
       sendBlockedReason,
       corePracticeNote: connectivity.corePracticeNote,
-      webLookupEnabled: Boolean(settings?.webLookupEnabled),
+      webLookupEnabled: settings?.webLookupEnabled ?? true,
       matterContextEnabled: settings?.matterContextEnabled !== false,
       maxOutputTokens: settings?.maxOutputTokens ?? 1200,
       routingMode: settings?.routingMode === "manual" ? "manual" : "auto",

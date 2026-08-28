@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import {
+  diagnosticJson,
+  errorMessageWithRef,
+} from "@/lib/diagnostics/client";
 
 type EmailConfig = {
   host: string;
@@ -39,17 +43,17 @@ export function EmailSettingsPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/settings/email", { credentials: "include" });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { config: EmailConfig };
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok || !body.data) {
-        setError(body.error?.message ?? "Could not load email settings.");
+      const result = await diagnosticJson<{ config: EmailConfig }>("/api/settings/email");
+      if (!result.ok || !result.data) {
+        setError(
+          errorMessageWithRef(
+            result.error?.message ?? "Could not load email settings.",
+            result.requestId,
+          ),
+        );
         return;
       }
-      const c = body.data.config;
+      const c = result.data.config;
       setHost(c.host);
       setPort(String(c.port));
       setSecure(c.secure);
@@ -74,32 +78,27 @@ export function EmailSettingsPanel() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/settings/email", {
+      const result = await diagnosticJson<{ config: EmailConfig }>("/api/settings/email", {
         method: "PUT",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           host,
           port: Number(port),
           secure,
           user,
-          // Only send password when the user typed a new one.
           ...(password.trim() ? { password } : {}),
           fromName,
           fromEmail,
           replyTo,
         }),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { config: EmailConfig };
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok || !body.data) {
-        setError(body.error?.message ?? "Could not save.");
+      if (!result.ok || !result.data) {
+        setError(
+          errorMessageWithRef(result.error?.message ?? "Could not save.", result.requestId),
+        );
         return;
       }
-      setPasswordSet(body.data.config.passwordSet);
+      setPasswordSet(result.data.config.passwordSet);
       setPassword("");
       toast("Email settings saved.");
     } catch {
@@ -113,22 +112,21 @@ export function EmailSettingsPanel() {
     setTesting(true);
     setError(null);
     try {
-      const res = await fetch("/api/settings/email/test", {
+      const result = await diagnosticJson<{ to: string }>("/api/settings/email/test", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: testTo.trim() || undefined }),
       });
-      const body = (await res.json()) as {
-        ok: boolean;
-        data?: { to: string };
-        error?: { message: string };
-      };
-      if (!res.ok || !body.ok) {
-        setError(body.error?.message ?? "Test send failed.");
+      if (!result.ok) {
+        setError(
+          errorMessageWithRef(
+            result.error?.message ?? "Test send failed.",
+            result.requestId,
+          ),
+        );
         return;
       }
-      toast(`Test email sent to ${body.data?.to ?? "recipient"}.`);
+      toast(`Test email sent to ${result.data?.to ?? "recipient"}.`);
     } catch {
       setError("Test send failed.");
     } finally {
@@ -144,8 +142,26 @@ export function EmailSettingsPanel() {
         <p className="settings-lede">
           Outbound email uses your firm SMTP server (host, port, credentials). Secrets are stored
           encrypted and never sent to the browser. Leave blank to fall back to a managed relay if
-          the deployment provides one.
+          the deployment provides one. Client document email is always manual: review To, Subject,
+          note, and attachment, then click Send. LexZim does not auto-email clients.
         </p>
+        <aside
+          className="settings-hint"
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.65rem 0.75rem",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            background: "var(--surface-muted, #f8f8f6)",
+            fontSize: "0.85rem",
+            lineHeight: 1.45,
+          }}
+        >
+          <strong>Pilot guidance (T Pfigu Attorneys):</strong> set From/Reply-To to the address your
+          partner provides (commonly their public info mailbox, for example{" "}
+          <code>info@tpfiguattorneys.com</code>). This is configured per firm in Settings. LexZim
+          never applies that address as a global default for other firms.
+        </aside>
         {error ? (
           <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
             {error}
@@ -163,25 +179,60 @@ export function EmailSettingsPanel() {
           </p>
         ) : (
           <>
-            <section className="settings-section" style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}>
+            <section
+              className="settings-section"
+              style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
+            >
               <h3 className="settings-section-title">SMTP server</h3>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>Host</div>
-                <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.example.com" style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  Host
+                </div>
+                <input
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="smtp.example.com"
+                  style={inputStyle}
+                />
               </label>
               <div style={{ display: "flex", gap: "0.65rem" }}>
                 <label style={{ flex: 1 }}>
-                  <div className="muted" style={{ fontSize: "0.8rem" }}>Port</div>
-                  <input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" style={inputStyle} />
+                  <div className="muted" style={{ fontSize: "0.8rem" }}>
+                    Port
+                  </div>
+                  <input
+                    value={port}
+                    onChange={(e) => setPort(e.target.value)}
+                    inputMode="numeric"
+                    style={inputStyle}
+                  />
                 </label>
-                <label style={{ display: "flex", alignItems: "flex-end", gap: "0.4rem", paddingBottom: "0.5rem" }}>
-                  <input type="checkbox" checked={secure} onChange={(e) => setSecure(e.target.checked)} />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: "0.4rem",
+                    paddingBottom: "0.5rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={secure}
+                    onChange={(e) => setSecure(e.target.checked)}
+                  />
                   <span style={{ fontSize: "0.85rem" }}>SSL/TLS (465)</span>
                 </label>
               </div>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>Username</div>
-                <input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  Username
+                </div>
+                <input
+                  value={user}
+                  onChange={(e) => setUser(e.target.value)}
+                  autoComplete="off"
+                  style={inputStyle}
+                />
               </label>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
@@ -198,19 +249,45 @@ export function EmailSettingsPanel() {
               </label>
             </section>
 
-            <section className="settings-section" style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}>
+            <section
+              className="settings-section"
+              style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
+            >
               <h3 className="settings-section-title">Sender identity</h3>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>From name</div>
-                <input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Firm name" style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  From name
+                </div>
+                <input
+                  value={fromName}
+                  onChange={(e) => setFromName(e.target.value)}
+                  placeholder="Firm name"
+                  style={inputStyle}
+                />
               </label>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>From email</div>
-                <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="billing@firm.co.zw" style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  From email
+                </div>
+                <input
+                  type="email"
+                  value={fromEmail}
+                  onChange={(e) => setFromEmail(e.target.value)}
+                  placeholder="name@yourfirm.co.zw"
+                  style={inputStyle}
+                />
               </label>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>Reply-to (optional)</div>
-                <input type="email" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  Reply-to (optional)
+                </div>
+                <input
+                  type="email"
+                  value={replyTo}
+                  onChange={(e) => setReplyTo(e.target.value)}
+                  placeholder="name@yourfirm.co.zw"
+                  style={inputStyle}
+                />
               </label>
               <div className="settings-actions">
                 <Button variant="gold" onClick={() => void save()} disabled={saving}>
@@ -219,11 +296,22 @@ export function EmailSettingsPanel() {
               </div>
             </section>
 
-            <section className="settings-section" style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}>
+            <section
+              className="settings-section"
+              style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
+            >
               <h3 className="settings-section-title">Test send</h3>
               <label>
-                <div className="muted" style={{ fontSize: "0.8rem" }}>Recipient (defaults to from address)</div>
-                <input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} style={inputStyle} />
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  Recipient (defaults to from address)
+                </div>
+                <input
+                  type="email"
+                  value={testTo}
+                  onChange={(e) => setTestTo(e.target.value)}
+                  placeholder="you@yourfirm.co.zw"
+                  style={inputStyle}
+                />
               </label>
               <div className="settings-actions">
                 <Button variant="outline" size="sm" onClick={() => void sendTest()} disabled={testing}>

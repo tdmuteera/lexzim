@@ -7,6 +7,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -116,8 +117,15 @@ export const users = pgTable(
     isSystemUser: boolean("is_system_user").notNull().default(true),
     /** Appears in responsible-lawyer / attorney pickers when active. */
     isLawyer: boolean("is_lawyer").notNull().default(false),
+    /**
+     * Test / sandbox login: not an employee. Skip HR profile ensure/backfill.
+     * Platform ops accounts are separate from firm users.
+     */
+    isTestUser: boolean("is_test_user").notNull().default(false),
     /** P7-11: force a password change on next login (temp password issued). */
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    /** P10-12: persistent colour for this user's events when visible to others (hex e.g. #2F6FED). */
+    calendarColor: text("calendar_color"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -148,6 +156,37 @@ export const userPermissions = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.permissionId] }),
     index("user_permissions_firm_user_idx").on(t.firmId, t.userId),
+  ],
+);
+
+/**
+ * Temporary / revocable capability overlay (Phase 10).
+ * Capabilities match permission codes such as invoice.approve.
+ */
+export const delegationGrants = pgTable(
+  "delegation_grants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    grantorUserId: uuid("grantor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    granteeUserId: uuid("grantee_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    capability: text("capability").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    index("delegation_grants_firm_grantee_idx").on(t.firmId, t.granteeUserId),
+    index("delegation_grants_firm_capability_idx").on(t.firmId, t.capability),
   ],
 );
 
@@ -512,7 +551,7 @@ export const aiSettings = pgTable("ai_settings", {
   /** e.g. text-embedding-004 */
     embeddingsModel: text("embeddings_model").notNull().default("gemini-embedding-001"),
   /** Default OFF. Allowlisted web lookup only when enabled. */
-  webLookupEnabled: boolean("web_lookup_enabled").notNull().default(false),
+  webLookupEnabled: boolean("web_lookup_enabled").notNull().default(true),
   /** auto = legal research prefers Claude when key present, else Gemini Flash. manual = always providerDefault. */
   routingMode: text("routing_mode").notNull().default("auto"),
   /** Soft monthly LLM call cap (null = unlimited). Soft-blocks chat when exceeded. */
@@ -700,6 +739,8 @@ export const calendarEvents = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }),
     allDay: boolean("all_day").notNull().default(false),
+    /** private | firm | people (P10-12). Default private for new rows. */
+    visibility: text("visibility").notNull().default("private"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -709,6 +750,32 @@ export const calendarEvents = pgTable(
     index("calendar_events_firm_starts_idx").on(t.firmId, t.startsAt),
     index("calendar_events_matter_id_idx").on(t.matterId),
     index("calendar_events_client_id_idx").on(t.firmId, t.clientId),
+    index("calendar_events_firm_visibility_idx").on(t.firmId, t.visibility),
+  ],
+);
+
+/**
+ * Specific-people shares for calendar events with visibility = people (P10-12).
+ */
+export const calendarEventShares = pgTable(
+  "calendar_event_shares",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => calendarEvents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("calendar_event_shares_event_user_uidx").on(t.eventId, t.userId),
+    index("calendar_event_shares_firm_user_idx").on(t.firmId, t.userId),
+    index("calendar_event_shares_event_idx").on(t.eventId),
   ],
 );
 
@@ -840,8 +907,18 @@ export const invoices = pgTable(
       .references(() => matters.id, { onDelete: "cascade" }),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     invoiceNumber: text("invoice_number").notNull(),
-    /** draft | sent | paid | overdue | void */
+    /** draft | sent | paid | overdue | void — AR/GL lifecycle */
     status: text("status").notNull().default("draft"),
+    /**
+     * Pre-send approval gate (Phase 10). none | pending | approved | rejected.
+     * Approved means ready to send; AR KPIs and GL still start at Sent.
+     */
+    approvalState: text("approval_state").notNull().default("none"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedBy: uuid("submitted_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    rejectionNote: text("rejection_note"),
     currency: text("currency").notNull().default("USD"),
     issueDate: timestamp("issue_date", { withTimezone: true }),
     dueDate: timestamp("due_date", { withTimezone: true }),
@@ -864,6 +941,7 @@ export const invoices = pgTable(
     unique("invoices_firm_number_uid").on(t.firmId, t.invoiceNumber),
     index("invoices_firm_id_idx").on(t.firmId),
     index("invoices_firm_status_idx").on(t.firmId, t.status),
+    index("invoices_firm_approval_state_idx").on(t.firmId, t.approvalState),
     index("invoices_matter_id_idx").on(t.matterId),
   ],
 );
@@ -988,8 +1066,7 @@ export const trustLedgerEntries = pgTable(
   ],
 );
 
-// Retained so the schema still matches the live database. The Intake & Conflicts
-// module was removed; no application code reads or writes these two tables.
+// intakes retained for DB parity (legacy). conflict_checks revived in P10-13 for client conflict workflow.
 export const intakes = pgTable(
   "intakes",
   {
@@ -1030,9 +1107,14 @@ export const conflictChecks = pgTable(
       .notNull()
       .references(() => firms.id, { onDelete: "cascade" }),
     intakeId: uuid("intake_id").references(() => intakes.id, { onDelete: "set null" }),
+    /** P10-13: primary link for client conflict workflow (intake optional/legacy). */
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
     query: text("query").notNull(),
-    /** clear | conflict | possible | not_done */
+    /**
+     * clear | potential | blocked | not_done
+     * Legacy rows may still use conflict | possible (map on read).
+     */
     result: text("result").notNull().default("not_done"),
     notes: text("notes"),
     checkedBy: uuid("checked_by").references(() => users.id, { onDelete: "set null" }),
@@ -1043,6 +1125,67 @@ export const conflictChecks = pgTable(
     index("conflict_checks_firm_id_idx").on(t.firmId),
     index("conflict_checks_intake_id_idx").on(t.intakeId),
     index("conflict_checks_matter_id_idx").on(t.matterId),
+    index("conflict_checks_client_id_idx").on(t.firmId, t.clientId),
+  ],
+);
+
+/** AR debtor follow-up log (P10-13). Prevents duplicate blind collection calls. */
+export const debtorCommunications = pgTable(
+  "debtor_communications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    loggedAt: timestamp("logged_at", { withTimezone: true }).defaultNow().notNull(),
+    employeeUserId: uuid("employee_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** phone | email | in_person */
+    channel: text("channel").notNull(),
+    outcomeNotes: text("outcome_notes").notNull(),
+    nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("debtor_communications_firm_client_idx").on(t.firmId, t.clientId),
+    index("debtor_communications_firm_follow_up_idx").on(t.firmId, t.nextFollowUpAt),
+    index("debtor_communications_firm_logged_idx").on(t.firmId, t.loggedAt),
+  ],
+);
+
+/**
+ * Firm event / BD / training reports (P10-13). Separate from AI knowledge_sources pack.
+ */
+export const knowledgeReports = pgTable(
+  "knowledge_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    reportDate: date("report_date").notNull(),
+    authorUserId: uuid("author_user_id").references(() => users.id, { onDelete: "set null" }),
+    authorName: text("author_name"),
+    eventName: text("event_name"),
+    notes: text("notes"),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type"),
+    byteSize: integer("byte_size"),
+    storagePath: text("storage_path").notNull(),
+    textExtract: text("text_extract"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("knowledge_reports_firm_date_idx").on(t.firmId, t.reportDate),
+    index("knowledge_reports_firm_created_idx").on(t.firmId, t.createdAt),
   ],
 );
 
@@ -1291,6 +1434,40 @@ export const staffNotifications = pgTable(
   (t) => [
     index("staff_notifications_firm_created_idx").on(t.firmId, t.createdAt),
     index("staff_notifications_firm_user_idx").on(t.firmId, t.userId),
+  ],
+);
+
+/**
+ * Firm-wide assignable tasks (Phase 10). Not matter pending_procedures.
+ * priority: low | normal | high; status: pending | done
+ */
+export const firmTasks = pgTable(
+  "firm_tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    assigneeUserId: uuid("assignee_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assignerUserId: uuid("assigner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    priority: text("priority").notNull().default("normal"),
+    status: text("status").notNull().default("pending"),
+    completionFeedback: text("completion_feedback"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("firm_tasks_firm_assignee_status_idx").on(t.firmId, t.assigneeUserId, t.status),
+    index("firm_tasks_firm_assigner_idx").on(t.firmId, t.assignerUserId),
+    index("firm_tasks_firm_due_idx").on(t.firmId, t.dueAt),
   ],
 );
 
@@ -1712,10 +1889,31 @@ export const hrStaffProfiles = pgTable(
     phone: text("phone"),
     jobTitle: text("job_title"),
     department: text("department"),
+    /** Managing Partner | Partner | Senior Associate | Junior Associate | Attorney | custom */
+    jobCategory: text("job_category"),
+    employeeNumber: text("employee_number"),
+    idPassport: text("id_passport"),
+    workLocation: text("work_location"),
     startDate: timestamp("start_date", { withTimezone: true }),
     endDate: timestamp("end_date", { withTimezone: true }),
     emergencyContactName: text("emergency_contact_name"),
     emergencyContactPhone: text("emergency_contact_phone"),
+    /** Next of kin (Next_of_Kin_Form.docx). */
+    nokFullName: text("nok_full_name"),
+    nokRelationship: text("nok_relationship"),
+    nokPhone1: text("nok_phone1"),
+    nokPhone2: text("nok_phone2"),
+    nokAddress: text("nok_address"),
+    nokEmail: text("nok_email"),
+    nokOccupation: text("nok_occupation"),
+    nokDeclaredAt: timestamp("nok_declared_at", { withTimezone: true }),
+    nokReceivedAt: timestamp("nok_received_at", { withTimezone: true }),
+    nokFiledByUserId: uuid("nok_filed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** Stub for P10-10 advances / payroll MVP (cents). */
+    grossSalaryCents: integer("gross_salary_cents"),
+    netSalaryCents: integer("net_salary_cents"),
     isActive: boolean("is_active").notNull().default(true),
     /** Manual annual leave entitlement (days per year). No accrual engine. */
     annualLeaveEntitlementDays: integer("annual_leave_entitlement_days"),
@@ -1809,6 +2007,148 @@ export const hrLeaveRequests = pgTable(
     index("hr_leave_requests_staff_idx").on(t.staffProfileId),
     index("hr_leave_requests_firm_status_idx").on(t.firmId, t.status),
     index("hr_leave_requests_dates_idx").on(t.firmId, t.fromDate, t.toDate),
+  ],
+);
+
+/** Per employee / leave type / year entitlement (Phase 10 ledger). */
+export const hrLeaveEntitlements = pgTable(
+  "hr_leave_entitlements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    staffProfileId: uuid("staff_profile_id")
+      .notNull()
+      .references(() => hrStaffProfiles.id, { onDelete: "cascade" }),
+    leaveTypeId: uuid("leave_type_id")
+      .notNull()
+      .references(() => hrLeaveTypes.id, { onDelete: "cascade" }),
+    year: integer("year").notNull(),
+    entitlementDays: integer("entitlement_days").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("hr_leave_entitlements_firm_staff_type_year_uid").on(
+      t.firmId,
+      t.staffProfileId,
+      t.leaveTypeId,
+      t.year,
+    ),
+    index("hr_leave_entitlements_firm_staff_idx").on(t.firmId, t.staffProfileId),
+  ],
+);
+
+/**
+ * Salary advance requests (T Pfigu form fields). Not a tax engine.
+ * status: submitted | finance_reviewed | decided | paid | closed
+ * decision: approved | approved_subject_to_amendment | not_approved
+ */
+export const hrSalaryAdvances = pgTable(
+  "hr_salary_advances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    staffProfileId: uuid("staff_profile_id")
+      .notNull()
+      .references(() => hrStaffProfiles.id, { onDelete: "cascade" }),
+    employeeName: text("employee_name").notNull(),
+    positionTitle: text("position_title"),
+    department: text("department"),
+    employeeNumber: text("employee_number"),
+    applicationDate: timestamp("application_date", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    amountInWords: text("amount_in_words"),
+    reason: text("reason"),
+    declarationAcceptedAt: timestamp("declaration_accepted_at", { withTimezone: true }),
+    grossSalaryCents: integer("gross_salary_cents"),
+    netSalaryCents: integer("net_salary_cents"),
+    existingAdvanceBalanceCents: integer("existing_advance_balance_cents")
+      .notNull()
+      .default(0),
+    proposedAdvanceCents: integer("proposed_advance_cents"),
+    proposedMonthlyDeductionCents: integer("proposed_monthly_deduction_cents"),
+    recommendedMonths: integer("recommended_months"),
+    preparedByUserId: uuid("prepared_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    financeNotes: text("finance_notes"),
+    financeReviewedAt: timestamp("finance_reviewed_at", { withTimezone: true }),
+    decision: text("decision"),
+    approvedAmountCents: integer("approved_amount_cents"),
+    monthlyDeductionCents: integer("monthly_deduction_cents"),
+    repaymentMonths: integer("repayment_months"),
+    effectiveDeductionDate: timestamp("effective_deduction_date", { withTimezone: true }),
+    managementComments: text("management_comments"),
+    authorisedByUserId: uuid("authorised_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    balanceRemainingCents: integer("balance_remaining_cents").notNull().default(0),
+    status: text("status").notNull().default("submitted"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("hr_salary_advances_firm_idx").on(t.firmId),
+    index("hr_salary_advances_firm_status_idx").on(t.firmId, t.status),
+    index("hr_salary_advances_staff_idx").on(t.staffProfileId),
+  ],
+);
+
+export const hrPayrollPeriods = pgTable(
+  "hr_payroll_periods",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    /** open | closed */
+    status: text("status").notNull().default("open"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("hr_payroll_periods_firm_idx").on(t.firmId)],
+);
+
+export const hrPayrollLines = pgTable(
+  "hr_payroll_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    periodId: uuid("period_id")
+      .notNull()
+      .references(() => hrPayrollPeriods.id, { onDelete: "cascade" }),
+    staffProfileId: uuid("staff_profile_id")
+      .notNull()
+      .references(() => hrStaffProfiles.id, { onDelete: "cascade" }),
+    grossCents: integer("gross_cents").notNull().default(0),
+    advancesOutstandingCents: integer("advances_outstanding_cents").notNull().default(0),
+    deductionsCents: integer("deductions_cents").notNull().default(0),
+    netPayableCents: integer("net_payable_cents").notNull().default(0),
+    advanceIdsJson: jsonb("advance_ids_json").$type<string[]>().notNull().default([]),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("hr_payroll_lines_period_staff_uid").on(t.periodId, t.staffProfileId),
+    index("hr_payroll_lines_firm_period_idx").on(t.firmId, t.periodId),
   ],
 );
 
@@ -2102,6 +2442,8 @@ export const schema = {
   permissions,
   rolePermissions,
   users,
+  userPermissions,
+  delegationGrants,
   firmSettings,
   auditLogs,
   clients,
@@ -2121,6 +2463,7 @@ export const schema = {
   aiEmbeddings,
   aiUsageEvents,
   calendarEvents,
+  calendarEventShares,
   deadlineTemplates,
   matterDeadlines,
   timeEntries,
@@ -2132,6 +2475,8 @@ export const schema = {
   trustLedgerEntries,
   intakes,
   conflictChecks,
+  debtorCommunications,
+  knowledgeReports,
   firmLicences,
   firmAiProxy,
   portalUsers,
@@ -2140,6 +2485,7 @@ export const schema = {
   documentPortalShares,
   portalInboxUploads,
   staffNotifications,
+  firmTasks,
   staffSessions,
   aiJobs,
   trustVaultBankIns,
@@ -2153,6 +2499,10 @@ export const schema = {
   hrContracts,
   hrLeaveTypes,
   hrLeaveRequests,
+  hrLeaveEntitlements,
+  hrSalaryAdvances,
+  hrPayrollPeriods,
+  hrPayrollLines,
   glAccounts,
   glJournalEntries,
   glJournalLines,

@@ -408,6 +408,42 @@ input.input:focus, select.input:focus, textarea.input:focus {
   font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em;
   color: var(--text-3); padding: 0.85rem 0.7rem 0.35rem; font-weight: 600;
 }
+.nav-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 0.85rem 0.7rem 0.35rem;
+}
+.nav-section-toggle:hover,
+.nav-section-toggle.has-active {
+  color: var(--gold-2);
+}
+.nav-section-chevron {
+  width: 0.85rem;
+  height: 0.85rem;
+  opacity: 0.65;
+  transform: rotate(-90deg);
+  transition: transform 0.2s var(--ease);
+  flex-shrink: 0;
+}
+.nav-section-chevron.open {
+  transform: rotate(0deg);
+}
+.sidebar.collapsed .nav-section-toggle,
+.sidebar.collapsed .nav-section-block.is-collapsed .nav-item {
+  /* Icon-rail mode: keep section labels hidden via existing rules */
+}
+.mobile-bottom-nav {
+  display: none;
+}
 .nav-item {
   width: 100%; display: flex; align-items: center; gap: 0.7rem;
   padding: 0.62rem 0.75rem; border-radius: var(--radius-sm);
@@ -1524,6 +1560,241 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   background: var(--bg-4); color: var(--text-2);
 }
 
+.cal-share-people-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.cal-share-people-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.cal-share-people-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.55rem 0.3rem 0.35rem;
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(160, 124, 56, 0.1);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cal-share-people-chip:hover:not(:disabled) {
+  background: rgba(160, 124, 56, 0.16);
+  border-color: var(--gold);
+}
+
+.cal-share-people-chip:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.cal-share-people-chip-avatar {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: var(--gold-dim);
+  color: var(--gold-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cal-share-people-chip-name {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-share-people-chip-remove {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-3);
+  margin-left: 0.1rem;
+}
+
+.cal-share-people-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.cal-share-people-search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cal-share-people-search:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-dim);
+}
+
+.cal-share-people-count {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.cal-share-people-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.cal-share-people-list li {
+  margin: 0;
+}
+
+.cal-share-people-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.cal-share-people-option:hover:not(:disabled) {
+  background: rgba(160, 124, 56, 0.07);
+}
+
+.cal-share-people-option.selected {
+  background: rgba(160, 124, 56, 0.12);
+  border: 1px solid rgba(160, 124, 56, 0.25);
+}
+
+.cal-share-people-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cal-share-people-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+  background: linear-gradient(145deg, var(--gold-dim), rgba(160, 124, 56, 0.12));
+  color: var(--gold-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid var(--gold-line);
+}
+
+.cal-share-people-option-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.cal-share-people-option-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.cal-share-people-option-meta {
+  font-size: 0.76rem;
+  color: var(--text-3);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-share-people-check {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gold-2);
+  flex-shrink: 0;
+  background: var(--bg-2);
+}
+
+.cal-share-people-option.selected .cal-share-people-check {
+  border-color: var(--gold);
+  background: rgba(160, 124, 56, 0.15);
+}
+
+.cal-share-people-empty {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.cal-colour-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cal-colour-picker-label {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.cal-colour-input {
+  width: 2.25rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  cursor: pointer;
+}
+
+.cal-colour-value {
+  font-size: 0.75rem;
+  font-family: var(--font-mono, monospace);
+}
+
+.cal-event.coloured {
+  color: #fff !important;
+}
+
 /* Case timeline */
 .case-timeline {
   display: flex; gap: 0; margin-bottom: 1.25rem; overflow-x: auto; padding: 0.5rem 0;
@@ -2224,9 +2495,67 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   .page-subtitle { display: none; }
   .content {
     padding: 0.75rem;
+    padding-bottom: calc(0.75rem + 4.25rem + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
+  .mobile-bottom-nav {
+    display: flex;
+    position: sticky;
+    bottom: 0;
+    z-index: 40;
+    flex-shrink: 0;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 0.15rem;
+    padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.08);
+  }
+  .mobile-bottom-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.35rem 0.2rem;
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    text-decoration: none;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .mobile-bottom-item .ico {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .mobile-bottom-item.active {
+    color: var(--gold-2);
+    background: var(--gold-dim);
+  }
+  .ai-chat {
+    min-height: calc(100dvh - 8.5rem);
+  }
+  .ai-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: calc(100dvh - 11rem);
+  }
+  .ai-sidebar {
+    flex-direction: column;
+    max-height: none;
+  }
+  .ai-main {
+    min-height: 55vh;
+  }
+  .ai-mode-btn { flex: 1 1 140px; }
   #view-dashboard,
   #view-clients, #view-matters, #view-documents, #view-billing,
   #view-staff, #view-calendar, #view-intake, #view-reports,
@@ -2267,9 +2596,6 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   .toolbar-spacer { display: none; }
   .card-grid { grid-template-columns: 1fr; }
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
-  .ai-layout { grid-template-columns: 1fr; height: auto; min-height: 70vh; }
-  .ai-sidebar { flex-direction: row; flex-wrap: wrap; }
-  .ai-mode-btn { flex: 1 1 140px; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-view {
     height: auto;

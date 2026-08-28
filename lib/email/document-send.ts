@@ -27,6 +27,17 @@ export type ResolvedDocumentRecipient = {
   documentNumber: string;
 };
 
+/** Human-readable PDF attachment name shown in the send modal and used on send. */
+export function documentAttachmentFilename(
+  kind: SendableDocumentKind,
+  documentNumber: string,
+): string {
+  const prefix =
+    kind === "quotation" ? "Quotation" : kind === "invoice" ? "Invoice" : "Receipt";
+  const safe = documentNumber.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "document";
+  return `${prefix}-${safe}.pdf`;
+}
+
 function labelFromClientRow(row: {
   clientNumber: string | null;
   clientType: string | null;

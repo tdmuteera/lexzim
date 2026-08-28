@@ -29,6 +29,7 @@ type Quotation = {
   clientId: string;
   clientNumber: string;
   clientDisplayLabel: string;
+  clientEmail?: string | null;
   matterId: string | null;
   matterTitle: string | null;
   matterNumber: string | null;
@@ -200,7 +201,13 @@ export function QuotationDetailView({ quotationId }: { quotationId: string }) {
               disabled={loading}
             />
             <Can permission="billing.view">
-              <SendDocumentButton kind="quotation" id={quotationId} disabled={loading} />
+              <SendDocumentButton
+                kind="quotation"
+                id={quotationId}
+                disabled={loading}
+                defaultEmail={quotation.clientEmail}
+                documentLabel={`Quotation ${quotation.quoteNumber}`}
+              />
             </Can>
             <Can permission="finance.quote.manage">
               {quotation.status === "draft" ? (

@@ -107,7 +107,7 @@ export function AiSettingsPanel() {
   const [providerDefault, setProviderDefault] = useState<ProviderId>("gemini");
   const [modelDefault, setModelDefault] = useState("gemini-3.6-flash");
   const [embeddingsModel, setEmbeddingsModel] = useState("gemini-embedding-001");
-  const [webLookupEnabled, setWebLookupEnabled] = useState(false);
+  const [webLookupEnabled, setWebLookupEnabled] = useState(true);
   const [routingMode, setRoutingMode] = useState<RoutingMode>("auto");
   const [keyMode, setKeyMode] = useState<"direct" | "proxy">("direct");
   const [monthlySoftBudget, setMonthlySoftBudget] = useState("500");
@@ -191,23 +191,7 @@ export function AiSettingsPanel() {
       setKey(body.data.key);
       setHelp(body.data.help);
       setModels(body.data.models ?? null);
-      const p = (body.data.settings.providerDefault || "gemini") as ProviderId;
-      setProviderDefault(p === "claude" || p === "openai" ? p : "gemini");
-      setModelDefault(body.data.settings.modelDefault);
-      setEmbeddingsModel(body.data.settings.embeddingsModel);
-      setWebLookupEnabled(body.data.settings.webLookupEnabled);
-      setRoutingMode(body.data.settings.routingMode === "manual" ? "manual" : "auto");
-      setKeyMode(body.data.settings.keyMode === "proxy" ? "proxy" : "direct");
-      const budget = body.data.settings.monthlySoftBudget;
-      if (budget === null) {
-        setBudgetUnlimited(true);
-        setMonthlySoftBudget("");
-      } else {
-        setBudgetUnlimited(false);
-        setMonthlySoftBudget(String(budget));
-      }
-      setMaxOutputTokens(String(body.data.settings.maxOutputTokens ?? 2200));
-      setMatterContextEnabled(body.data.settings.matterContextEnabled !== false);
+      applySettingsToForm(body.data.settings);
       if (body.data.key.status === "missing") {
         setConnectionStatus("missing");
       }
@@ -239,10 +223,37 @@ export function AiSettingsPanel() {
 
   function onProviderChange(next: ProviderId) {
     setProviderDefault(next);
-    if (models?.[next]) {
+    // Only bump the chat model. Keep embeddings as-is so hybrid setups
+    // (e.g. OpenAI chat + Gemini KB vectors) are not wiped on provider switch.
+    if (models?.[next]?.chat) {
       setModelDefault(models[next].chat);
-      setEmbeddingsModel(models[next].embeddings);
     }
+  }
+
+  function applyProviderModelDefaults() {
+    if (!models?.[providerDefault]) return;
+    setModelDefault(models[providerDefault].chat);
+    setEmbeddingsModel(models[providerDefault].embeddings);
+  }
+
+  function applySettingsToForm(s: SettingsData) {
+    const p = (s.providerDefault || "gemini") as ProviderId;
+    setProviderDefault(p === "claude" || p === "openai" ? p : "gemini");
+    setModelDefault(s.modelDefault);
+    setEmbeddingsModel(s.embeddingsModel);
+    setWebLookupEnabled(s.webLookupEnabled);
+    setRoutingMode(s.routingMode === "manual" ? "manual" : "auto");
+    setKeyMode(s.keyMode === "proxy" ? "proxy" : "direct");
+    const budget = s.monthlySoftBudget;
+    if (budget === null) {
+      setBudgetUnlimited(true);
+      setMonthlySoftBudget("");
+    } else {
+      setBudgetUnlimited(false);
+      setMonthlySoftBudget(String(budget));
+    }
+    setMaxOutputTokens(String(s.maxOutputTokens ?? 2200));
+    setMatterContextEnabled(s.matterContextEnabled !== false);
   }
 
   async function onSave() {
@@ -299,12 +310,15 @@ export function AiSettingsPanel() {
         return;
       }
       setSettings(body.data.settings);
+      applySettingsToForm(body.data.settings);
       if (body.data.key) setKey(body.data.key);
       setByoGemini("");
       setByoClaude("");
       setByoOpenAi("");
       toast("AI settings saved.");
       await loadUsage();
+      // Re-fetch so the form matches the DB exactly (avoids “did not save” confusion).
+      await load();
     } catch {
       setError("Could not save AI settings.");
     } finally {
@@ -451,10 +465,19 @@ export function AiSettingsPanel() {
                 value={routingMode}
                 onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
               >
-                <option value="auto">Auto (use Claude for law if a Claude key exists)</option>
-                <option value="manual">Manual: always use the provider below (Gemini, Claude, or OpenAI)</option>
+                <option value="auto">
+                  Auto (Legal Research: Claude key → OpenAI key → Gemini)
+                </option>
+                <option value="manual">
+                  Manual: always use Default provider below for chat
+                </option>
               </select>
-              {help?.routing ? <p className="settings-hint">{help.routing}</p> : null}
+              <p className="settings-hint">
+                {routingMode === "auto"
+                  ? "Auto mode picks the chat provider from available API keys for Legal Research. Changing Default provider alone does not switch Auto legal chat until you set Manual, or until only that provider’s key is present."
+                  : "Manual mode uses Default provider + chat model for every AI chat."}
+                {help?.routing ? ` ${help.routing}` : ""}
+              </p>
             </label>
 
             <label className="settings-field">
@@ -494,6 +517,11 @@ export function AiSettingsPanel() {
                 value={modelDefault}
                 onChange={(e) => setModelDefault(e.target.value)}
               />
+              <p className="settings-hint">
+                Preferred model first. If OpenAI blocks it or it fails, LexZim
+                tries cheaper OpenAI models, then Gemini. Word/document requests
+                prefer stronger drafting models (mini / 4o) before nano.
+              </p>
             </label>
 
             <label className="settings-field">
@@ -503,7 +531,22 @@ export function AiSettingsPanel() {
                 value={embeddingsModel}
                 onChange={(e) => setEmbeddingsModel(e.target.value)}
               />
-              {help?.embeddings ? <p className="settings-hint">{help.embeddings}</p> : null}
+              <p className="settings-hint">
+                For OpenAI chat with the existing starter pack, keep{" "}
+                <code>gemini-embedding-001</code> so the 19 KB vectors still match. Changing
+                provider no longer overwrites embeddings automatically.
+                {help?.embeddings ? ` ${help.embeddings}` : ""}
+              </p>
+              <div className="settings-actions" style={{ marginTop: "0.5rem" }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applyProviderModelDefaults}
+                >
+                  Reset chat + embeddings to {PROVIDER_LABELS[providerDefault]} defaults
+                </Button>
+              </div>
             </label>
 
             <label className="settings-field">
@@ -542,9 +585,9 @@ export function AiSettingsPanel() {
               onChange={(e) => setWebLookupEnabled(e.target.checked)}
             />
             <span>
-              Enable optional allowlisted web lookup (ZimLII, Veritas, Parliament). Results are
-              always labelled <strong>[UNVERIFIED]</strong>. Local knowledge-base RAG still runs
-              first. Default is off.
+              Trusted web lookup is ON by default for richer Zimbabwe links (ZimLII, Veritas,
+              Parliament). Results are always labelled <strong>[UNVERIFIED]</strong>. Local
+              knowledge-base RAG still runs first. A Managing Partner may turn this off.
             </span>
           </label>
           <label className="settings-check">
@@ -559,7 +602,8 @@ export function AiSettingsPanel() {
             </span>
           </label>
           <p className="settings-hint">
-            Disclaimer is always appended to AI answers and cannot be disabled.
+            LexZim AI is assistive only. Always verify authorities against primary sources. Answers
+            are not guaranteed correct. Disclaimer stays on and cannot be disabled.
             {help?.safety ? ` ${help.safety}` : ""}
           </p>
         </section>

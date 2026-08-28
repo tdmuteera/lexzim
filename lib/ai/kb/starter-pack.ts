@@ -7,7 +7,7 @@
  * Always verify against the cited primary source before relying on any answer.
  */
 
-export const STARTER_PACK_VERSION = "lexzim-starter-pack-v1";
+export const STARTER_PACK_VERSION = "lexzim-starter-pack-v3";
 
 export type StarterChunkDef = {
   headingPath: string;
@@ -33,7 +33,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "constitution",
     citationLabel: "Constitution of Zimbabwe, 2013 (as amended) — starter pack",
     publisher: "Government of Zimbabwe / Veritas / ZimLII (attribution)",
-    sourceUrl: "https://www.veritaszim.net/",
+    sourceUrl: "https://www.veritaszim.net/search/node/Constitution%20of%20Zimbabwe",
     licenseNote:
       "Starter educational excerpts only. Confirm against the official Constitution text (Veritas / ZimLII / Government Printer).",
     effectiveDate: "2013",
@@ -58,7 +58,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Labour Act [Chapter 28:01] — starter pack",
     publisher: "Government of Zimbabwe / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=Labour%20Act%20Chapter%2028%3A01",
     licenseNote:
       "Structural starter summary only. Confirm current consolidated Act on ZimLII or official publication.",
     effectiveDate: "Chapter 28:01 (check amendments)",
@@ -79,18 +79,23 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Criminal Law (Codification and Reform) Act [Chapter 9:23] — starter pack",
     publisher: "Government of Zimbabwe / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl:
+      "https://zimlii.org/search?q=Criminal%20Law%20Codification%20and%20Reform%20Act%20Chapter%209%3A23",
     licenseNote:
       "Orientation excerpts only. Elements of offences must be taken from the Code sections as currently in force.",
     effectiveDate: "Chapter 9:23 (check amendments)",
     chunks: [
       {
         headingPath: "Code structure — orientation",
-        text: "Starter note: Zimbabwe's principal criminal offences are largely set out in the Criminal Law (Codification and Reform) Act. Answers about elements of crime, defences, and penalties must cite Code sections after retrieving authoritative text. Never invent offence numbers. Quality: starter_demo.",
+        text: "Starter note: Zimbabwe's principal criminal offences are largely set out in the Criminal Law (Codification and Reform) Act [Chapter 9:23]. Answers about elements of crime, defences, and penalties must cite Code sections after retrieving authoritative text. Never invent offence numbers. Quality: starter_demo.",
+      },
+      {
+        headingPath: "Incest — s.75 (verify current text)",
+        text: "Starter note (Criminal Law Code): incest is expressly addressed in the Criminal Law (Codification and Reform) Act [Chapter 9:23]. Consolidated texts and professional sources commonly identify s.75 as the incest offence (sexual intercourse within prohibited degrees of relationship). Do NOT say the Code does not explicitly address incest, or that incest is only prosecuted under generic sexual-offence labels, without checking s.75 and related provisions. Confirm the exact elements, degrees of relationship, and penalties in the current Code text on ZimLII or Veritas before advising. Quality: starter_demo. Verify section numbering against the consolidated Act.",
       },
       {
         headingPath: "General principles — caution",
-        text: "Starter note: general principles (e.g. intention, negligence, parties to offences, and selected defences) are defined in the Code. Procedural matters often sit in the Criminal Procedure and Evidence Act and court practice. Separate substantive law from procedure when answering.",
+        text: "Starter note: general principles (e.g. intention, negligence, parties to offences, and selected defences) are defined in the Code. Procedural matters often sit in the Criminal Procedure and Evidence Act and court practice. Separate substantive law from procedure when answering. Absence of a retrieved excerpt is not proof that an offence is absent from the Code.",
       },
     ],
   },
@@ -100,18 +105,31 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Companies and Other Business Entities Act [Chapter 24:31] — starter pack",
     publisher: "Government of Zimbabwe / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl:
+      "https://zimlii.org/search?q=Companies%20and%20Other%20Business%20Entities%20Act%20Chapter%2024%3A31%20section%20195%20ordinarily%20resident",
     licenseNote:
       "Starter orientation only. Confirm incorporation, directors' duties, and filing rules in the current COBEA text.",
     effectiveDate: "Chapter 24:31 (check amendments)",
     chunks: [
       {
         headingPath: "Company formation — orientation",
-        text: "Starter note (COBEA): Zimbabwe company law for private and public companies, and other business entities, is primarily governed by the Companies and Other Business Entities Act. Incorporation, constitutional documents, and names are regulated. Always verify current filing requirements with the Companies Registry / official Act. Quality: starter_demo.",
+        text: "Starter note (COBEA): Zimbabwe company law for private and public companies, and other business entities, is primarily governed by the Companies and Other Business Entities Act [Chapter 24:31]. Incorporation, constitutional documents, and names are regulated. Always verify current filing requirements with the Companies Registry / official Act. Quality: starter_demo.",
+      },
+      {
+        headingPath: "Resident director — s.195 (mandatory)",
+        text: "Starter note (COBEA s.195): Under the Companies and Other Business Entities Act [Chapter 24:31], section 195 requires that at least one director of a company incorporated in Zimbabwe be ordinarily resident in Zimbabwe. This is a statutory requirement, not optional common practice or mere banking preference. Do NOT tell users that COBEA is silent on local or resident directors, or that a Zimbabwe-incorporated company may freely run with no Zimbabwe-resident director. Ordinarily resident is not the same as citizenship: a non-citizen who is ordinarily resident can satisfy the rule; a citizen who is not ordinarily resident does not. Confirm exact wording, any exemptions, and current registry practice on ZimLII, Veritas, or the Companies Registry before court use. Quality: starter_demo.",
+      },
+      {
+        headingPath: "Company secretary residency — s.198",
+        text: "Starter note (COBEA s.198): Related residency rules apply to company secretaries. Professional guides commonly cite a requirement that at least one company secretary be ordinarily resident in Zimbabwe (verify s.198 and current text). Do not collapse secretary residency into practice only. Quality: starter_demo.",
+      },
+      {
+        headingPath: "Foreign companies — principal officer (Part IV)",
+        text: "Starter note (COBEA Part IV / around s.241 area): A foreign company operating in Zimbabwe is a different entity type from a Zimbabwe-incorporated company. Foreign companies are commonly required to have a resident principal officer in Zimbabwe (verify the exact Part IV / s.241-area provision in the current Act). When a user asks about a local company, disambiguate: Zimbabwe-incorporated company (s.195 resident director) versus foreign company carrying on business locally (resident principal officer). Quality: starter_demo.",
       },
       {
         headingPath: "Directors and governance — caution",
-        text: "Starter note: directors' duties, meetings, shares, and remedies for members are COBEA topics. Do not transplant foreign company-law cases as Zimbabwe authority without checking local sources.",
+        text: "Starter note (COBEA): Directors' duties, meetings, shares, and remedies for members are COBEA topics. Banking and operational preference for a local contact person is separate from, and secondary to, the s.195 statutory residency rule. Never characterize s.195 as merely advisable practice. Do not transplant UK, SA, or US company-law defaults as Zimbabwe authority. Quality: starter_demo.",
       },
     ],
   },
@@ -121,7 +139,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Marriages Act [Chapter 5:15] (and related family statutes) — starter pack",
     publisher: "Government of Zimbabwe / ZimLII / Veritas (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=Marriages%20Act%20Chapter%205%3A15",
     licenseNote:
       "Starter family-law orientation. Marriage types, solemnisation, and related reforms must be checked against current Acts.",
     effectiveDate: "Check current Marriages Act consolidation",
@@ -142,7 +160,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Deeds Registries Act [Chapter 20:05] — starter pack",
     publisher: "Government of Zimbabwe / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=Deeds%20Registries%20Act%20Chapter%2020%3A05",
     licenseNote:
       "Conveyancing orientation only. Registration practice must be confirmed with the Deeds Office and current Act/regulations.",
     effectiveDate: "Chapter 20:05 (check amendments)",
@@ -163,7 +181,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "statute",
     citationLabel: "Civil Evidence Act [Chapter 8:01] — starter pack",
     publisher: "Government of Zimbabwe / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=Civil%20Evidence%20Act%20Chapter%208%3A01",
     licenseNote:
       "Evidence orientation only. Admissibility rules must be taken from the Act and applicable case law after proper research.",
     effectiveDate: "Chapter 8:01 (check amendments)",
@@ -184,7 +202,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "rules",
     citationLabel: "High Court Rules (Zimbabwe) — starter pack",
     publisher: "Judiciary / Government Printer / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=High%20Court%20Rules%20Zimbabwe",
     licenseNote:
       "Procedure orientation only. Always check the current High Court Rules SI / practice directions.",
     effectiveDate: "Check current Rules statutory instrument",
@@ -205,7 +223,7 @@ export const STARTER_KB_SOURCES: StarterSourceDef[] = [
     sourceType: "rules",
     citationLabel: "Magistrates Court (Civil) Rules — starter pack",
     publisher: "Judiciary / Government Printer / ZimLII (attribution)",
-    sourceUrl: "https://zimlii.org/",
+    sourceUrl: "https://zimlii.org/search?q=Magistrates%20Court%20Civil%20Rules%20Zimbabwe",
     licenseNote:
       "Lower-court procedure orientation only. Confirm monetary jurisdiction and current Rules.",
     effectiveDate: "Check current Magistrates Court Rules",

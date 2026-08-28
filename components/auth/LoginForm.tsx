@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   AuthFormPanel,
@@ -20,15 +20,23 @@ import { PLATFORM_PRODUCT_NAME } from "@/lib/firm/branding";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [errorRef, setErrorRef] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("reason") === "idle") {
+      setInfo("Signed out after inactivity. Sign in again to continue.");
+    }
+  }, [searchParams]);
 
   async function onRequestReset() {
     setResetBusy(true);
@@ -93,6 +101,22 @@ export function LoginForm() {
         <div className="eyebrow">Secure Access</div>
         <h2>Welcome back</h2>
         <p className="sub">Sign in to {PLATFORM_PRODUCT_NAME}</p>
+
+        {info && !error ? (
+          <div
+            role="status"
+            style={{
+              marginBottom: "1rem",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              background: "rgba(60, 90, 60, 0.08)",
+              border: "1px solid rgba(60, 90, 60, 0.25)",
+              color: "var(--text)",
+            }}
+          >
+            {info}
+          </div>
+        ) : null}
 
         {error && (
           <div

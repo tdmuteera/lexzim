@@ -11,13 +11,19 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
-import { FEE_PAYMENT_METHODS } from "@/lib/billing/fee-payment-methods";
+import {
+  FEE_BANK_METHODS,
+  FEE_PAYMENT_CHANNELS,
+  type FeePaymentChannel,
+} from "@/lib/billing/fee-payment-methods";
 import { INVOICING_LIST_PATH } from "@/lib/billing/paths";
 
 type Invoice = {
   id: string;
   invoiceNumber: string;
   status: string;
+  approvalState?: string;
+  rejectionNote?: string | null;
   currency: string;
   issueDate: string | null;
   dueDate: string | null;
@@ -31,6 +37,7 @@ type Invoice = {
   matterNumber: string | null;
   clientDisplayName: string | null;
   clientNumber: string | null;
+  clientEmail?: string | null;
   discountAppliedCents?: number;
   discountDisplay?: string;
   retainerAppliedCents?: number;
@@ -93,7 +100,8 @@ export function InvoiceDetailView({
   const [payOpen, setPayOpen] = useState(false);
   const [amountDollars, setAmountDollars] = useState("");
   const [paidAt, setPaidAt] = useState(todayInput);
-  const [method, setMethod] = useState("Bank deposit (confirmed)");
+  const [method, setMethod] = useState<string>(FEE_BANK_METHODS[0]);
+  const [payChannel, setPayChannel] = useState<FeePaymentChannel>("Bank");
   const [reference, setReference] = useState("");
   const [payError, setPayError] = useState<string | null>(null);
   const [bankConfirmed, setBankConfirmed] = useState(true);
@@ -101,6 +109,8 @@ export function InvoiceDetailView({
   const [retainerOpen, setRetainerOpen] = useState(false);
   const [retainerDollars, setRetainerDollars] = useState("");
   const [retainerError, setRetainerError] = useState<string | null>(null);
+  const [requireApproval, setRequireApproval] = useState(true);
+  const [rejectNote, setRejectNote] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,7 +119,12 @@ export function InvoiceDetailView({
       const res = await fetch(`/api/invoices/${invoiceId}`, { credentials: "include" });
       const body = (await res.json()) as {
         ok: boolean;
-        data?: { invoice: Invoice; lines: Line[]; payments: Payment[] };
+        data?: {
+          invoice: Invoice;
+          lines: Line[];
+          payments: Payment[];
+          requireInvoiceApproval?: boolean;
+        };
         error?: { message: string };
       };
       if (!res.ok || !body.ok || !body.data) {
@@ -120,6 +135,7 @@ export function InvoiceDetailView({
       setInvoice(body.data.invoice);
       setLines(body.data.lines);
       setPayments(body.data.payments);
+      setRequireApproval(body.data.requireInvoiceApproval !== false);
       if (body.data.invoice.balanceCents > 0) {
         setAmountDollars((body.data.invoice.balanceCents / 100).toFixed(2));
       }
@@ -161,21 +177,51 @@ export function InvoiceDetailView({
     }
   }
 
+  async function runApproval(action: "submit" | "approve" | "reject") {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/approval`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          rejectionNote: action === "reject" ? rejectNote.trim() || null : null,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not update approval.");
+        return;
+      }
+      if (action === "reject") setRejectNote("");
+      await load();
+    } catch {
+      setError("Could not update approval.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onPay(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setPayError(null);
     try {
-      let methodOut = method || null;
-      if (methodOut && /bank|eft|rtgs|deposit/i.test(methodOut) && bankConfirmed) {
-        if (!/confirmed/i.test(methodOut)) {
-          methodOut = `${methodOut} (confirmed)`;
-        }
+      const methodOut = payChannel === "Cash" ? "Cash" : method;
+      if (payChannel === "Bank" && !bankConfirmed) {
+        setPayError("Confirm the bank payment before saving.");
+        setBusy(false);
+        return;
       }
       const notes =
-        bankConfirmed && methodOut && /bank|eft|rtgs|deposit/i.test(methodOut)
+        payChannel === "Bank"
           ? "Bank payment confirmed. Included in fee revenue."
-          : null;
+          : "Cash received at office. Included in fee revenue.";
       const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
         method: "POST",
         credentials: "include",
@@ -190,6 +236,7 @@ export function InvoiceDetailView({
       });
       const body = (await res.json()) as {
         ok: boolean;
+        data?: { payment?: { id: string; receiptNumber?: string | null } };
         error?: { message: string };
       };
       if (!res.ok || !body.ok) {
@@ -199,6 +246,14 @@ export function InvoiceDetailView({
       setPayOpen(false);
       setDetailTab("receipts");
       await load();
+      const paymentId = body.data?.payment?.id;
+      if (paymentId) {
+        window.open(
+          `/api/export/receipt?id=${encodeURIComponent(paymentId)}&format=pdf`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
     } catch {
       setPayError("Could not record payment.");
     } finally {
@@ -257,8 +312,15 @@ export function InvoiceDetailView({
 
   const overdue =
     invoice.displayOverdue || invoice.status === "overdue";
-  const statusLabel =
-    invoice.displayOverdue && invoice.status === "sent" ? "overdue" : invoice.status;
+  const partiallyPaid =
+    invoice.paidCents > 0 &&
+    invoice.balanceCents > 0 &&
+    (invoice.status === "sent" || invoice.status === "overdue");
+  const statusLabel = partiallyPaid
+    ? "partially paid"
+    : invoice.displayOverdue && invoice.status === "sent"
+      ? "overdue"
+      : invoice.status;
   const pastDue = overdue && invoice.balanceCents > 0 ? daysPastDue(invoice.dueDate) : null;
   const bucket =
     overdue && invoice.balanceCents > 0 ? ageingBucketLabel(invoice.dueDate) : null;
@@ -279,7 +341,12 @@ export function InvoiceDetailView({
               disabled={loading}
             />
             <Can permission="billing.view">
-              <SendDocumentButton kind="invoice" id={invoiceId} />
+              <SendDocumentButton
+                kind="invoice"
+                id={invoiceId}
+                defaultEmail={invoice.clientEmail}
+                documentLabel={`Invoice ${invoice.invoiceNumber}`}
+              />
             </Can>
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               Print
@@ -310,8 +377,33 @@ export function InvoiceDetailView({
           ) : null}
 
           <Can permission="billing.manage">
-            <div className="toolbar" style={{ marginBottom: "1rem" }}>
-              {invoice.status === "draft" ? (
+            <div className="toolbar" style={{ marginBottom: "1rem", flexWrap: "wrap", gap: "0.35rem" }}>
+              {invoice.status === "draft" && requireApproval ? (
+                <>
+                  {(invoice.approvalState === "none" ||
+                    invoice.approvalState === "rejected") && (
+                    <Button size="sm" disabled={busy} onClick={() => void runApproval("submit")}>
+                      Submit for approval
+                    </Button>
+                  )}
+                  {invoice.approvalState === "approved" ? (
+                    <Button size="sm" disabled={busy} onClick={() => void setStatus("sent")}>
+                      Mark sent
+                    </Button>
+                  ) : null}
+                  {invoice.approvalState === "pending" ? (
+                    <span className="muted" style={{ fontSize: "0.85rem", alignSelf: "center" }}>
+                      Awaiting approval
+                    </span>
+                  ) : null}
+                  {invoice.approvalState === "rejected" && invoice.rejectionNote ? (
+                    <span className="muted" style={{ fontSize: "0.85rem", alignSelf: "center" }}>
+                      Rejected: {invoice.rejectionNote}
+                    </span>
+                  ) : null}
+                </>
+              ) : null}
+              {invoice.status === "draft" && !requireApproval ? (
                 <Button size="sm" disabled={busy} onClick={() => void setStatus("sent")}>
                   Mark sent
                 </Button>
@@ -330,7 +422,7 @@ export function InvoiceDetailView({
               invoice.balanceCents > 0 ? (
                 <>
                   <Button size="sm" disabled={busy} onClick={() => setPayOpen(true)}>
-                    Confirm bank payment
+                    Record payment
                   </Button>
                   <Button
                     size="sm"
@@ -363,16 +455,47 @@ export function InvoiceDetailView({
             </div>
           </Can>
 
+          {invoice.status === "draft" &&
+          requireApproval &&
+          invoice.approvalState === "pending" ? (
+            <Can permission="invoice.approve">
+              <div
+                className="toolbar"
+                style={{ marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}
+              >
+                <Button size="sm" disabled={busy} onClick={() => void runApproval("approve")}>
+                  Approve (ready to send)
+                </Button>
+                <input
+                  type="text"
+                  placeholder="Rejection note (optional)"
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  disabled={busy}
+                  style={{ minWidth: "12rem", padding: "0.35rem 0.5rem" }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void runApproval("reject")}
+                >
+                  Reject
+                </Button>
+              </div>
+            </Can>
+          ) : null}
+
           {payOpen ? (
             <form
               onSubmit={onPay}
               className="panel"
               style={{ padding: "1rem", marginBottom: "1rem" }}
             >
-              <h4 style={{ marginTop: 0 }}>Confirm bank / fee payment</h4>
+              <h4 style={{ marginTop: 0 }}>Record fee payment</h4>
               <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
-                Records a fee receipt when funds are paid into the firm bank account (or cash).
-                This updates fee revenue. Trust money stays in Trust.
+                Cash or bank payment against this fee note. Issues a receipt number (RCP), updates
+                the balance, and posts fee revenue. Trust money stays in Trust.
               </p>
               {payError ? (
                 <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
@@ -405,22 +528,57 @@ export function InvoiceDetailView({
               </div>
               <div className="grid-2">
                 <div className="form-group">
-                  <label htmlFor="pay-method">Method</label>
+                  <label htmlFor="pay-channel">Channel</label>
                   <select
-                    id="pay-method"
-                    value={method}
+                    id="pay-channel"
+                    value={payChannel}
                     onChange={(e) => {
-                      setMethod(e.target.value);
-                      setBankConfirmed(/bank|eft|rtgs|deposit/i.test(e.target.value));
+                      const next = e.target.value as FeePaymentChannel;
+                      setPayChannel(next);
+                      if (next === "Cash") {
+                        setMethod("Cash");
+                        setBankConfirmed(false);
+                      } else {
+                        setMethod(FEE_BANK_METHODS[0]);
+                        setBankConfirmed(true);
+                      }
                     }}
                   >
-                    {FEE_PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
+                    {FEE_PAYMENT_CHANNELS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </select>
                 </div>
+                {payChannel === "Bank" ? (
+                  <div className="form-group">
+                    <label htmlFor="pay-method">Bank method</label>
+                    <select
+                      id="pay-method"
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                    >
+                      {FEE_BANK_METHODS.map((m) => (
+                        <option key={m} value={m}>
+                          {m.replace(" (confirmed)", "")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label htmlFor="pay-ref-cash">Reference (optional)</label>
+                    <input
+                      id="pay-ref-cash"
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      placeholder="Cash receipt or note"
+                    />
+                  </div>
+                )}
+              </div>
+              {payChannel === "Bank" ? (
                 <div className="form-group">
                   <label htmlFor="pay-ref">Bank / payment reference</label>
                   <input
@@ -430,37 +588,40 @@ export function InvoiceDetailView({
                     placeholder="Deposit slip or EFT reference"
                   />
                 </div>
-              </div>
-              <label
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  alignItems: "flex-start",
-                  marginBottom: "0.85rem",
-                  fontSize: "0.9rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={bankConfirmed}
-                  onChange={(e) => setBankConfirmed(e.target.checked)}
-                  style={{ marginTop: "0.2rem" }}
-                />
-                <span>
-                  Payment confirmed in the firm bank account (include in fee revenue and issue
-                  receipt).
-                </span>
-              </label>
+              ) : null}
+              {payChannel === "Bank" ? (
+                <label
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "flex-start",
+                    marginBottom: "0.85rem",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={bankConfirmed}
+                    onChange={(e) => setBankConfirmed(e.target.checked)}
+                    style={{ marginTop: "0.2rem" }}
+                  />
+                  <span>
+                    Payment confirmed in the firm bank account (include in fee revenue and issue
+                    receipt).
+                  </span>
+                </label>
+              ) : (
+                <p className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.85rem" }}>
+                  Cash received at the office will be recorded and a fee receipt issued.
+                </p>
+              )}
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={
-                    busy ||
-                    (/bank|eft|rtgs|deposit/i.test(method) && !bankConfirmed)
-                  }
+                  disabled={busy || (payChannel === "Bank" && !bankConfirmed)}
                 >
-                  {busy ? "Saving…" : "Save payment & generate receipt"}
+                  {busy ? "Saving…" : "Save payment & open receipt"}
                 </Button>
                 <Button
                   type="button"
@@ -472,7 +633,7 @@ export function InvoiceDetailView({
                   Cancel
                 </Button>
               </div>
-              {!bankConfirmed && /bank|eft|rtgs|deposit/i.test(method) ? (
+              {payChannel === "Bank" && !bankConfirmed ? (
                 <p className="muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
                   Tick confirmation once the bank deposit or EFT is verified.
                 </p>
@@ -582,7 +743,15 @@ export function InvoiceDetailView({
                             formats={["pdf", "docx", "xlsx"]}
                             label="Download"
                           />
-                          <SendDocumentButton kind="receipt" id={p.id} label="Email" />
+                          <SendDocumentButton
+                            kind="receipt"
+                            id={p.id}
+                            label="Email"
+                            defaultEmail={invoice.clientEmail}
+                            documentLabel={
+                              p.receiptNumber ? `Receipt ${p.receiptNumber}` : "Receipt"
+                            }
+                          />
                         </div>
                       </td>
                     </tr>
@@ -606,7 +775,37 @@ export function InvoiceDetailView({
             <div>
               <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>Fee note</div>
               <div>{invoice.invoiceNumber}</div>
-              <Badge tone={overdue ? "danger" : "default"}>{statusLabel}</Badge>
+              <Badge
+                tone={
+                  overdue
+                    ? "danger"
+                    : partiallyPaid
+                      ? "pending"
+                      : invoice.status === "paid"
+                        ? "open"
+                        : "default"
+                }
+              >
+                {statusLabel}
+              </Badge>
+              {invoice.status === "draft" && invoice.approvalState && invoice.approvalState !== "none" ? (
+                <Badge
+                  tone={
+                    invoice.approvalState === "approved"
+                      ? "open"
+                      : invoice.approvalState === "rejected"
+                        ? "danger"
+                        : "pending"
+                  }
+                  style={{ marginLeft: "0.35rem" }}
+                >
+                  {invoice.approvalState === "pending"
+                    ? "pending approval"
+                    : invoice.approvalState === "approved"
+                      ? "approved (ready to send)"
+                      : "rejected"}
+                </Badge>
+              ) : null}
             </div>
             <div style={{ textAlign: "right", fontSize: "0.85rem" }}>
               <div>

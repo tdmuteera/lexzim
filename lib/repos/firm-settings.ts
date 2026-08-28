@@ -32,6 +32,10 @@ export const INVOICE_PAYMENT_NOTE_KEY = "invoice_payment_note";
 export const INVOICE_CLOSING_NOTE_KEY = "invoice_closing_note";
 /** JSON: accountName, bank, accountNumber, branch, accountType, swiftCode, branchCode */
 export const INVOICE_BANKING_KEY = "invoice_banking";
+/** Phase 10: when not "false", draft invoices must be approved before Mark sent. Default ON. */
+export const REQUIRE_INVOICE_APPROVAL_KEY = "require_invoice_approval";
+/** Phase 10: when not "false", matter status open requires latest client conflict = clear. Default ON. */
+export const REQUIRE_CLEAR_CONFLICT_KEY = "require_clear_conflict";
 
 export const PHASE3_FIRM_SETTING_KEYS = [
   DEFAULT_CURRENCY_KEY,

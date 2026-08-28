@@ -8,6 +8,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lte,
   or,
   sql,
@@ -134,13 +135,17 @@ export async function getDashboardCommandKpis(input: {
   const [clientCount] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clients)
-    .where(eq(clients.firmId, input.firmId));
+    .where(and(eq(clients.firmId, input.firmId), isNull(clients.archivedAt)));
 
   const [newClients] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clients)
     .where(
-      and(eq(clients.firmId, input.firmId), gte(clients.createdAt, monthStart)),
+      and(
+        eq(clients.firmId, input.firmId),
+        isNull(clients.archivedAt),
+        gte(clients.createdAt, monthStart),
+      ),
     );
 
   const [highPriority] = await db
@@ -182,10 +187,19 @@ export async function getDashboardCommandKpis(input: {
       ), 0)::int`,
     })
     .from(invoices)
+    .innerJoin(
+      clients,
+      and(
+        eq(clients.id, invoices.clientId),
+        eq(clients.firmId, input.firmId),
+        isNull(clients.archivedAt),
+      ),
+    )
     .where(
       and(
         eq(invoices.firmId, input.firmId),
-        inArray(invoices.status, ["sent", "overdue", "draft"]),
+        // Outstanding AR: sent/overdue only (not draft). Active clients only.
+        inArray(invoices.status, ["sent", "overdue"]),
       ),
     );
 

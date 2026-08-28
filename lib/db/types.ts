@@ -113,4 +113,9 @@ export type PermissionCode =
   | "audit.view"
   | "settings.manage"
   | "users.manage"
-  | "reports.view";
+  | "reports.view"
+  | "knowledge.reports.view"
+  | "knowledge.reports.manage"
+  | "invoice.approve"
+  | "leave.approve"
+  | "payroll.advance.approve";

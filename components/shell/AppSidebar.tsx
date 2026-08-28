@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -16,6 +17,12 @@ const API_WARM: Record<string, string> = {
   "/matters": "/api/matters?bucket=open&includeLawyers=1",
   "/clients": "/api/clients",
 };
+
+const ALWAYS_OPEN_SECTIONS = new Set(["Overview"]);
+
+function storageKey(userId: string) {
+  return `lz_nav_sections_${userId}`;
+}
 
 function warmModule(href: string) {
   const api = API_WARM[href];
@@ -50,10 +57,43 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { user, can, isLoading } = useAuth();
   const branding = getFirmBranding(user);
-  // Keep nav visible while a background session refresh runs.
   const showMenu = Boolean(user) || !isLoading;
   const visibleSections = showMenu ? filterNavSections(can) : [];
   const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useUiStore();
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  useEffect(() => {
+    if (!user?.id || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey(user.id));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, boolean>;
+      if (parsed && typeof parsed === "object") setCollapsedSections(parsed);
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id]);
+
+  const persist = useCallback(
+    (next: Record<string, boolean>) => {
+      setCollapsedSections(next);
+      if (!user?.id || typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(storageKey(user.id), JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+    },
+    [user?.id],
+  );
+
+  function toggleSection(title: string) {
+    if (ALWAYS_OPEN_SECTIONS.has(title)) return;
+    const next = { ...collapsedSections, [title]: !collapsedSections[title] };
+    persist(next);
+  }
 
   const sidebarClass = [
     "sidebar",
@@ -79,28 +119,69 @@ export function AppSidebar() {
             Loading menu…
           </div>
         ) : (
-          visibleSections.map((section) => (
-            <div key={section.title}>
-              <div className="nav-section">{section.title}</div>
-              {section.items.map((item) => {
-                const active = isNavItemActive(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    prefetch
-                    className={["nav-item", active ? "active" : ""].filter(Boolean).join(" ")}
-                    onClick={() => setMobileNavOpen(false)}
-                    onMouseEnter={() => warmModule(item.href)}
-                    onFocus={() => warmModule(item.href)}
+          visibleSections.map((section) => {
+            const lockedOpen = ALWAYS_OPEN_SECTIONS.has(section.title);
+            const isCollapsed =
+              !sidebarCollapsed &&
+              !lockedOpen &&
+              Boolean(collapsedSections[section.title]);
+            const hasActiveChild = section.items.some((item) =>
+              isNavItemActive(pathname, item.href),
+            );
+            const showItems = !isCollapsed || sidebarCollapsed;
+            return (
+              <div
+                key={section.title}
+                className={["nav-section-block", isCollapsed ? "is-collapsed" : ""]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {lockedOpen ? (
+                  <div className="nav-section">{section.title}</div>
+                ) : (
+                  <button
+                    type="button"
+                    className={[
+                      "nav-section",
+                      "nav-section-toggle",
+                      hasActiveChild ? "has-active" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-expanded={!isCollapsed}
+                    onClick={() => toggleSection(section.title)}
                   >
-                    <Icon name={item.icon} />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          ))
+                    <span>{section.title}</span>
+                    <Icon
+                      name="chevron"
+                      className={isCollapsed ? "nav-section-chevron" : "nav-section-chevron open"}
+                    />
+                  </button>
+                )}
+                {showItems
+                  ? section.items.map((item) => {
+                      const active = isNavItemActive(pathname, item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          prefetch
+                          className={["nav-item", active ? "active" : ""]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={() => setMobileNavOpen(false)}
+                          onMouseEnter={() => warmModule(item.href)}
+                          onFocus={() => warmModule(item.href)}
+                        >
+                          <Icon name={item.icon} />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })
+                  : null}
+              </div>
+            );
+          })
         )}
       </nav>
 

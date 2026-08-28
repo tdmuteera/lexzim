@@ -88,6 +88,7 @@ Optional Firm-edition mode. Master provider keys stay on the proxy/app server. F
 - Starter Zimbabwe corpus with provenance (`docs/KNOWLEDGE_BASE.md`)
 - Settings → **Knowledge pack** → Re-ingest (pack + embed) or Embed only
 - APIs: `GET/POST /api/ai/knowledge` with `mode`: `all` | `pack` | `embed`
+- **Citation URLs:** starter sources use Act-specific ZimLII/Veritas **search** links (not bare homepages). Runtime deepen (`lib/ai/citations/authority-urls.ts`) also upgrades shallow URLs. If the DB still has old homepage `source_url` values, re-run pack ingest via Settings → Knowledge pack → Re-ingest (or `POST /api/ai/knowledge` with `mode: "all"`). There is no separate `npm` ingest-starter script.
 
 ### Embeddings (P2-05)
 
@@ -121,9 +122,12 @@ API: `POST /api/ai/retrieve` (`ai.use`)
 
 Pipeline (`lib/ai/rag/answer.ts` → `aiLegalAsk`):
 
-1. `retrieveLegalContext(question)`
-2. **Empty hits:** fixed not-found text, confidence `low`, citations `[]`, disclaimer included. No LLM call that invents authorities.
-3. **Hits:** strict Zimbabwe-only system prompt → Gemini `chat()` → answer + `citations_json` from retrieval + confidence (high/medium/low) + mandatory disclaimer.
+1. Classify intent (chat / legal / document).
+2. Retrieve local legal context (skipped for pure chat).
+3. Optional allowlisted web lookup (legal only). **Default ON** for richer Zimbabwe links; firm may disable in Settings → AI.
+4. Generate via configured provider (Gemini / Claude / OpenAI).
+5. **Verify pass (P10-15):** deterministic claim/citation overlap vs sources; drop unsupported citations; lower confidence; optional hedge when weak (`lib/ai/rag/verify.ts`). Summary stored in `retrievalMetaJson.verify`.
+6. Citations shown for legal turns only (precise Act/section labels when heading path exists; UI caps at **3**, prefers answer overlap, deepens shallow homepage links to publisher search). Chat/greetings: empty citations. In the UI, Sources start **collapsed** behind Show sources / Hide sources.
 
 API: `POST /api/ai/ask` (`ai.use`)
 
@@ -131,9 +135,15 @@ API: `POST /api/ai/ask` (`ai.use`)
 { "question": "What does the Constitution say about equality?", "conversationId": null }
 ```
 
-UI: **AI Assistant** (`/ai`) legal research chat. Conversations/messages persist (`ai_conversations` / `ai_messages`). Audit: `ai.legal_ask`.
+**Edit + regenerate:** `POST /api/ai/conversations/[id]/regenerate` with `{ messageId, content }` updates the user message, truncates later turns, then runs ask with `skipCreateUserMessage` so the user row is not duplicated.
 
-No matter context yet (P2-10). No web search yet.
+**Dictate:** `POST /api/ai/transcribe` (multipart `file`) via OpenAI Whisper when an OpenAI key is available.
+
+UI: **AI Assistant** (`/ai`) legal research chat. Conversations/messages persist (`ai_conversations` / `ai_messages`). Audit: `ai.legal_ask` / `ai.legal_regenerate`.
+
+### Document house style (P10-15)
+
+AI Word exports (`packInstructionDocx` / chat document packing) default to Trebuchet MS, 12pt, 1.5 line spacing, justified, plain black (`lib/ai/drafting/house-style.ts`). User overrides only when they explicitly request another font/size/spacing. Invoice letterhead fonts are unchanged.
 
 ### Sample transcript (not-found path, no embeddings / no hits)
 
@@ -197,9 +207,9 @@ Pipeline (`aiMatterAsk`):
 
 API: `POST /api/ai/matter-ask` `{ "matterId", "question", "conversationId?" }`
 
-## Drafting (P2-11)
+## Drafting (P2-11, house style + red placeholders updated P-AI-reset)
 
-AI-assisted drafting starts from **Phase 1 firm templates only** (no invented official forms).
+AI-assisted drafting starts from **Phase 1 firm templates only** (no invented official forms), and the AI chat assistant can also draft full, ready-to-use documents directly (letters, notices, affidavits, agreements) via `/ai` when asked.
 
 Flow (Matter → Documents → Generate from template):
 
@@ -220,6 +230,10 @@ API: `POST /api/matters/[id]/draft`
 
 Code: `lib/ai/drafting/polish.ts`, `lib/templates/merge.ts` (`extractPlainTextFromDocx`), `lib/templates/pack-text.ts`
 
+### House style + placeholders (P-AI-reset)
+
+Every AI-generated Word document uses Trebuchet MS, 12pt, 1.5 line spacing, justified, black — unless the user explicitly asks for different formatting (`lib/ai/drafting/house-style.ts`, `lib/ai/intent.ts::parseDocxStyle`). The model is instructed to leave any fact it does not have as a `[BRACKETED PLACEHOLDER]`; the docx generator (`lib/ai/drafting/instruction-docx.ts`) automatically renders those bracketed spans in **red** so a lawyer can see at a glance what still needs to be filled in before sending. Everything else in the document stays normal black text. Documents are always the full, ready-to-use body — never a chat summary pasted into a file.
+
 ## Offline / error behaviour (P2-12)
 
 Honest failure modes on the web app:
@@ -239,31 +253,46 @@ Matter Assist can still answer from **live matter facts** when the LLM/key is do
 
 Ollama / offline desktop fallback is **out of scope** for the web SaaS MVP (optional future).
 
-## Web lookup (P2-13)
+## Web lookup (P-AI-reset)
 
-Optional allowlisted lookup (default **OFF**). Managing Partner enables via Settings → AI (`ai.manage_settings`).
+Live web search is a real, independent research step — not a static allowlist scrape. It runs via the **OpenAI Responses API `web_search` tool** whenever the firm has an OpenAI key configured, regardless of which provider (OpenAI/Claude/Gemini) writes the final chat answer. Managing Partner may disable it via Settings → AI (`ai.manage_settings`, `ai_settings.web_lookup_enabled`).
 
 | Rule | Behaviour |
 |---|---|
-| Allowlist | ZimLII, Veritas Zimbabwe, Parliament of Zimbabwe |
-| Labels | Every web hit / citation is **`[UNVERIFIED]`** (`verified: false`) |
-| Order | Local RAG always runs first |
-| Override | Web never silently replaces local grounding |
-| Failure | Network/timeout → local only (no hard fail) |
+| Scope | Full web, not restricted to a fixed allowlist — the model may cite any verifiable page it actually retrieves |
+| Reliable sources | ZimLII, Veritas Zimbabwe, Parliament of Zimbabwe, Ministry of Justice, JSC, ZIMRA, RBZ, Law Society of Zimbabwe, ZHRC are ranked/checked first (`lib/ai/web/trusted-sites.ts`) — a ranking hint, never a hard restriction |
+| Labels | Web-sourced citations carry `verified: false` and `verificationStatus: "web_consulted"`; the UI never presents them as primary legislation |
+| Order | Local knowledge base always runs first; web search runs alongside it as a second, independent source |
+| Real links only | Every hit is a URL the model's own `url_citation` annotation actually returned — nothing is invented |
+| Failure | No OpenAI key / network / timeout → local knowledge only, no hard fail |
+| Currency | This is how brand-new gazetted law (days old) can still be found and cited |
 
-Code: `lib/ai/web/trusted-lookup.ts` (wired in `aiLegalAsk`).
+Code: `lib/ai/web/openai-web-search.ts` (the search call), `lib/ai/web/trusted-lookup.ts` (firm-scoped wrapper + ranking), wired in `aiLegalAsk` and `aiMatterAsk`.
 
-## Accuracy & ethics (Phase 2)
+## Sources tiering & honesty (P-AI-reset)
 
-1. Zimbabwe context only for legal research.
-2. No fake cases / invented sections.
-3. Citations when authority is claimed.
-4. Confidence shown.
-5. Honest not-found.
-6. Disclaimer + lawyer-in-the-loop.
-7. Keys server-side only.
-8. `firm_id` + RBAC for firm memory.
-9. Web results labelled UNVERIFIED.
+Every legal or drafting answer runs through a **verify pass** (`lib/ai/rag/verify.ts`) before anything is shown as a source. `lib/ai/citations/tiers.ts` splits the result into what the chat UI renders:
+
+| Tier | Meaning |
+|---|---|
+| **Primary sources** | Verified local knowledge-base authorities (Acts/sections actually retrieved and pinpointed) |
+| **Other sources consulted** | Relevant live web results that informed the answer but are not primary legislation text |
+| **Further reading** | Related but not directly relied-on citations (rejected by the relevance gate but still worth checking), categorized as statute / case law / treaty / secondary |
+
+A candidate source only reaches "Primary" or "Other sources consulted" if it is topically relevant to the question **and** answer (cross-domain and off-topic matches — e.g. ZIMRA on a criminal-law question — are dropped, never shown). If neither the knowledge base nor a live web search finds anything relevant to a specific legal claim, the assistant is instructed to say so plainly (no fabricated citation to fill the gap) before giving a general-knowledge answer.
+
+## Accuracy & ethics (Phase 2, updated P-AI-reset)
+
+1. Zimbabwe context only for legal research (unless the user asks about another jurisdiction).
+2. No fake cases / invented sections / invented URLs.
+3. Every legal claim traceable to a real, clickable source shown under **Show sources**.
+4. Irrelevant sources are never shown — a domain/topic relevance gate filters candidates before display.
+5. Confidence and grounding status shown.
+6. Honest not-found: the assistant says so when it found nothing verifiable, rather than padding the list.
+7. Disclaimer + lawyer-in-the-loop.
+8. Keys server-side only; never shipped to the browser.
+9. `firm_id` + RBAC for firm memory.
+10. Web-sourced citations are always labelled distinctly from verified local authorities.
 
 ## Conversation retention (P5-12)
 

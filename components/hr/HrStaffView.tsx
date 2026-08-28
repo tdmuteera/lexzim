@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { HrAccessCallout } from "@/components/hr/HrAccessCallout";
+import { HrPageShell } from "@/components/hr/HrPageShell";
+import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { HR_JOB_CATEGORIES } from "@/lib/hr/job-categories";
+import { dollarsToCents } from "@/lib/billing/money";
 
 type StaffItem = {
   id: string;
@@ -14,11 +18,26 @@ type StaffItem = {
   email: string | null;
   phone: string | null;
   jobTitle: string | null;
+  jobCategory: string | null;
   department: string | null;
+  employeeNumber: string | null;
+  idPassport: string | null;
+  workLocation: string | null;
   startDate: string | null;
   endDate: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  nokFullName: string | null;
+  nokRelationship: string | null;
+  nokPhone1: string | null;
+  nokPhone2: string | null;
+  nokAddress: string | null;
+  nokEmail: string | null;
+  nokOccupation: string | null;
+  nokDeclaredAt: string | null;
+  nokReceivedAt: string | null;
+  grossSalaryCents: number | null;
+  netSalaryCents: number | null;
   isActive: boolean;
   notes: string | null;
   userId: string | null;
@@ -55,6 +74,14 @@ function dateInputFromIso(value: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 export function HrStaffView() {
   const { can } = useAuth();
   const canManage = can("hr.manage");
@@ -72,11 +99,25 @@ export function HrStaffView() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [jobCategory, setJobCategory] = useState("");
   const [department, setDepartment] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [idPassport, setIdPassport] = useState("");
+  const [workLocation, setWorkLocation] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [emergencyName, setEmergencyName] = useState("");
-  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [nokFullName, setNokFullName] = useState("");
+  const [nokRelationship, setNokRelationship] = useState("");
+  const [nokPhone1, setNokPhone1] = useState("");
+  const [nokPhone2, setNokPhone2] = useState("");
+  const [nokAddress, setNokAddress] = useState("");
+  const [nokEmail, setNokEmail] = useState("");
+  const [nokOccupation, setNokOccupation] = useState("");
+  const [nokDeclaredAt, setNokDeclaredAt] = useState("");
+  const [nokReceivedAt, setNokReceivedAt] = useState("");
+  const [grossSalaryDollars, setGrossSalaryDollars] = useState("");
+  const [netSalaryDollars, setNetSalaryDollars] = useState("");
+  const [markAsLawyer, setMarkAsLawyer] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [notes, setNotes] = useState("");
   const [userId, setUserId] = useState("");
@@ -118,11 +159,25 @@ export function HrStaffView() {
     setEmail("");
     setPhone("");
     setJobTitle("");
+    setJobCategory("");
     setDepartment("");
+    setEmployeeNumber("");
+    setIdPassport("");
+    setWorkLocation("");
     setStartDate("");
     setEndDate("");
-    setEmergencyName("");
-    setEmergencyPhone("");
+    setNokFullName("");
+    setNokRelationship("");
+    setNokPhone1("");
+    setNokPhone2("");
+    setNokAddress("");
+    setNokEmail("");
+    setNokOccupation("");
+    setNokDeclaredAt("");
+    setNokReceivedAt("");
+    setGrossSalaryDollars("");
+    setNetSalaryDollars("");
+    setMarkAsLawyer(false);
     setIsActive(true);
     setNotes("");
     setUserId("");
@@ -142,11 +197,29 @@ export function HrStaffView() {
     setEmail(row.email ?? "");
     setPhone(row.phone ?? "");
     setJobTitle(row.jobTitle ?? "");
+    setJobCategory(row.jobCategory ?? "");
     setDepartment(row.department ?? "");
+    setEmployeeNumber(row.employeeNumber ?? "");
+    setIdPassport(row.idPassport ?? "");
+    setWorkLocation(row.workLocation ?? "");
     setStartDate(dateInputFromIso(row.startDate));
     setEndDate(dateInputFromIso(row.endDate));
-    setEmergencyName(row.emergencyContactName ?? "");
-    setEmergencyPhone(row.emergencyContactPhone ?? "");
+    setNokFullName(row.nokFullName ?? row.emergencyContactName ?? "");
+    setNokRelationship(row.nokRelationship ?? "");
+    setNokPhone1(row.nokPhone1 ?? row.emergencyContactPhone ?? "");
+    setNokPhone2(row.nokPhone2 ?? "");
+    setNokAddress(row.nokAddress ?? "");
+    setNokEmail(row.nokEmail ?? "");
+    setNokOccupation(row.nokOccupation ?? "");
+    setNokDeclaredAt(dateInputFromIso(row.nokDeclaredAt));
+    setNokReceivedAt(dateInputFromIso(row.nokReceivedAt));
+    setGrossSalaryDollars(
+      row.grossSalaryCents != null ? (row.grossSalaryCents / 100).toFixed(2) : "",
+    );
+    setNetSalaryDollars(
+      row.netSalaryCents != null ? (row.netSalaryCents / 100).toFixed(2) : "",
+    );
+    setMarkAsLawyer(Boolean(row.userIsLawyer));
     setIsActive(row.isActive);
     setNotes(row.notes ?? "");
     setUserId(row.userId ?? "");
@@ -163,21 +236,39 @@ export function HrStaffView() {
     setSaving(true);
     setError(null);
     try {
+      const grossCents = grossSalaryDollars.trim()
+        ? dollarsToCents(grossSalaryDollars)
+        : null;
+      const netCents = netSalaryDollars.trim() ? dollarsToCents(netSalaryDollars) : null;
       const payload = {
         fullName,
         email: email || null,
         phone: phone || null,
         jobTitle: jobTitle || null,
+        jobCategory: jobCategory || null,
         department: department || null,
+        employeeNumber: employeeNumber || null,
+        idPassport: idPassport || null,
+        workLocation: workLocation || null,
         startDate: startDate || null,
         endDate: endDate || null,
-        emergencyContactName: emergencyName || null,
-        emergencyContactPhone: emergencyPhone || null,
+        nokFullName: nokFullName || null,
+        nokRelationship: nokRelationship || null,
+        nokPhone1: nokPhone1 || null,
+        nokPhone2: nokPhone2 || null,
+        nokAddress: nokAddress || null,
+        nokEmail: nokEmail || null,
+        nokOccupation: nokOccupation || null,
+        nokDeclaredAt: nokDeclaredAt || null,
+        nokReceivedAt: nokReceivedAt || null,
+        grossSalaryCents: grossCents,
+        netSalaryCents: netCents,
         isActive,
         notes: notes || null,
         userId: userId || null,
         annualLeaveEntitlementDays: annualEntitlement === "" ? null : Number(annualEntitlement),
         listAsLawyer: !userId && listAsLawyer,
+        markAsLawyer: userId ? markAsLawyer : null,
       };
       const url = editingId ? `/api/hr/staff/${editingId}` : "/api/hr/staff";
       const method = editingId ? "PATCH" : "POST";
@@ -205,60 +296,97 @@ export function HrStaffView() {
     (u) => !u.linkedProfileId || u.linkedProfileId === editingId,
   );
 
+  const summaryStats = useMemo(() => {
+    const active = items.filter((i) => i.isActive).length;
+    const linked = items.filter((i) => i.userId).length;
+    return [
+      { label: "Total staff", value: loading ? "—" : items.length, icon: "ST" },
+      { label: "Active", value: loading ? "—" : active, icon: "OK" },
+      { label: "Login linked", value: loading ? "—" : linked, icon: "IN" },
+      {
+        label: "Inactive",
+        value: loading ? "—" : items.length - active,
+        icon: "OFF",
+      },
+    ];
+  }, [items, loading]);
+
   return (
-    <section className="view active scrollable finance-desk-view" aria-label="HR staff records">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h3>Staff records</h3>
-            <p className="panel-subtitle muted">
-              Employment profiles · optional link to LexZim login
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-            <Can permission="hr.manage">
-              <Button size="sm" onClick={() => openCreate()} disabled={loading}>
-                Add staff
-              </Button>
-            </Can>
-            <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
-              Refresh
+    <HrPageShell
+      title="Staff records"
+      subtitle="Employees · next of kin · job category · optional LexZim login link"
+      ariaLabel="HR staff records"
+      actions={
+        <>
+          <Can permission="hr.manage">
+            <Button size="sm" onClick={() => openCreate()} disabled={loading}>
+              Add staff
             </Button>
-          </div>
-        </div>
-        <div className="panel-body">
-          <HrAccessCallout />
+          </Can>
+          <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
+            Refresh
+          </Button>
+        </>
+      }
+      summary={<HrStatStrip stats={summaryStats} />}
+    >
+      <HrAccessCallout />
 
-          <div className="toolbar" style={{ marginTop: "1rem" }}>
-            <label className="filter-label">
-              <input
-                type="checkbox"
-                checked={activeOnly}
-                onChange={(e) => setActiveOnly(e.target.checked)}
-              />
-              Active only
-            </label>
-          </div>
+      <div className="hr-toolbar">
+        <label className="filter-label">
+          <input
+            type="checkbox"
+            checked={activeOnly}
+            onChange={(e) => setActiveOnly(e.target.checked)}
+          />
+          Active only
+        </label>
+      </div>
 
-          {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
 
-          {formOpen && canManage ? (
-            <form className="panel" style={{ padding: "1rem", marginBottom: "1rem" }} onSubmit={onSubmit}>
-              <h4 style={{ marginBottom: "0.75rem" }}>
-                {editingId ? "Edit staff record" : "New staff record"}
-              </h4>
-              <div className="form-grid" style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
+      {formOpen && canManage ? (
+        <form className="hr-form-panel" onSubmit={onSubmit}>
+          <h4>{editingId ? "Edit staff record" : "New staff record"}</h4>
+          <div className="hr-form-grid">
                 <label>
                   Full name
                   <input className="filter-input" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
                 </label>
                 <label>
-                  Job title
+                  Job category
+                  <select
+                    className="filter-select"
+                    value={jobCategory}
+                    onChange={(e) => setJobCategory(e.target.value)}
+                  >
+                    <option value="">Not set</option>
+                    {HR_JOB_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c === "custom" ? "Custom title" : c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Job title (custom / free text)
                   <input className="filter-input" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
                 </label>
                 <label>
                   Department
                   <input className="filter-input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+                </label>
+                <label>
+                  Employee number
+                  <input className="filter-input" value={employeeNumber} onChange={(e) => setEmployeeNumber(e.target.value)} />
+                </label>
+                <label>
+                  ID / passport
+                  <input className="filter-input" value={idPassport} onChange={(e) => setIdPassport(e.target.value)} />
+                </label>
+                <label>
+                  Work location
+                  <input className="filter-input" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} />
                 </label>
                 <label>
                   Email
@@ -277,6 +405,28 @@ export function HrStaffView() {
                   <input className="filter-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </label>
                 <label>
+                  Gross salary (USD)
+                  <input
+                    className="filter-input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={grossSalaryDollars}
+                    onChange={(e) => setGrossSalaryDollars(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Net salary (USD)
+                  <input
+                    className="filter-input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={netSalaryDollars}
+                    onChange={(e) => setNetSalaryDollars(e.target.value)}
+                  />
+                </label>
+                <label>
                   Link to login user
                   <select className="filter-select" value={userId} onChange={(e) => {
                     setUserId(e.target.value);
@@ -293,19 +443,30 @@ export function HrStaffView() {
                   </select>
                 </label>
                 {!userId ? (
-                  <label style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+                  <label className="hr-checkbox-row">
                     <input
                       type="checkbox"
                       checked={listAsLawyer}
                       onChange={(e) => setListAsLawyer(e.target.checked)}
-                      style={{ marginTop: "0.2rem" }}
                     />
                     <span>
                       This person is a lawyer. Add them to responsible attorney lists even without a
                       LexZim login (for matters they handle and revenue attribution).
                     </span>
                   </label>
-                ) : null}
+                ) : (
+                  <label className="hr-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={markAsLawyer}
+                      onChange={(e) => setMarkAsLawyer(e.target.checked)}
+                    />
+                    <span>
+                      Lawyer eligible (appears in matter/client attorney pickers). Lawyer job
+                      categories default this on.
+                    </span>
+                  </label>
+                )}
                 <label>
                   Annual leave entitlement (days)
                   <input
@@ -318,14 +479,45 @@ export function HrStaffView() {
                     placeholder="Manual entitlement per year"
                   />
                 </label>
+
+                <h4 className="hr-form-section-title">Next of kin</h4>
                 <label>
-                  Emergency contact name
-                  <input className="filter-input" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} />
+                  Full name
+                  <input className="filter-input" value={nokFullName} onChange={(e) => setNokFullName(e.target.value)} />
                 </label>
                 <label>
-                  Emergency contact phone
-                  <input className="filter-input" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+                  Relationship
+                  <input className="filter-input" value={nokRelationship} onChange={(e) => setNokRelationship(e.target.value)} />
                 </label>
+                <label>
+                  Phone 1
+                  <input className="filter-input" value={nokPhone1} onChange={(e) => setNokPhone1(e.target.value)} />
+                </label>
+                <label>
+                  Phone 2
+                  <input className="filter-input" value={nokPhone2} onChange={(e) => setNokPhone2(e.target.value)} />
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  Residential address
+                  <textarea className="filter-input" rows={2} value={nokAddress} onChange={(e) => setNokAddress(e.target.value)} />
+                </label>
+                <label>
+                  Email
+                  <input className="filter-input" type="email" value={nokEmail} onChange={(e) => setNokEmail(e.target.value)} />
+                </label>
+                <label>
+                  Occupation
+                  <input className="filter-input" value={nokOccupation} onChange={(e) => setNokOccupation(e.target.value)} />
+                </label>
+                <label>
+                  Declared on
+                  <input className="filter-input" type="date" value={nokDeclaredAt} onChange={(e) => setNokDeclaredAt(e.target.value)} />
+                </label>
+                <label>
+                  Received (office)
+                  <input className="filter-input" type="date" value={nokReceivedAt} onChange={(e) => setNokReceivedAt(e.target.value)} />
+                </label>
+
                 <label style={{ gridColumn: "1 / -1" }}>
                   Notes
                   <textarea className="filter-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -335,23 +527,24 @@ export function HrStaffView() {
                   Active
                 </label>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => resetForm()}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
+          <div className="hr-form-actions">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => resetForm()}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
 
-          {loading ? (
-            <p className="muted">Loading staff records…</p>
-          ) : items.length === 0 ? (
-            <EmptyState title="No staff records yet" />
-          ) : (
-            <table className="data data-dense">
+      {loading ? (
+        <p className="hr-empty-loading">Loading staff records…</p>
+      ) : items.length === 0 ? (
+        <EmptyState title="No staff records yet" />
+      ) : (
+        <div className="hr-table-wrap">
+          <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -366,17 +559,34 @@ export function HrStaffView() {
                 {items.map((row) => (
                   <tr key={row.id}>
                     <td>
-                      <strong>{row.fullName}</strong>
-                      {row.email ? <div className="muted" style={{ fontSize: "0.85rem" }}>{row.email}</div> : null}
+                      <div className="hr-staff-card">
+                        <div className="hr-avatar" aria-hidden="true">
+                          {initials(row.fullName)}
+                        </div>
+                        <div>
+                          <div className="hr-cell-primary">{row.fullName}</div>
+                          {row.email ? <div className="hr-cell-meta">{row.email}</div> : null}
+                          {row.department ? (
+                            <div className="hr-cell-meta">{row.department}</div>
+                          ) : null}
+                        </div>
+                      </div>
                     </td>
-                    <td>{row.jobTitle ?? "—"}</td>
+                    <td>
+                      {row.jobCategory && row.jobCategory !== "custom"
+                        ? row.jobCategory
+                        : row.jobTitle ?? "—"}
+                      {row.jobCategory === "custom" && row.jobTitle ? (
+                        <div className="hr-cell-meta">{row.jobTitle}</div>
+                      ) : null}
+                    </td>
                     <td>
                       {row.userId
                         ? (
                           <>
                             {row.userFullName ?? row.userEmail ?? "Linked"}
                             {row.userIsLawyer ? (
-                              <div className="muted" style={{ fontSize: "0.8rem" }}>
+                              <div className="hr-cell-meta">
                                 Lawyer{row.userIsSystemUser === false ? " · no login" : ""}
                               </div>
                             ) : null}
@@ -401,9 +611,8 @@ export function HrStaffView() {
                 ))}
               </tbody>
             </table>
-          )}
         </div>
-      </div>
-    </section>
+      )}
+    </HrPageShell>
   );
 }

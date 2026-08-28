@@ -41,7 +41,7 @@ function newLine(partial?: Partial<DraftLine>): DraftLine {
     description: "",
     qty: "1",
     unitPriceDollars: "",
-    workDate: new Date().toISOString().slice(0, 10),
+    workDate: "",
     ...partial,
   };
 }
@@ -195,7 +195,7 @@ export function InvoiceFormView() {
             <h1>New invoice</h1>
             <p className="muted">
               Create a fee note matching your firm letterhead. Banking and firm address come from
-              Settings → Firm profile (Isolation uses Isolation details; T Pfigu uses T Pfigu).
+              Settings → Firm profile.
             </p>
           </div>
           <Link href="/finance/invoicing" className="btn btn-outline btn-sm">
@@ -285,7 +285,7 @@ export function InvoiceFormView() {
               <table className="data quote-lines-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Date (optional)</th>
                     <th>Description</th>
                     <th className="num">Qty</th>
                     <th className="num">Unit price</th>

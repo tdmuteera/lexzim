@@ -2,6 +2,7 @@ import "server-only";
 
 import path from "path";
 import { hasAnyBanking, type InvoiceBankingDetails } from "@/lib/billing/invoice-banking";
+import { resolveInvoicePaymentNote } from "@/lib/billing/invoice-payment-note";
 import { clientDisplayName } from "@/lib/clients/display";
 import type { FirmExportBranding } from "@/lib/export/types";
 import { getInvoice, listInvoiceLines } from "@/lib/repos/billing";
@@ -12,6 +13,8 @@ import { quotationDiscountCents } from "@/lib/quotes/totals";
 export const INVOICE_BODY_PT = 11.5;
 export const INVOICE_TITLE_PT = 12;
 export const INVOICE_FIRM_PT = 12;
+/** Payment note + banking details on letterhead (PDF / DOCX / XLSX). */
+export const INVOICE_FOOTER_PT = 9;
 export const INVOICE_FONT_FAMILY = "Trebuchet MS";
 
 export const TREBUCHET_FONT_FILES = {
@@ -145,9 +148,7 @@ export async function buildInvoiceLetterheadModel(
   );
 
   const attorneyLine = profile?.invoiceAttorneyLine?.trim() || "";
-  const paymentNote =
-    profile?.invoicePaymentNote?.trim() ||
-    "Payment may be made in cash at the office or into the following bank account.";
+  const paymentNote = resolveInvoicePaymentNote(profile?.invoicePaymentNote);
   const closingNote =
     profile?.invoiceClosingNote?.trim() || "Thank you for your business!!!";
   const banking: InvoiceBankingDetails =
@@ -191,18 +192,11 @@ export async function buildInvoiceLetterheadModel(
     paymentTerms,
     totalLabel: moneyUs(inv.totalCents, inv.currency),
     subjectLine,
-    lines: lines.map((line) => {
-      const workDate =
-        line.workDate ??
-        (line.lineType === "time" || line.lineType === "disbursement"
-          ? inv.issueDate
-          : null);
-      return {
-        workDateLabel: formatWorkDate(workDate),
-        description: line.description,
-        amountLabel: moneyUs(line.amountCents, inv.currency),
-      };
-    }),
+    lines: lines.map((line) => ({
+      workDateLabel: formatWorkDate(line.workDate),
+      description: line.description,
+      amountLabel: moneyUs(line.amountCents, inv.currency),
+    })),
     discountLabel:
       discountApplied > 0 ? `-${moneyUs(discountApplied, inv.currency)}` : null,
     notes: inv.notes?.trim() || null,

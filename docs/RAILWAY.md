@@ -47,8 +47,14 @@ Railway → your service → **Variables**. Add at minimum:
 | `AUTH_SECRET` | long random hex |
 | `GEMINI_API_KEY` | if using managed AI |
 | `PORTAL_ENABLED` | `1` if portal should be on |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_REPLY_TO` | Optional shared email relay. Prefer firm **Settings → Email** BYO SMTP for pilots. Never commit passwords. See `docs/EMAIL.md`. |
+| `EMAIL_MOCK` | `1` for CI / mock transport only (not production) |
 
 Redeploy after saving variables.
+
+### Firm From address (pilot)
+
+Per-firm From/Reply-To is configured in **Settings → Email** after credentials arrive. LexZim never hardcodes a tenant mailbox (including the T Pfigu pilot address) as a global code default.
 
 ### Stage 4: Migrations
 

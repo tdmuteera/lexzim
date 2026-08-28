@@ -54,7 +54,7 @@ export type OnboardingStatus = {
   steps: OnboardingStep[];
   demoSeedAllowed: boolean;
   safety: {
-    webLookupDefaultOff: true;
+    webLookupDefaultOff: false;
     telemetryNotAutoEnabled: true;
     neverBlocksApp: true;
   };
@@ -83,7 +83,7 @@ export async function getOnboardingStatus(firmId: string): Promise<OnboardingSta
       steps: [],
       demoSeedAllowed: false,
       safety: {
-        webLookupDefaultOff: true,
+        webLookupDefaultOff: false,
         telemetryNotAutoEnabled: true,
         neverBlocksApp: true,
       },
@@ -245,7 +245,7 @@ export async function getOnboardingStatus(firmId: string): Promise<OnboardingSta
     steps,
     demoSeedAllowed: allowDemo && !demoDone,
     safety: {
-      webLookupDefaultOff: true,
+      webLookupDefaultOff: false,
       telemetryNotAutoEnabled: true,
       neverBlocksApp: true,
     },

@@ -26,6 +26,8 @@ type FirmProfile = {
   invoicePaymentNote: string | null;
   invoiceClosingNote: string | null;
   invoiceBanking: InvoiceBankingDetails;
+  requireInvoiceApproval: boolean;
+  requireClearConflict: boolean;
 };
 
 export function FirmProfilePanel() {
@@ -51,6 +53,8 @@ export function FirmProfilePanel() {
       }
       setForm({
         ...body.data,
+        requireInvoiceApproval: body.data.requireInvoiceApproval !== false,
+        requireClearConflict: body.data.requireClearConflict !== false,
         invoiceBanking: {
           ...EMPTY_INVOICE_BANKING,
           ...(body.data.invoiceBanking ?? {}),
@@ -92,6 +96,8 @@ export function FirmProfilePanel() {
           invoicePaymentNote: form.invoicePaymentNote,
           invoiceClosingNote: form.invoiceClosingNote,
           invoiceBanking: form.invoiceBanking,
+          requireInvoiceApproval: form.requireInvoiceApproval,
+          requireClearConflict: form.requireClearConflict,
           confirmProfile: true,
         }),
       });
@@ -106,6 +112,8 @@ export function FirmProfilePanel() {
       }
       setForm({
         ...body.data,
+        requireInvoiceApproval: body.data.requireInvoiceApproval !== false,
+        requireClearConflict: body.data.requireClearConflict !== false,
         invoiceBanking: {
           ...EMPTY_INVOICE_BANKING,
           ...(body.data.invoiceBanking ?? {}),
@@ -200,6 +208,46 @@ export function FirmProfilePanel() {
                   />
                 </label>
               </div>
+              <label
+                className="settings-field"
+                style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.75rem" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.requireInvoiceApproval}
+                  onChange={(e) =>
+                    setForm({ ...form, requireInvoiceApproval: e.target.checked })
+                  }
+                  style={{ marginTop: "0.2rem" }}
+                />
+                <span>
+                  <strong style={{ fontWeight: 600 }}>Require invoice approval before send</strong>
+                  <span className="muted" style={{ display: "block", fontSize: "0.85rem", marginTop: "0.2rem" }}>
+                    When on, draft fee notes must be approved (Managing Partner or delegated
+                    approver) before Mark sent. GL still posts on send only. Default on for pilot.
+                  </span>
+                </span>
+              </label>
+              <label
+                className="settings-field"
+                style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.75rem" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.requireClearConflict}
+                  onChange={(e) =>
+                    setForm({ ...form, requireClearConflict: e.target.checked })
+                  }
+                  style={{ marginTop: "0.2rem" }}
+                />
+                <span>
+                  <strong style={{ fontWeight: 600 }}>Require clear conflict check before open matter</strong>
+                  <span className="muted" style={{ display: "block", fontSize: "0.85rem", marginTop: "0.2rem" }}>
+                    When on, matter status Open needs a Clear conflict check on the client.
+                    Prospective and draft remain allowed without Clear. Default on for pilot.
+                  </span>
+                </span>
+              </label>
             </section>
 
             <section className="settings-section">
@@ -271,7 +319,7 @@ export function FirmProfilePanel() {
                     rows={3}
                     value={form.invoicePaymentNote ?? ""}
                     onChange={set("invoicePaymentNote")}
-                    placeholder="Payment may be made in cash at the office or into the following bank account."
+                    placeholder="Payment may be made in cash at the office or into the following Zimbabwe Nostro Bank Account."
                   />
                 </label>
                 <label className="settings-field">

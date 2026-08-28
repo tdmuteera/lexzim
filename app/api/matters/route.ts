@@ -2,6 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { getClientById } from "@/lib/repos/clients";
+import { assertClearConflictForOpenMatter } from "@/lib/repos/conflict-checks";
 import { serializeMatter } from "@/lib/matters/serialize";
 import { MATTER_STATUSES, parseMatterInput } from "@/lib/matters/validation";
 import { createMatterEvent } from "@/lib/repos/matter-workflow";
@@ -82,6 +83,9 @@ export async function POST(request: Request) {
     if (client.archivedAt) {
       throw new AuthError("validation", "Cannot open a matter for an archived client.");
     }
+
+    const status = input.status ?? "prospective";
+    await assertClearConflictForOpenMatter(firmId, input.clientId, status);
 
     const row = await createMatter(firmId, session.id, input);
 

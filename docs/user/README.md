@@ -20,7 +20,9 @@ Clear guides for Zimbabwe practitioners on the hosted LexZim web app.
 | AI assistant | `AI_Assistant_Guide.md` | `/help/ai` |
 | FAQ | `FAQ.md` | `/help/faq` |
 
-**Payroll** (payslips, PAYE, NSSA) is **Phase 6B** and is not available yet. See `docs/PHASE6B_PAYROLL_HANDOFF.md`.
+**Phase 10** added idle logout, archive vs platform purge, invoice approval, leave ledger, salary advances, payroll **MVP**, tasks/workflow, calendar privacy, conflict check, debtor notes, knowledge reports, and firmer AI verify/citations. See Workflow (`/workflow/tasks`) and Knowledge in the app when your ticks allow.
+
+**Payroll:** Phase 10 ships an **MVP** (periods, lines, advance recovery). Full statutory PAYE/NSSA/payslips remain **Phase 6B**. See `docs/PHASE6B_PAYROLL_HANDOFF.md` and `docs/PHASE11_CANDIDATES.md`.
 
 Phase 7 added full double-entry GL, KYC numbers, quotations, CRM, email send, and approval-gated password resets. Phase 6 “no full GL” is superseded: `docs/PHASE7_ADR.md` and `Finance_Phase7_Guide.md`.
 

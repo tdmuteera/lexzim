@@ -19,6 +19,7 @@ import {
   INVOICE_BODY_PT,
   INVOICE_FIRM_PT,
   INVOICE_FONT_FAMILY,
+  INVOICE_FOOTER_PT,
   INVOICE_TITLE_PT,
   buildInvoiceLetterheadModel,
   type InvoiceLetterheadModel,
@@ -35,6 +36,7 @@ const BODY = Math.round(INVOICE_BODY_PT * 2);
 const TITLE = Math.round(INVOICE_TITLE_PT * 2);
 const FIRM = Math.round(INVOICE_FIRM_PT * 2);
 const NOTE = Math.round((INVOICE_BODY_PT - 1) * 2);
+const FOOTER = Math.round(INVOICE_FOOTER_PT * 2);
 
 const NO_BORDER = {
   top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -365,15 +367,15 @@ function buildChildren(model: InvoiceLetterheadModel): Array<Paragraph | Table> 
     para(model.paymentNote, {
       italic: true,
       after: 200,
-      size: NOTE,
+      size: FOOTER,
       align: AlignmentType.BOTH,
     }),
   );
 
   if (model.bankingRows.length > 0) {
-    blocks.push(para("Banking Details:", { bold: true, after: 60 }));
+    blocks.push(para("Banking Details:", { bold: true, after: 60, size: FOOTER }));
     for (const [label, value] of model.bankingRows) {
-      blocks.push(para(`${label}: ${value}`, { bold: true, after: 20 }));
+      blocks.push(para(`${label}: ${value}`, { bold: true, after: 20, size: FOOTER }));
     }
     blocks.push(emptyPara(160));
   }

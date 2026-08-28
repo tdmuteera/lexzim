@@ -3,9 +3,10 @@ import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { leaveDaysInclusive } from "@/lib/hr/leave";
 import { parseLeaveDecisionInput } from "@/lib/hr/validation";
+import { createStaffNotification } from "@/lib/notifications/staff";
 import { getStaffProfileByUserId } from "@/lib/repos/hr";
 import { decideLeaveRequest, getLeaveRequest } from "@/lib/repos/hr-leave";
-import { hasPermission, requirePermission } from "@/lib/rbac/guards";
+import { hasAnyPermission, hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -62,9 +63,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json();
     const input = parseLeaveDecisionInput(body);
 
+    const canApproveLeave = hasAnyPermission(session, ["leave.approve", "hr.manage"]);
+
     if (input.status === "approved" || input.status === "rejected") {
-      if (!canManage) {
-        throw new AuthError("forbidden", "Only HR managers can approve or reject leave.");
+      if (!canApproveLeave) {
+        throw new AuthError(
+          "forbidden",
+          "Leave approval requires leave.approve or hr.manage.",
+        );
       }
     } else if (input.status === "cancelled") {
       const self = await getStaffProfileByUserId(firmId, session.id);
@@ -92,6 +98,32 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
       ipOrUserAgent: clientInfo(request),
     });
+
+    if (
+      (input.status === "approved" || input.status === "rejected") &&
+      existing.request.createdBy &&
+      existing.request.createdBy !== session.id
+    ) {
+      await createStaffNotification({
+        firmId,
+        userId: existing.request.createdBy,
+        type:
+          input.status === "approved"
+            ? "leave.approval_approved"
+            : "leave.approval_rejected",
+        title:
+          input.status === "approved"
+            ? `Leave request approved (${existing.staffName})`
+            : `Leave request rejected (${existing.staffName})`,
+        body:
+          input.status === "approved"
+            ? "Your leave request was approved. Approval is discretionary."
+            : input.decisionNotes ||
+              "Your leave request was not approved. Approval is discretionary.",
+        href: "/hr/leave",
+        metadata: { requestId: id, status: input.status },
+      });
+    }
 
     const full = await getLeaveRequest(firmId, id);
     return jsonOk({ request: full ? serializeRequest(full) : null });

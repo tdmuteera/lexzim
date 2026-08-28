@@ -101,6 +101,14 @@ export async function PATCH(request: Request) {
           : body.invoiceBanking && typeof body.invoiceBanking === "object"
             ? (body.invoiceBanking as Record<string, string>)
             : null,
+      requireInvoiceApproval:
+        body.requireInvoiceApproval === undefined
+          ? undefined
+          : Boolean(body.requireInvoiceApproval),
+      requireClearConflict:
+        body.requireClearConflict === undefined
+          ? undefined
+          : Boolean(body.requireClearConflict),
       confirmProfile: body.confirmProfile !== false,
     });
 
@@ -114,6 +122,8 @@ export async function PATCH(request: Request) {
         name: profile.name,
         defaultCurrency: profile.defaultCurrency,
         invoicePrefix: profile.invoicePrefix,
+        requireInvoiceApproval: profile.requireInvoiceApproval,
+        requireClearConflict: profile.requireClearConflict,
       },
       ipOrUserAgent: clientInfo(request),
     });

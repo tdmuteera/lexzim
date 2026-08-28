@@ -6,11 +6,14 @@ import { resolveCalendarClientId } from "@/lib/calendar/resolve-client";
 import { serializeCalendarEventRow } from "@/lib/calendar/serialize";
 import { parseCalendarEventInput } from "@/lib/calendar/validation";
 import {
+  assertSharedUsersInFirm,
+  canEditCalendarEvent,
+  canViewCalendarEvent,
   deleteCalendarEvent,
   getCalendarEvent,
   updateCalendarEvent,
 } from "@/lib/repos/calendar";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import { canViewAllMatters, hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { userCanAccessMatter } from "@/lib/repos/matters";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -20,6 +23,7 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("calendar.view");
     const firmId = tenantFirmId(session);
+    const canManage = hasPermission(session, "calendar.manage");
     const { id } = await context.params;
 
     const full = await getCalendarEvent(firmId, id);
@@ -27,8 +31,19 @@ export async function GET(request: Request, context: RouteContext) {
       throw new AuthError("not_found", "Calendar event not found.");
     }
 
+    const sharedUserIds = full.sharedUserIds ?? [];
+    if (!canViewCalendarEvent(full.event, session.id, sharedUserIds)) {
+      throw new AuthError("not_found", "Calendar event not found.");
+    }
+
     return jsonOk({
-      event: serializeCalendarEventRow(full),
+      event: serializeCalendarEventRow({
+        ...full,
+        canEdit: canEditCalendarEvent(full.event, session.id, {
+          canManage,
+          sharedUserIds,
+        }),
+      }),
     });
   } catch (err) {
     return jsonError(err, request);
@@ -40,6 +55,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const session = await requirePermission("calendar.manage");
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
+    const canManage = hasPermission(session, "calendar.manage");
     const { id } = await context.params;
     const body = await request.json();
     const parsed = parseCalendarEventInput(body);
@@ -48,6 +64,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const existing = await getCalendarEvent(firmId, id);
     if (!existing) {
       throw new AuthError("not_found", "Calendar event not found.");
+    }
+
+    const sharedUserIds = existing.sharedUserIds ?? [];
+    if (
+      !canEditCalendarEvent(existing.event, session.id, {
+        canManage,
+        sharedUserIds,
+      })
+    ) {
+      throw new AuthError("forbidden", "You cannot edit this calendar event.");
     }
 
     if (input.matterId) {
@@ -62,6 +88,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
+    if (input.visibility === "people") {
+      await assertSharedUsersInFirm(firmId, input.sharedUserIds);
+    }
+
+    const previousVisibility = existing.event.visibility;
     const row = await updateCalendarEvent(firmId, id, input);
     if (!row) {
       throw new AuthError("not_found", "Calendar event not found.");
@@ -73,8 +104,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
     }
 
+    const visibilityChanged = previousVisibility !== row.visibility;
     await writeAuditLog({
-      action: "calendar.update",
+      action: visibilityChanged ? "calendar.visibility_change" : "calendar.update",
       firmId,
       userId: session.id,
       entityType: "calendar_event",
@@ -85,12 +117,20 @@ export async function PATCH(request: Request, context: RouteContext) {
         matterId: row.matterId,
         clientId: row.clientId,
         startsAt: row.startsAt.toISOString(),
+        visibility: row.visibility,
+        previousVisibility,
+        sharedUserIds: input.sharedUserIds,
       },
       ipOrUserAgent: clientInfo(request),
     });
 
     return jsonOk({
-      event: full ? serializeCalendarEventRow(full) : serializeCalendarEventRow({ event: row }),
+      event: full
+        ? serializeCalendarEventRow({
+            ...full,
+            canEdit: true,
+          })
+        : serializeCalendarEventRow({ event: row, canEdit: true }),
     });
   } catch (err) {
     return jsonError(err, request);
@@ -101,11 +141,22 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const session = await requirePermission("calendar.manage");
     const firmId = tenantFirmId(session);
+    const canManage = hasPermission(session, "calendar.manage");
     const { id } = await context.params;
 
     const existing = await getCalendarEvent(firmId, id);
     if (!existing) {
       throw new AuthError("not_found", "Calendar event not found.");
+    }
+
+    const sharedUserIds = existing.sharedUserIds ?? [];
+    if (
+      !canEditCalendarEvent(existing.event, session.id, {
+        canManage,
+        sharedUserIds,
+      })
+    ) {
+      throw new AuthError("forbidden", "You cannot delete this calendar event.");
     }
 
     const deleted = await deleteCalendarEvent(firmId, id);
@@ -123,6 +174,7 @@ export async function DELETE(request: Request, context: RouteContext) {
         eventType: existing.event.eventType,
         title: existing.event.title,
         matterId: existing.event.matterId,
+        visibility: existing.event.visibility,
       },
       ipOrUserAgent: clientInfo(request),
     });

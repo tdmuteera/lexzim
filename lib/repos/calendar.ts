@@ -1,8 +1,9 @@
 /**
- * Calendar / deadline repository (P3-01 stubs + P3-02 event CRUD + P3-03 deadlines).
+ * Calendar / deadline repository (P3-01 stubs + P3-02 event CRUD + P3-03 deadlines + P10-12 privacy).
  * EVERY firm-scoped query MUST filter firmId.
  */
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import { AuthError } from "@/lib/auth/types";
 import type { CalendarEventInput } from "@/lib/calendar/validation";
 import {
   addCalendarDays,
@@ -13,16 +14,20 @@ import {
 } from "@/lib/deadlines/validation";
 import { getDb } from "@/lib/db";
 import {
+  calendarEventShares,
   calendarEvents,
   clients,
   deadlineTemplates,
   matterDeadlines,
   matterTeam,
   matters,
+  users,
 } from "@/lib/db/schema";
 
 /** Marker so matter Next hearing rows can be updated without touching manual diary events. */
 export const MATTER_HEARING_SYNC_NOTE = "Synced from matter Next hearing";
+
+export type CalendarListScope = "mine" | "firm" | "shared";
 
 export type ListCalendarEventsOpts = {
   from?: Date;
@@ -32,40 +37,166 @@ export type ListCalendarEventsOpts = {
   /** When false, only firm events with no matter, or matters the user can access. */
   viewAll?: boolean;
   userId?: string;
+  /** Privacy tab. Default mine. */
+  scope?: CalendarListScope;
 };
+
+export type CalendarEventListRow = {
+  event: typeof calendarEvents.$inferSelect;
+  matterNumber: string | null;
+  matterTitle: string | null;
+  clientType: string | null;
+  clientFullName: string | null;
+  clientLegalName: string | null;
+  clientTradingName: string | null;
+  creatorCalendarColor: string | null;
+  sharedUserIds?: string[];
+};
+
+export async function listSharesForEvent(firmId: string, eventId: string): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ userId: calendarEventShares.userId })
+    .from(calendarEventShares)
+    .where(
+      and(eq(calendarEventShares.firmId, firmId), eq(calendarEventShares.eventId, eventId)),
+    );
+  return rows.map((r) => r.userId);
+}
+
+export async function listSharesForEvents(
+  firmId: string,
+  eventIds: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (!eventIds.length) return map;
+  const db = getDb();
+  const rows = await db
+    .select({
+      eventId: calendarEventShares.eventId,
+      userId: calendarEventShares.userId,
+    })
+    .from(calendarEventShares)
+    .where(
+      and(
+        eq(calendarEventShares.firmId, firmId),
+        inArray(calendarEventShares.eventId, eventIds),
+      ),
+    );
+  for (const row of rows) {
+    const list = map.get(row.eventId) ?? [];
+    list.push(row.userId);
+    map.set(row.eventId, list);
+  }
+  return map;
+}
+
+export async function replaceEventShares(
+  firmId: string,
+  eventId: string,
+  userIds: string[],
+): Promise<void> {
+  const db = getDb();
+  await db
+    .delete(calendarEventShares)
+    .where(
+      and(eq(calendarEventShares.firmId, firmId), eq(calendarEventShares.eventId, eventId)),
+    );
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (!unique.length) return;
+  await db.insert(calendarEventShares).values(
+    unique.map((userId) => ({
+      firmId,
+      eventId,
+      userId,
+    })),
+  );
+}
+
+export function canViewCalendarEvent(
+  event: {
+    visibility: string;
+    createdBy: string | null;
+  },
+  viewerUserId: string,
+  sharedUserIds: string[],
+): boolean {
+  if (event.createdBy === viewerUserId) return true;
+  if (event.visibility === "firm") return true;
+  if (event.visibility === "people") {
+    return sharedUserIds.includes(viewerUserId);
+  }
+  return false;
+}
+
+export function canEditCalendarEvent(
+  event: {
+    visibility: string;
+    createdBy: string | null;
+  },
+  viewerUserId: string,
+  opts: { canManage: boolean; sharedUserIds: string[] },
+): boolean {
+  if (!canViewCalendarEvent(event, viewerUserId, opts.sharedUserIds)) return false;
+  if (event.createdBy === viewerUserId) return true;
+  return opts.canManage;
+}
+
+export async function getUserCalendarColor(
+  firmId: string,
+  userId: string,
+): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ calendarColor: users.calendarColor })
+    .from(users)
+    .where(and(eq(users.firmId, firmId), eq(users.id, userId)))
+    .limit(1);
+  return rows[0]?.calendarColor ?? null;
+}
+
+export async function setUserCalendarColor(
+  firmId: string,
+  userId: string,
+  colour: string,
+): Promise<string> {
+  const db = getDb();
+  const rows = await db
+    .update(users)
+    .set({ calendarColor: colour, updatedAt: new Date() })
+    .where(and(eq(users.firmId, firmId), eq(users.id, userId)))
+    .returning({ calendarColor: users.calendarColor });
+  return rows[0]?.calendarColor ?? colour;
+}
 
 export async function listCalendarEvents(firmId: string, opts?: ListCalendarEventsOpts) {
   const db = getDb();
+  const scope: CalendarListScope = opts?.scope ?? "mine";
+  const userId = opts?.userId;
   const conditions = [eq(calendarEvents.firmId, firmId)];
   if (opts?.from) conditions.push(gte(calendarEvents.startsAt, opts.from));
   if (opts?.to) conditions.push(lte(calendarEvents.startsAt, opts.to));
   if (opts?.eventType) conditions.push(eq(calendarEvents.eventType, opts.eventType));
   if (opts?.matterId) conditions.push(eq(calendarEvents.matterId, opts.matterId));
 
-  if (opts?.viewAll === false && opts.userId) {
-    const teamMatterIds = db
-      .select({ matterId: matterTeam.matterId })
-      .from(matterTeam)
-      .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, opts.userId)));
+  if (!userId) {
+    // Safety: without a viewer, only return firm-visible rows.
+    conditions.push(eq(calendarEvents.visibility, "firm"));
+  } else if (scope === "mine") {
+    conditions.push(eq(calendarEvents.createdBy, userId));
+  } else if (scope === "firm") {
+    conditions.push(eq(calendarEvents.visibility, "firm"));
+  } else if (scope === "shared") {
+    const sharedIds = db
+      .select({ eventId: calendarEventShares.eventId })
+      .from(calendarEventShares)
+      .where(
+        and(eq(calendarEventShares.firmId, firmId), eq(calendarEventShares.userId, userId)),
+      );
+    conditions.push(eq(calendarEvents.visibility, "people"));
+    conditions.push(inArray(calendarEvents.id, sharedIds));
     conditions.push(
-      or(
-        isNull(calendarEvents.matterId),
-        inArray(
-          calendarEvents.matterId,
-          db
-            .select({ id: matters.id })
-            .from(matters)
-            .where(
-              and(
-                eq(matters.firmId, firmId),
-                or(
-                  eq(matters.responsibleLawyerId, opts.userId),
-                  inArray(matters.id, teamMatterIds),
-                ),
-              ),
-            ),
-        ),
-      )!,
+      or(isNull(calendarEvents.createdBy), ne(calendarEvents.createdBy, userId))!,
     );
   }
 
@@ -78,6 +209,7 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
       clientFullName: clients.fullName,
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
+      creatorCalendarColor: users.calendarColor,
     })
     .from(calendarEvents)
     .leftJoin(
@@ -88,23 +220,34 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
       clients,
       and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)),
     )
+    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
     .where(and(...conditions))
     .orderBy(asc(calendarEvents.startsAt));
 
+  const realIds = rows.map((r) => r.event.id);
+  const shareMap = await listSharesForEvents(firmId, realIds);
+  const withShares: CalendarEventListRow[] = rows.map((r) => ({
+    ...r,
+    sharedUserIds: shareMap.get(r.event.id) ?? [],
+  }));
+
   if (opts?.eventType && opts.eventType !== "hearing") {
-    return rows;
+    return withShares;
+  }
+  if (scope === "shared") {
+    return withShares;
   }
 
   const matterHearings = await listMatterHearingsForCalendar(firmId, opts);
-  if (matterHearings.length === 0) return rows;
+  if (matterHearings.length === 0) return withShares;
 
   const covered = new Set(
-    rows
+    withShares
       .filter((r) => r.event.eventType === "hearing" && r.event.matterId)
       .map((r) => `${r.event.matterId}:${r.event.startsAt.toISOString().slice(0, 10)}`),
   );
 
-  const merged = [...rows];
+  const merged = [...withShares];
   for (const extra of matterHearings) {
     const key = `${extra.event.matterId}:${extra.event.startsAt.toISOString().slice(0, 10)}`;
     if (covered.has(key)) continue;
@@ -114,23 +257,31 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
   return merged;
 }
 
-async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendarEventsOpts) {
+async function listMatterHearingsForCalendar(
+  firmId: string,
+  opts?: ListCalendarEventsOpts,
+): Promise<CalendarEventListRow[]> {
+  const scope: CalendarListScope = opts?.scope ?? "mine";
+  const userId = opts?.userId;
+  if (scope === "shared") return [];
+
   const db = getDb();
   const conditions = [eq(matters.firmId, firmId), isNotNull(matters.nextHearingAt)];
   if (opts?.from) conditions.push(gte(matters.nextHearingAt, opts.from));
   if (opts?.to) conditions.push(lte(matters.nextHearingAt, opts.to));
   if (opts?.matterId) conditions.push(eq(matters.id, opts.matterId));
 
-  if (opts?.viewAll === false && opts.userId) {
+  if (scope === "mine" && userId) {
+    // Synthetic hearings on My only when this user is the responsible lawyer.
+    conditions.push(eq(matters.responsibleLawyerId, userId));
+  } else if (opts?.viewAll === false && userId) {
+    // Firm tab: keep previous matter-access gating for synthetic rows.
     const teamMatterIds = db
       .select({ matterId: matterTeam.matterId })
       .from(matterTeam)
-      .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, opts.userId)));
+      .where(and(eq(matterTeam.firmId, firmId), eq(matterTeam.userId, userId)));
     conditions.push(
-      or(
-        eq(matters.responsibleLawyerId, opts.userId),
-        inArray(matters.id, teamMatterIds),
-      )!,
+      or(eq(matters.responsibleLawyerId, userId), inArray(matters.id, teamMatterIds))!,
     );
   }
 
@@ -144,8 +295,11 @@ async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendar
       createdBy: matters.createdBy,
       createdAt: matters.createdAt,
       updatedAt: matters.updatedAt,
+      responsibleLawyerId: matters.responsibleLawyerId,
+      creatorCalendarColor: users.calendarColor,
     })
     .from(matters)
+    .leftJoin(users, eq(users.id, matters.createdBy))
     .where(and(...conditions))
     .orderBy(asc(matters.nextHearingAt));
 
@@ -167,6 +321,7 @@ async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendar
           startsAt,
           endsAt,
           allDay: false,
+          visibility: "firm",
           createdBy: row.createdBy,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -177,6 +332,8 @@ async function listMatterHearingsForCalendar(firmId: string, opts?: ListCalendar
         clientFullName: null,
         clientLegalName: null,
         clientTradingName: null,
+        creatorCalendarColor: row.creatorCalendarColor,
+        sharedUserIds: [],
       };
     });
 }
@@ -223,6 +380,7 @@ export async function syncMatterHearingEvent(input: {
     endsAt,
     allDay: false,
     description: MATTER_HEARING_SYNC_NOTE,
+    visibility: "firm",
     updatedAt: new Date(),
   };
 
@@ -358,10 +516,12 @@ export async function applyDeadlineTemplate(
       eventType: toCalendarEventType(template.defaultEventType),
       title,
       description: template.description,
-      location: null,
+      location: "Deadline",
       startsAt: dueAt,
       endsAt: null,
       allDay: true,
+      visibility: "firm",
+      sharedUserIds: [],
     });
     calendarEventId = event.id;
   }
@@ -445,6 +605,7 @@ export async function getCalendarEvent(firmId: string, id: string) {
       clientFullName: clients.fullName,
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
+      creatorCalendarColor: users.calendarColor,
     })
     .from(calendarEvents)
     .leftJoin(
@@ -455,9 +616,13 @@ export async function getCalendarEvent(firmId: string, id: string) {
       clients,
       and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)),
     )
+    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
     .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const sharedUserIds = await listSharesForEvent(firmId, id);
+  return { ...row, sharedUserIds };
 }
 
 export async function createCalendarEvent(
@@ -466,6 +631,7 @@ export async function createCalendarEvent(
   input: CalendarEventInput,
 ) {
   const db = getDb();
+  const visibility = input.visibility ?? "private";
   const rows = await db
     .insert(calendarEvents)
     .values({
@@ -479,11 +645,16 @@ export async function createCalendarEvent(
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       allDay: input.allDay,
+      visibility,
       createdBy: userId,
       updatedAt: new Date(),
     })
     .returning();
-  return rows[0]!;
+  const event = rows[0]!;
+  if (visibility === "people") {
+    await replaceEventShares(firmId, event.id, input.sharedUserIds ?? []);
+  }
+  return event;
 }
 
 export async function updateCalendarEvent(
@@ -492,6 +663,7 @@ export async function updateCalendarEvent(
   input: CalendarEventInput,
 ) {
   const db = getDb();
+  const visibility = input.visibility ?? "private";
   const rows = await db
     .update(calendarEvents)
     .set({
@@ -504,11 +676,19 @@ export async function updateCalendarEvent(
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       allDay: input.allDay,
+      visibility,
       updatedAt: new Date(),
     })
     .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
     .returning();
-  return rows[0] ?? null;
+  const event = rows[0] ?? null;
+  if (!event) return null;
+  if (visibility === "people") {
+    await replaceEventShares(firmId, id, input.sharedUserIds ?? []);
+  } else {
+    await replaceEventShares(firmId, id, []);
+  }
+  return event;
 }
 
 export async function deleteCalendarEvent(firmId: string, id: string) {
@@ -518,4 +698,24 @@ export async function deleteCalendarEvent(firmId: string, id: string) {
     .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
     .returning({ id: calendarEvents.id });
   return rows[0] ?? null;
+}
+
+/** Validate shared users belong to the firm and are active system users. */
+export async function assertSharedUsersInFirm(firmId: string, userIds: string[]) {
+  if (!userIds.length) return;
+  const db = getDb();
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.firmId, firmId),
+        eq(users.isActive, true),
+        eq(users.isSystemUser, true),
+        inArray(users.id, userIds),
+      ),
+    );
+  if (rows.length !== userIds.length) {
+    throw new AuthError("validation", "One or more shared users are invalid for this firm.");
+  }
 }

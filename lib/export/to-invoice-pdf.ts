@@ -6,6 +6,7 @@ import type { FirmExportBranding } from "@/lib/export/types";
 import {
   INVOICE_BODY_PT,
   INVOICE_FIRM_PT,
+  INVOICE_FOOTER_PT,
   INVOICE_TITLE_PT,
   TREBUCHET_FONT_FILES,
   buildInvoiceLetterheadModel,
@@ -227,14 +228,14 @@ export async function exportInvoiceLetterheadPdf(
       doc.fillColor("#000000");
     }
 
-    doc.font(FONT.italic).fontSize(INVOICE_BODY_PT - 1);
+    doc.font(FONT.italic).fontSize(INVOICE_FOOTER_PT);
     doc.text(model.paymentNote, MARGIN, y, { width: pageWidth, align: "justify" });
     y = doc.y + 12;
 
     if (model.bankingRows.length > 0) {
-      doc.font(FONT.bold).fontSize(INVOICE_BODY_PT).text("Banking Details:", MARGIN, y);
+      doc.font(FONT.bold).fontSize(INVOICE_FOOTER_PT).text("Banking Details:", MARGIN, y);
       y = doc.y + 4;
-      doc.font(FONT.bold).fontSize(INVOICE_BODY_PT);
+      doc.font(FONT.bold).fontSize(INVOICE_FOOTER_PT);
       for (const [label, value] of model.bankingRows) {
         doc.text(`${label}: ${value}`, MARGIN, y);
         y = doc.y;

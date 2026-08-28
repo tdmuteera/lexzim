@@ -18,6 +18,10 @@ export type SerializedCalendarEvent = {
   startsAt: string;
   endsAt: string | null;
   allDay: boolean;
+  visibility: string;
+  sharedUserIds?: string[];
+  creatorCalendarColor?: string | null;
+  canEdit?: boolean;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +36,9 @@ export function serializeCalendarEvent(
     clientFullName?: string | null;
     clientLegalName?: string | null;
     clientTradingName?: string | null;
+    sharedUserIds?: string[];
+    creatorCalendarColor?: string | null;
+    canEdit?: boolean;
   } | null,
 ): SerializedCalendarEvent {
   const matterNumber = extras?.matterNumber ?? null;
@@ -61,6 +68,10 @@ export function serializeCalendarEvent(
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt ? row.endsAt.toISOString() : null,
     allDay: row.allDay,
+    visibility: row.visibility ?? "private",
+    sharedUserIds: extras?.sharedUserIds,
+    creatorCalendarColor: extras?.creatorCalendarColor ?? null,
+    canEdit: extras?.canEdit,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -75,6 +86,9 @@ export function serializeCalendarEventRow(row: {
   clientFullName?: string | null;
   clientLegalName?: string | null;
   clientTradingName?: string | null;
+  sharedUserIds?: string[];
+  creatorCalendarColor?: string | null;
+  canEdit?: boolean;
 }) {
   return serializeCalendarEvent(row.event, {
     matterNumber: row.matterNumber,
@@ -83,5 +97,8 @@ export function serializeCalendarEventRow(row: {
     clientFullName: row.clientFullName,
     clientLegalName: row.clientLegalName,
     clientTradingName: row.clientTradingName,
+    sharedUserIds: row.sharedUserIds,
+    creatorCalendarColor: row.creatorCalendarColor,
+    canEdit: row.canEdit,
   });
 }

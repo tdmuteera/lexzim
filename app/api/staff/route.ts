@@ -51,6 +51,7 @@ export async function GET(request: Request) {
         isActive: users.isActive,
         isSystemUser: users.isSystemUser,
         isLawyer: users.isLawyer,
+        isTestUser: users.isTestUser,
         roleCode: roles.code,
         roleName: roles.name,
         roleId: roles.id,
@@ -76,6 +77,8 @@ export async function GET(request: Request) {
               userId: row.id,
               roleId: row.roleId,
               roleCode: row.roleCode,
+              firmId,
+              includeDelegations: false,
             })
           : [];
         return {
@@ -86,6 +89,7 @@ export async function GET(request: Request) {
           isActive: row.isActive,
           isSystemUser: row.isSystemUser,
           isLawyer: row.isLawyer,
+          isTestUser: row.isTestUser,
           roleCode: row.roleCode,
           roleName: row.roleName,
           lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
@@ -131,6 +135,7 @@ export async function POST(request: Request) {
       forceChange?: boolean;
       isSystemUser?: boolean;
       isLawyer?: boolean;
+      isTestUser?: boolean;
     };
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
@@ -141,6 +146,7 @@ export async function POST(request: Request) {
         : null;
     const isSystemUser = body.isSystemUser !== false;
     const isLawyer = body.isLawyer === true || (!isSystemUser && body.isLawyer !== false);
+    const isTestUser = body.isTestUser === true;
 
     if (!isSystemUser) {
       const person = await createDirectoryPerson(firmId, {
@@ -242,6 +248,7 @@ export async function POST(request: Request) {
         isActive: true,
         isSystemUser: true,
         isLawyer,
+        isTestUser,
         mustChangePassword: forceChange,
       });
 
@@ -256,6 +263,18 @@ export async function POST(request: Request) {
         });
       } else {
         await copyRolePermissionsToUser(created.user.id, firmId, role.id);
+      }
+
+      if (!isTestUser) {
+        const { ensureEmployeeProfileForUser } = await import("@/lib/repos/hr");
+        await ensureEmployeeProfileForUser({
+          firmId,
+          userId: created.user.id,
+          fullName,
+          email,
+          jobTitle,
+          isTestUser: false,
+        });
       }
     } catch (err) {
       await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
@@ -273,9 +292,11 @@ export async function POST(request: Request) {
         fullName,
         jobTitle,
         isLawyer,
+        isTestUser,
         tempPasswordGenerated: Boolean(generatedTemp),
         forceChange,
         permissionCodes: tickCodes,
+        hrProfileEnsured: !isTestUser,
       },
       ipOrUserAgent: clientInfo(request),
     });
@@ -292,6 +313,7 @@ export async function POST(request: Request) {
           isActive: true,
           isSystemUser: true,
           isLawyer,
+          isTestUser,
           mustChangePassword: forceChange,
         },
         tempPassword: generatedTemp ?? null,

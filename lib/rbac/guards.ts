@@ -25,6 +25,16 @@ export async function requirePermission(
   return session;
 }
 
+/**
+ * Same as requirePermission after Phase 10: session permissions already include
+ * active delegation capabilities (invoice.approve, leave.approve, …).
+ */
+export async function requirePermissionOrDelegation(
+  permissionCode: PermissionCode | string,
+): Promise<AuthSessionUser> {
+  return requirePermission(permissionCode);
+}
+
 export async function requireAny(
   permissionCodes: (PermissionCode | string)[],
 ): Promise<AuthSessionUser> {

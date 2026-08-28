@@ -53,6 +53,7 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
     userId: row.id,
     roleId: row.roleId,
     roleCode: row.roleCode,
+    firmId: row.firmId,
   });
 
   return {

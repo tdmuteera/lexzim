@@ -32,7 +32,7 @@ function normalizeProviderId(raw: string | null | undefined): LlmProviderId {
 
 /**
  * Resolve chat provider for a mode.
- * Auto (default): legal_research prefers Claude when a Claude key is present, else Gemini Flash.
+ * Auto (default): legal_research prefers Claude → OpenAI → Gemini (first key present).
  * Manual: always firm providerDefault + modelDefault.
  */
 export async function resolveAiRoute(
@@ -65,6 +65,22 @@ export async function resolveAiRoute(
         embeddingsModel,
         routingMode,
         reason: "auto_legal_prefers_claude",
+      };
+    }
+    const openai = await resolveProviderApiKey(firmId, "openai");
+    if (openai.key) {
+      // Prefer firm embeddings model when set (often Gemini pack vectors).
+      const embed =
+        settings?.embeddingsModel?.trim() ||
+        OPENAI_EMBEDDINGS_MODEL_ID;
+      return {
+        providerId: "openai",
+        chatModel: settings?.modelDefault?.trim()?.startsWith("gpt")
+          ? settings.modelDefault.trim()
+          : defaultChat("openai"),
+        embeddingsModel: embed,
+        routingMode,
+        reason: "auto_legal_prefers_openai",
       };
     }
     return {

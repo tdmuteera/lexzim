@@ -264,6 +264,79 @@
   font-size: 0.78rem;
 }
 
+.ai-copy-btn,
+.ai-edit-btn,
+.ai-sources-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-2);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-copy-btn {
+  margin-left: auto;
+}
+
+.ai-copy-btn:hover,
+.ai-edit-btn:hover,
+.ai-sources-toggle:hover {
+  border-color: var(--ai-teal-line);
+  color: var(--ai-teal);
+}
+
+.ai-bubble.user .ai-edit-btn {
+  margin-left: auto;
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ai-bubble.user .ai-edit-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.55);
+  color: #fff;
+}
+
+.ai-edit-btn:disabled,
+.ai-sources-toggle:disabled,
+.ai-mic-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ai-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ai-edit-form textarea {
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.15);
+  color: #fff;
+  resize: vertical;
+  font: inherit;
+}
+
+.ai-edit-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.ai-citation-hint {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
 .ai-bubble.user .ai-bubble-head strong {
   color: rgba(255, 255, 255, 0.9);
 }
@@ -278,11 +351,21 @@
   border-top: 1px solid var(--border);
 }
 
+.ai-citations-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
+}
+
 .ai-citations .label {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-2);
-  margin-bottom: 0.25rem;
+}
+
+.ai-sources-toggle {
+  margin-left: auto;
 }
 
 .ai-citations ul {
@@ -298,6 +381,45 @@
 
 .ai-citations a {
   color: var(--ai-teal);
+}
+
+.ai-citations-note {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.ai-citations.ai-explore {
+  border-top-style: dashed;
+}
+
+.ai-explore-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ai-explore-cat {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 0.15rem;
+}
+
+.ai-explore-group ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.ai-disclaimer {
+  margin: 0.55rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .ai-composer {
@@ -444,7 +566,8 @@
   align-items: center;
 }
 
-.ai-attach-btn {
+.ai-attach-btn,
+.ai-mic-btn {
   align-self: flex-end;
   cursor: pointer;
   border: 1px solid var(--border-2);
@@ -453,6 +576,13 @@
   padding: 0.45rem 0.7rem;
   font: inherit;
   font-size: 0.85rem;
+}
+
+.ai-mic-btn.recording {
+  border-color: rgba(168, 83, 69, 0.45);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .ai-attach-clear {

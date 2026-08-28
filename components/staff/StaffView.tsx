@@ -7,7 +7,17 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { formatDateTime } from "@/lib/format/dates";
+import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { AccessChecklist } from "@/components/staff/AccessChecklist";
+import { DelegationsPanel } from "@/components/staff/DelegationsPanel";
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 type StaffRow = {
   id: string;
@@ -17,6 +27,7 @@ type StaffRow = {
   isActive: boolean;
   isSystemUser: boolean;
   isLawyer: boolean;
+  isTestUser?: boolean;
   roleCode: string;
   roleName: string;
   lastLoginAt: string | null;
@@ -41,7 +52,7 @@ type SessionRow = {
   lastSeenAt: string;
 };
 
-type StaffTab = "logins" | "lawyers";
+type StaffTab = "logins" | "lawyers" | "delegations";
 
 const DEFAULT_TICKS = ["dashboard.view"];
 
@@ -60,6 +71,7 @@ export function StaffView() {
   const [jobTitle, setJobTitle] = useState("");
   const [password, setPassword] = useState("");
   const [isLawyer, setIsLawyer] = useState(true);
+  const [isTestUser, setIsTestUser] = useState(false);
   const [createTicks, setCreateTicks] = useState<string[]>(DEFAULT_TICKS);
   const [issuedTemp, setIssuedTemp] = useState<{ email: string; tempPassword: string } | null>(
     null,
@@ -112,7 +124,8 @@ export function StaffView() {
     () => items.filter((u) => !u.isSystemUser),
     [items],
   );
-  const visible = tab === "logins" ? loginUsers : directoryLawyers;
+  const visible =
+    tab === "logins" ? loginUsers : tab === "lawyers" ? directoryLawyers : [];
 
   function startEdit(u: StaffRow) {
     setEditingId(u.id);
@@ -137,6 +150,7 @@ export function StaffView() {
           permissionCodes: createTicks,
           isSystemUser: true,
           isLawyer,
+          isTestUser,
         }),
       });
       const body = (await res.json()) as {
@@ -158,6 +172,7 @@ export function StaffView() {
       setJobTitle("");
       setPassword("");
       setIsLawyer(true);
+      setIsTestUser(false);
       setCreateTicks(DEFAULT_TICKS);
       await load();
     } catch {
@@ -328,30 +343,51 @@ export function StaffView() {
 
   const editing = items.find((u) => u.id === editingId) ?? null;
 
+  const summaryStats = useMemo(
+    () => [
+      {
+        label: "Login seats",
+        value: seats ? `${seats.used}/${seats.limit}` : "—",
+        hint: seats?.edition,
+        icon: "SE",
+      },
+      { label: "System logins", value: loading ? "—" : loginUsers.length, icon: "IN" },
+      { label: "Practice lawyers", value: loading ? "—" : directoryLawyers.length, icon: "LW" },
+      { label: "Active sessions", value: loading ? "—" : sessions.length, icon: "SS" },
+    ],
+    [seats, loading, loginUsers.length, directoryLawyers.length, sessions.length],
+  );
+
   return (
     <Can permission="users.manage">
-      <div className="view active scrollable" aria-label="Staff">
-        <div className="toolbar">
-          <div>
-            <h1 style={{ margin: 0, fontSize: "1.15rem" }}>Lawyers &amp; Staff</h1>
-            <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-              System logins use seats. Practice lawyers without a login can still be responsible
-              attorneys on clients and matters.
-            </p>
-            {seats ? (
-              <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
-                Active logins: {seats.used} of {seats.limit}
-                {seats.edition ? ` (${seats.edition} licence)` : ""}. Directory lawyers do not use a
-                seat.
+      <section className="view active scrollable hr-desk-view hr-staff-access-view" aria-label="Staff">
+        <div className="panel hr-hero-panel">
+          <div className="panel-head">
+            <div>
+              <h1>Lawyers &amp; Staff</h1>
+              <p className="panel-subtitle muted">
+                System logins use seats. Practice lawyers without a login can still be responsible
+                attorneys on clients and matters.
               </p>
-            ) : null}
+              {seats ? (
+                <p className="muted hr-aging-note">
+                  Active logins: {seats.used} of {seats.limit}
+                  {seats.edition ? ` (${seats.edition} licence)` : ""}. Directory lawyers do not use a
+                  seat.
+                </p>
+              ) : null}
+            </div>
+            <div className="hr-panel-actions">
+              <Button variant="ghost" onClick={() => void load()} disabled={loading}>
+                Refresh
+              </Button>
+            </div>
           </div>
-          <Button variant="ghost" onClick={() => void load()} disabled={loading}>
-            Refresh
-          </Button>
         </div>
 
-        <div className="tabs" style={{ marginBottom: "1rem" }}>
+        <HrStatStrip stats={summaryStats} />
+
+        <div className="tabs module-tabs-inline">
           <button
             type="button"
             className={["tab", tab === "logins" ? "active" : ""].filter(Boolean).join(" ")}
@@ -372,14 +408,24 @@ export function StaffView() {
           >
             Practice lawyers ({directoryLawyers.length})
           </button>
+          <button
+            type="button"
+            className={["tab", tab === "delegations" ? "active" : ""].filter(Boolean).join(" ")}
+            onClick={() => {
+              setTab("delegations");
+              setEditingId(null);
+            }}
+          >
+            Delegations
+          </button>
         </div>
 
+        {tab === "delegations" ? (
+          <DelegationsPanel loginUsers={loginUsers} currentUserId={me?.id} />
+        ) : (
+          <>
         {tab === "logins" && seats !== null && seats.remaining <= 0 ? (
-          <div
-            className="panel"
-            style={{ marginBottom: "1rem", borderColor: "var(--gold, #b8860b)" }}
-            role="status"
-          >
+          <div className="panel hr-notice-panel" role="status">
             <div className="panel-body">
               <strong>No free login seats</strong>
               <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.88rem" }}>
@@ -391,27 +437,17 @@ export function StaffView() {
         ) : null}
 
         {error ? (
-          <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>{error}</p>
+          <p className="form-error" role="alert">{error}</p>
         ) : null}
 
         {issuedTemp ? (
-          <div className="panel" style={{ marginBottom: "1rem", borderColor: "var(--gold, #b8860b)" }}>
+          <div className="panel hr-notice-panel">
             <div className="panel-body" style={{ display: "grid", gap: "0.4rem" }}>
               <strong>Temporary password for {issuedTemp.email}</strong>
               <p className="muted" style={{ margin: 0, fontSize: "0.82rem" }}>
                 Share this securely. Shown once; they must change it on first login.
               </p>
-              <code
-                style={{
-                  fontSize: "1.05rem",
-                  padding: "0.5rem 0.75rem",
-                  background: "rgba(0,0,0,0.05)",
-                  borderRadius: "6px",
-                  userSelect: "all",
-                }}
-              >
-                {issuedTemp.tempPassword}
-              </code>
+              <code className="hr-temp-password-code">{issuedTemp.tempPassword}</code>
               <div>
                 <Button size="sm" variant="outline" onClick={() => setIssuedTemp(null)}>
                   Done
@@ -421,9 +457,9 @@ export function StaffView() {
           </div>
         ) : null}
 
-        <div className="panel" style={{ marginBottom: "1rem" }}>
+        <div className="panel hr-form-panel">
           <div className="panel-body" style={{ display: "grid", gap: "0.65rem" }}>
-            <strong>
+            <strong className="hr-section-title">
               {tab === "logins" ? "Create system login" : "Add practice lawyer (no login)"}
             </strong>
             <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
@@ -431,15 +467,15 @@ export function StaffView() {
                 ? "Creates a LexZim login and uses one seat. Tick modules they may use."
                 : "For lawyers who practice and bring revenue but do not need system access. They appear in responsible attorney lists on clients and matters."}
             </p>
-            <div className="grid-2">
+            <div className="hr-grid-2">
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
                   Full name
                 </div>
                 <input
+                  className="filter-input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                 />
               </label>
               <label>
@@ -447,24 +483,24 @@ export function StaffView() {
                   {tab === "logins" ? "Email" : "Email (optional)"}
                 </div>
                 <input
+                  className="filter-input"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={tab === "lawyers" ? "Optional contact email" : undefined}
-                  style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                 />
               </label>
             </div>
-            <div className="grid-2">
+            <div className="hr-grid-2">
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
                   Job title
                 </div>
                 <input
+                  className="filter-input"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
                   placeholder={tab === "lawyers" ? "e.g. Advocate, Associate" : "e.g. Associate, Accounts"}
-                  style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                 />
               </label>
               {tab === "logins" ? (
@@ -473,12 +509,12 @@ export function StaffView() {
                     Temporary password (leave blank to auto-generate)
                   </div>
                   <input
+                    className="filter-input"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Auto-generated if blank"
                     autoComplete="new-password"
-                    style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                   />
                 </label>
               ) : (
@@ -487,7 +523,7 @@ export function StaffView() {
             </div>
             {tab === "logins" ? (
               <>
-                <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <label className="hr-checkbox-row">
                   <input
                     type="checkbox"
                     checked={isLawyer}
@@ -495,6 +531,16 @@ export function StaffView() {
                   />
                   <span style={{ fontSize: "0.9rem" }}>
                     This person is a lawyer (show in responsible attorney lists)
+                  </span>
+                </label>
+                <label className="hr-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={isTestUser}
+                    onChange={(e) => setIsTestUser(e.target.checked)}
+                  />
+                  <span style={{ fontSize: "0.9rem" }}>
+                    Test user (not an employee — skip HR profile)
                   </span>
                 </label>
                 <AccessChecklist selected={createTicks} onChange={setCreateTicks} disabled={saving} />
@@ -518,37 +564,25 @@ export function StaffView() {
           </div>
         </div>
 
-        <div className="panel" style={{ marginBottom: "1rem" }}>
-          <div className="panel-body">
-            <strong style={{ display: "block", marginBottom: "0.65rem" }}>
+        <div className="panel">
+          <div className="panel-body hr-panel-body">
+            <strong className="hr-section-title">
               {tab === "logins" ? "Users with login" : "Practice lawyers (no login)"}
             </strong>
-            {loading ? <p className="muted">Loading…</p> : null}
+            {loading ? <p className="hr-empty-loading">Loading…</p> : null}
             {!loading && visible.length === 0 ? (
               <p className="muted">
                 {tab === "logins" ? "No login users yet." : "No directory lawyers yet."}
               </p>
             ) : null}
-            <div style={{ display: "grid", gap: "0.5rem" }}>
+            <div className="hr-user-list">
               {visible.map((u) => (
-                <div
-                  key={u.id}
-                  style={{
-                    padding: "0.55rem 0",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.75rem",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: "12rem" }}>
-                      <div style={{ fontWeight: 600 }}>{u.fullName}</div>
-                      <div className="muted" style={{ fontSize: "0.8rem" }}>
+                <div key={u.id} className="hr-user-row">
+                  <div className="hr-user-row-main">
+                    <div className="hr-avatar" aria-hidden="true">{initials(u.fullName)}</div>
+                    <div className="hr-user-row-body">
+                      <div className="hr-cell-primary">{u.fullName}</div>
+                      <div className="hr-cell-meta">
                         {u.email.includes("@") && !u.email.includes(".lexzim.local")
                           ? u.email
                           : u.isSystemUser
@@ -558,6 +592,7 @@ export function StaffView() {
                       </div>
                     </div>
                     {u.isLawyer ? <Badge tone="open">Lawyer</Badge> : null}
+                    {u.isTestUser ? <Badge tone="pending">Test</Badge> : null}
                     {!u.isSystemUser ? <Badge tone="pending">No login</Badge> : null}
                     <Badge tone={u.isActive ? "open" : "closed"}>
                       {u.isActive ? "Active" : "Inactive"}
@@ -599,25 +634,18 @@ export function StaffView() {
                     ) : null}
                   </div>
                   {editingId === u.id && editing ? (
-                    <div style={{ marginTop: "0.75rem" }}>
+                    <div className="hr-detail-panel" style={{ marginTop: "0.75rem" }}>
                       <label style={{ display: "block", marginBottom: "0.65rem", maxWidth: "22rem" }}>
                         <div className="muted" style={{ fontSize: "0.8rem" }}>
                           Job title
                         </div>
                         <input
+                          className="filter-input"
                           value={editJobTitle}
                           onChange={(e) => setEditJobTitle(e.target.value)}
-                          style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                         />
                       </label>
-                      <label
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "center",
-                          marginBottom: "0.65rem",
-                        }}
-                      >
+                      <label className="hr-checkbox-row" style={{ marginBottom: "0.65rem" }}>
                         <input
                           type="checkbox"
                           checked={editIsLawyer}
@@ -635,7 +663,7 @@ export function StaffView() {
                           lockUsersManage={u.isProtectedMp || u.id === me?.id}
                         />
                       ) : null}
-                      <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.5rem" }}>
+                      <div className="hr-form-actions">
                         <Button size="sm" onClick={() => void onSaveAccess()} disabled={saving}>
                           {saving ? "Saving…" : "Save"}
                         </Button>
@@ -653,47 +681,38 @@ export function StaffView() {
 
         {tab === "logins" ? (
           <div className="panel">
-            <div className="panel-body">
-              <strong style={{ display: "block", marginBottom: "0.35rem" }}>
-                Active web sessions
-              </strong>
-              <p className="muted" style={{ margin: "0 0 0.65rem", fontSize: "0.85rem" }}>
+            <div className="panel-body hr-panel-body">
+              <strong className="hr-section-title">Active web sessions</strong>
+              <p className="muted hr-detail-subtitle">
                 Sessions are recorded on login. Revoking signs that browser out.
               </p>
               {sessions.length === 0 ? (
                 <p className="muted">No active tracked sessions yet.</p>
               ) : (
-                <div style={{ display: "grid", gap: "0.45rem" }}>
+                <div className="hr-user-list">
                   {sessions.map((s) => (
-                    <div
-                      key={s.id}
-                      style={{
-                        display: "flex",
-                        gap: "0.75rem",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        padding: "0.45rem 0",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: "12rem" }}>
-                        <div style={{ fontWeight: 600 }}>{s.fullName}</div>
-                        <div className="muted" style={{ fontSize: "0.8rem" }}>
-                          {s.email}
-                          {s.ipOrUserAgent ? ` · ${s.ipOrUserAgent.slice(0, 80)}` : ""}
+                    <div key={s.id} className="hr-user-row">
+                      <div className="hr-user-row-main">
+                        <div className="hr-avatar" aria-hidden="true">{initials(s.fullName)}</div>
+                        <div className="hr-user-row-body">
+                          <div className="hr-cell-primary">{s.fullName}</div>
+                          <div className="hr-cell-meta">
+                            {s.email}
+                            {s.ipOrUserAgent ? ` · ${s.ipOrUserAgent.slice(0, 80)}` : ""}
+                          </div>
                         </div>
+                        <span className="muted" style={{ fontSize: "0.75rem" }}>
+                          Seen {formatDateTime(s.lastSeenAt)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={saving}
+                          onClick={() => void revokeSession(s.id)}
+                        >
+                          Revoke
+                        </Button>
                       </div>
-                      <span className="muted" style={{ fontSize: "0.75rem" }}>
-                        Seen {formatDateTime(s.lastSeenAt)}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={saving}
-                        onClick={() => void revokeSession(s.id)}
-                      >
-                        Revoke
-                      </Button>
                     </div>
                   ))}
                 </div>
@@ -701,7 +720,9 @@ export function StaffView() {
             </div>
           </div>
         ) : null}
-      </div>
+          </>
+        )}
+      </section>
     </Can>
   );
 }

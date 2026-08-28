@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { ClientDetailView } from "@/components/clients/ClientDetailView";
 import { serializeClient } from "@/lib/clients/serialize";
@@ -39,24 +40,26 @@ export default async function ClientDetailPage({ params }: PageProps) {
 
   return (
     <ProtectedModulePage path="/clients">
-      <ClientDetailView
-        client={{ ...client, responsibleLawyerName }}
-        matterCounts={matterCounts}
-        matters={matterRows.map((m) => {
-          const s = serializeMatter(m, {
-            clientDisplayName: m.clientDisplayName,
-            responsibleLawyerName: m.responsibleLawyerName,
-          });
-          return {
-            id: s.id,
-            title: s.title,
-            status: s.status,
-            statusLabel: s.statusLabel,
-            areaOfLaw: s.areaOfLaw,
-            matterNumber: s.matterNumber,
-          };
-        })}
-      />
+      <Suspense fallback={<p className="muted">Loading client…</p>}>
+        <ClientDetailView
+          client={{ ...client, responsibleLawyerName }}
+          matterCounts={matterCounts}
+          matters={matterRows.map((m) => {
+            const s = serializeMatter(m, {
+              clientDisplayName: m.clientDisplayName,
+              responsibleLawyerName: m.responsibleLawyerName,
+            });
+            return {
+              id: s.id,
+              title: s.title,
+              status: s.status,
+              statusLabel: s.statusLabel,
+              areaOfLaw: s.areaOfLaw,
+              matterNumber: s.matterNumber,
+            };
+          })}
+        />
+      </Suspense>
     </ProtectedModulePage>
   );
 }

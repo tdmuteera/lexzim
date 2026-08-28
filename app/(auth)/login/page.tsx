@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -23,7 +24,11 @@ export default async function LoginPage({ searchParams }: PageProps) {
     if (await authCurrentUser()) {
       redirect("/dashboard");
     }
-    return <LoginForm />;
+    return (
+      <Suspense fallback={<p className="muted">Loading sign-in…</p>}>
+        <LoginForm />
+      </Suspense>
+    );
   } catch (err) {
     const unavailable = getDbUnavailableFromError(err, isRedirectError);
     if (unavailable) {

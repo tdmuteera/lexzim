@@ -45,7 +45,15 @@ Requires RBAC seed (`npm run db:seed:rbac`) so `managing_partner` exists.
 
 ### 4. Logout
 
-`authLogout()` → Supabase `signOut` + `auth.logout` audit when a profile was present.
+`authLogout()` → Supabase `signOut` + audit (`auth.logout`, or `auth.idle_logout` when reason is idle).
+
+### Idle timeout (Phase 10)
+
+Staff app shell runs `IdleSessionGuard`: after **30 minutes of inactivity** (pointer/keyboard/touch), POST `/api/auth/logout` with `{ reason: "idle" }` and redirect to `/login?reason=idle`. Active use resets the timer. Optional local override: `NEXT_PUBLIC_STAFF_IDLE_TIMEOUT_MS` (ms, min 60000).
+
+### Delegation grants (Phase 10)
+
+Managing Partner (`users.manage`) can grant temporary capabilities under **Lawyers & Staff → Delegations**: `invoice.approve`, `leave.approve`, `payroll.advance.approve`. Active grants merge into the grantee’s session permissions on load (revocable, optional expiry). Module access ticks stay separate. Audit: `delegation.grant` / `delegation.revoke`.
 
 ## Password policy
 

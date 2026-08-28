@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   gte,
+  isNull,
   lte,
   ne,
   sql,
@@ -119,7 +120,14 @@ export async function listDebtors(
     })
     .from(invoices)
     .innerJoin(matters, and(eq(matters.id, invoices.matterId), eq(matters.firmId, firmId)))
-    .leftJoin(clients, and(eq(clients.id, invoices.clientId), eq(clients.firmId, firmId)))
+    .innerJoin(
+      clients,
+      and(
+        eq(clients.id, invoices.clientId),
+        eq(clients.firmId, firmId),
+        isNull(clients.archivedAt),
+      ),
+    )
     .where(and(...conditions))
     .orderBy(asc(invoices.dueDate), desc(invoices.issueDate));
 
@@ -134,7 +142,8 @@ export async function listDebtors(
     if (accessible && !accessible.has(r.invoice.matterId)) continue;
 
     const paidCents = Number(r.paidCents) || 0;
-    const balanceCents = Math.max(0, r.invoice.totalCents - paidCents);
+    const retainerApplied = r.invoice.retainerAppliedCents ?? 0;
+    const balanceCents = Math.max(0, r.invoice.totalCents - paidCents - retainerApplied);
     if (balanceCents <= 0) continue;
 
     const bucket = agingBucketFromDueDate(r.invoice.dueDate, now);
@@ -196,7 +205,7 @@ export async function listDebtors(
 
   return {
     title: "Debtors (outstanding fee invoices)",
-    note: "Fee side only. Ageing from due date. Does not include trust balances.",
+    note: "Fee side only. Ageing from due date. Active clients only (archived clients excluded). Does not include trust balances.",
     agingBasis: "due_date",
     asOf: now.toISOString(),
     summaryByCurrency,

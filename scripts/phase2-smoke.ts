@@ -83,7 +83,7 @@ async function main() {
   const status = await fetchJson("/api/ai/status", { cookieJar: mp });
   const st = dataOf(status.body);
   check("AI status", status.status === 200 && status.body.ok === true);
-  check("Web lookup default off", st.webLookupEnabled === false, String(st.webLookupEnabled));
+  check("Web lookup default on", st.webLookupEnabled === true, String(st.webLookupEnabled));
 
   const test = await fetchJson("/api/ai/test", {
     method: "POST",

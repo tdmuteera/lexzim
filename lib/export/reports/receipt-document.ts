@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 import { centsToDisplay } from "@/lib/billing/money";
+import { feePaymentChannelLabel } from "@/lib/billing/fee-payment-methods";
 import { clientDisplayLabel } from "@/lib/clients/display";
 import { getDb } from "@/lib/db";
 import { clients, feePayments, invoices, matters } from "@/lib/db/schema";
@@ -52,6 +53,8 @@ export async function receiptToExportDocument(
     dateStyle: "medium",
   });
 
+  const channel = feePaymentChannelLabel(row.payment.method);
+
   return {
     title: `Receipt ${row.payment.receiptNumber ?? row.payment.id.slice(0, 8)}`,
     subtitle: clientLabel,
@@ -61,6 +64,7 @@ export async function receiptToExportDocument(
       row.matterNumber ? `Matter: ${row.matterNumber} · ${row.matterTitle ?? ""}` : "",
       `Paid: ${centsToDisplay(row.payment.amountCents, row.payment.currency)}`,
       `Date: ${paidAt}`,
+      `Channel: ${channel}`,
       row.payment.method ? `Method: ${row.payment.method}` : "",
       row.payment.reference ? `Reference: ${row.payment.reference}` : "",
       `Balance remaining: ${centsToDisplay(balanceCents, row.invoice.currency)}`,

@@ -122,23 +122,27 @@ App layer blocks new expense/cashbook/trust posts in locked periods (P6-10).
 
 ---
 
-## HR (no payroll)
+## HR (leave + payroll MVP)
+
+Payroll MVP and salary advances ship in Phase 10 (P10-10). Full statutory payroll remains deferred (Phase 6B).
 
 ### `hr_staff_profiles`
 
-HR directory row. `user_id` optional for staff without LexZim login.
+Linked optionally to `users`. Phase 10: every normal system login gets a profile stub (unless `users.is_test_user`).
 
-| Column | Purpose |
-|--------|---------|
-| `user_id` | Link to `users` when they have login |
-| `full_name` | Required display name |
-| `job_title`, `department`, `start_date`, `end_date` | Employment |
-| `emergency_contact_*` | Emergency contact |
-| `is_active` | Active flag |
+| Column group | Notes |
+|---|---|
+| Identity | `full_name`, `email`, `phone`, `employee_number`, `id_passport`, `work_location` |
+| Role at work | `job_category` (Managing Partner / Partner / Senior Associate / Junior Associate / Attorney / custom), `job_title`, `department` |
+| Employment | `start_date`, `end_date`, `is_active`, leave entitlement |
+| Next of kin | `nok_*` (+ legacy `emergency_contact_*` mirrored from NOK) |
+| Salary stubs | `gross_salary_cents`, `net_salary_cents` (for advances / payroll MVP) |
+
+Lawyer pickers use `users.is_lawyer` (directory lawyers without login kept). Lawyer job categories default that flag on when saving a linked profile.
+
+**Migration:** `0039_employee_spine.sql` backfills profiles for existing system users.
 
 Unique `(firm_id, user_id)` when user is linked. Multiple profiles with `user_id` null allowed (non-login staff).
-
-**Migration note:** Existing `/staff` users are not auto-imported. P6-12 may offer “create HR profile from user” action.
 
 ### `hr_contracts`
 
@@ -164,6 +168,20 @@ Per-firm leave type catalog. Seed defaults in P6-13: `annual`, `sick`, `unpaid`,
 | `status` | `requested` \| `approved` \| `rejected` \| `cancelled` |
 | `approver_user_id`, `approved_at` | Approval audit |
 | `notes`, `decision_notes` | Request and decision text |
+
+### `hr_leave_entitlements` (P10-10)
+
+Per employee / leave type / year entitlement. Ledger APIs compute used / pending / remaining from requests. Approvals are discretionary (`leave.approve` or `hr.manage`).
+
+### `hr_salary_advances` (P10-10)
+
+T Pfigu salary advance form fields. Status: `submitted` → `finance_reviewed` (optional) → `decided` → `paid` → `closed`. Decision: `approved` | `approved_subject_to_amendment` | `not_approved`. `balance_remaining_cents` drives payroll recovery. Approval of salary advances is discretionary (`payroll.advance.approve` or `hr.manage`).
+
+### `hr_payroll_periods` / `hr_payroll_lines` (P10-10)
+
+Payroll MVP (not statutory PAYE/NSSA). Period header + per-staff lines: gross, advances outstanding, deductions, net payable. Marking a line paid reduces linked advance balances.
+
+**Migration:** `0040_leave_advances_payroll.sql`.
 
 ---
 

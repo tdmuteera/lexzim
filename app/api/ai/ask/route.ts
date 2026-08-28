@@ -5,7 +5,7 @@ import { aiLegalAsk } from "@/lib/ai/rag/answer";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-/** Legal research ask (RAG + grounded answer or not-found). Requires ai.use. */
+/** Legal research ask. Requires ai.use. */
 export async function POST(request: Request) {
   try {
     const session = await requirePermission("ai.use");
@@ -52,8 +52,6 @@ export async function POST(request: Request) {
         confidence: result.confidence,
         hitCount: result.retrievalMeta.hitCount,
         emptyReason: result.retrievalMeta.emptyReason,
-        webLookupEnabled: result.webLookup.enabled,
-        webHitCount: result.webLookup.hitCount,
         questionPreview: question.slice(0, 120),
       },
       ipOrUserAgent: clientInfo(request),
@@ -67,8 +65,10 @@ export async function POST(request: Request) {
       confidence: result.confidence,
       confidenceScore: result.confidenceScore,
       citations: result.citations,
+      grounding: result.grounding,
+      sourceTiers: result.sourceTiers,
+      exploreSources: result.exploreSources,
       retrievalMeta: result.retrievalMeta,
-      webLookup: result.webLookup,
       notFound: result.notFound,
       disclaimer: result.disclaimer,
       document: result.document ?? null,

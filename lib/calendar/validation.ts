@@ -9,16 +9,21 @@ export const CALENDAR_EVENT_TYPES: CalendarEventType[] = [
   "other",
 ];
 
+export const CALENDAR_VISIBILITIES = ["private", "firm", "people"] as const;
+export type CalendarVisibility = (typeof CALENDAR_VISIBILITIES)[number];
+
 export type CalendarEventInput = {
   matterId: string | null;
   clientId: string | null;
   eventType: CalendarEventType;
   title: string;
   description: string | null;
-  location: string | null;
+  location: string;
   startsAt: Date;
   endsAt: Date | null;
   allDay: boolean;
+  visibility: CalendarVisibility;
+  sharedUserIds: string[];
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -42,6 +47,25 @@ export function isCalendarEventType(value: unknown): value is CalendarEventType 
   return typeof value === "string" && CALENDAR_EVENT_TYPES.includes(value as CalendarEventType);
 }
 
+export function isCalendarVisibility(value: unknown): value is CalendarVisibility {
+  return typeof value === "string" && (CALENDAR_VISIBILITIES as readonly string[]).includes(value);
+}
+
+/** Default calendar colour shown in UI until the user saves a personal choice. */
+export const DEFAULT_CALENDAR_COLOR = "#2F6FED";
+
+/** Persistable hex colour for users.calendar_color (e.g. #2F6FED). */
+export function parseCalendarColor(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AuthError("validation", "Calendar colour is required.");
+  }
+  const colour = value.trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(colour)) {
+    throw new AuthError("validation", "Calendar colour must be a hex value like #2F6FED.");
+  }
+  return colour.toUpperCase();
+}
+
 export function parseCalendarEventInput(body: unknown): CalendarEventInput {
   if (!body || typeof body !== "object") {
     throw new AuthError("validation", "Invalid calendar event payload.");
@@ -61,6 +85,14 @@ export function parseCalendarEventInput(body: unknown): CalendarEventInput {
   }
   if (title.length > 200) {
     throw new AuthError("validation", "Title must be 200 characters or fewer.");
+  }
+
+  const location = typeof raw.location === "string" ? raw.location.trim() : "";
+  if (!location) {
+    throw new AuthError("validation", "Location is required.");
+  }
+  if (location.length > 300) {
+    throw new AuthError("validation", "Location must be 300 characters or fewer.");
   }
 
   const startsAt = parseDate(raw.startsAt, "Start time");
@@ -84,11 +116,33 @@ export function parseCalendarEventInput(body: unknown): CalendarEventInput {
     clientId = clientRaw.trim();
   }
 
-  if (raw.eventType === "appointment" && !clientId && !matterId) {
+  let visibility: CalendarVisibility = "private";
+  if (raw.visibility != null && raw.visibility !== "") {
+    if (!isCalendarVisibility(raw.visibility)) {
+      throw new AuthError("validation", "Visibility must be private, firm, or people.");
+    }
+    visibility = raw.visibility;
+  }
+
+  const sharedUserIds: string[] = [];
+  if (Array.isArray(raw.sharedUserIds)) {
+    for (const id of raw.sharedUserIds) {
+      if (typeof id !== "string" || !id.trim()) {
+        throw new AuthError("validation", "sharedUserIds must be an array of user ids.");
+      }
+      const trimmed = id.trim();
+      if (!sharedUserIds.includes(trimmed)) sharedUserIds.push(trimmed);
+    }
+  }
+
+  if (visibility === "people" && sharedUserIds.length === 0) {
     throw new AuthError(
       "validation",
-      "Client is required for a client meeting (or link a matter with a client).",
+      "Select at least one person when visibility is Specific people.",
     );
+  }
+  if (visibility !== "people") {
+    sharedUserIds.length = 0;
   }
 
   return {
@@ -97,9 +151,11 @@ export function parseCalendarEventInput(body: unknown): CalendarEventInput {
     eventType: raw.eventType,
     title,
     description: trimOrNull(raw.description),
-    location: trimOrNull(raw.location),
+    location,
     startsAt,
     endsAt,
     allDay: Boolean(raw.allDay),
+    visibility,
+    sharedUserIds,
   };
 }

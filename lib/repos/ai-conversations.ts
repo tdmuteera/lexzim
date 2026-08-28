@@ -2,7 +2,7 @@
  * AI conversations / messages repository stubs (P2-01).
  * EVERY firm-scoped query MUST filter firmId.
  */
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiConversations, aiMessages } from "@/lib/db/schema";
 import type { AiConversationMode, AiMessageRole } from "@/lib/db/ai-types";
@@ -98,4 +98,74 @@ export async function createMessage(input: {
     );
 
   return rows[0];
+}
+
+export async function getMessage(
+  firmId: string,
+  conversationId: string,
+  messageId: string,
+) {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(aiMessages)
+    .where(
+      and(
+        eq(aiMessages.firmId, firmId),
+        eq(aiMessages.conversationId, conversationId),
+        eq(aiMessages.id, messageId),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Update a user message and hard-delete all later messages in the thread (edit + regenerate). */
+export async function editUserMessageAndTruncate(input: {
+  firmId: string;
+  conversationId: string;
+  messageId: string;
+  content: string;
+}) {
+  const db = getDb();
+  const existing = await getMessage(input.firmId, input.conversationId, input.messageId);
+  if (!existing || existing.role !== "user") return null;
+
+  const content = input.content.trim();
+  if (!content) throw new Error("content_required");
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(aiMessages)
+      .set({ content })
+      .where(
+        and(
+          eq(aiMessages.firmId, input.firmId),
+          eq(aiMessages.conversationId, input.conversationId),
+          eq(aiMessages.id, input.messageId),
+        ),
+      );
+
+    await tx
+      .delete(aiMessages)
+      .where(
+        and(
+          eq(aiMessages.firmId, input.firmId),
+          eq(aiMessages.conversationId, input.conversationId),
+          gt(aiMessages.createdAt, existing.createdAt),
+        ),
+      );
+
+    await tx
+      .update(aiConversations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(aiConversations.firmId, input.firmId),
+          eq(aiConversations.id, input.conversationId),
+        ),
+      );
+  });
+
+  return getMessage(input.firmId, input.conversationId, input.messageId);
 }

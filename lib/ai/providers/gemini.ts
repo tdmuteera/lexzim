@@ -90,7 +90,13 @@ export function createGeminiProvider(opts?: {
               contents,
               generationConfig: {
                 temperature: chatOpts?.temperature ?? 0.2,
-                maxOutputTokens: chatOpts?.maxOutputTokens ?? 1024,
+                // Thinking models share this budget with internal thoughts — keep high.
+                maxOutputTokens: chatOpts?.maxOutputTokens ?? 8192,
+                // Cap thinking so visible legal answers are not truncated mid-sentence.
+                thinkingConfig: {
+                  thinkingBudget: 1024,
+                  includeThoughts: false,
+                },
               },
             }),
           });
@@ -99,16 +105,42 @@ export function createGeminiProvider(opts?: {
         }
 
         if (!res.ok) {
-          mapHttpError(res.status, `Gemini chat failed (HTTP ${res.status}).`);
+          // Older models may reject thinkingConfig — retry once without it.
+          const errText = await res.text().catch(() => "");
+          if (res.status === 400 && /thinking/i.test(errText)) {
+            const retry = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...(systemInstruction ? { systemInstruction } : {}),
+                contents,
+                generationConfig: {
+                  temperature: chatOpts?.temperature ?? 0.2,
+                  maxOutputTokens: Math.max(
+                    8192,
+                    chatOpts?.maxOutputTokens ?? 8192,
+                  ),
+                },
+              }),
+            });
+            if (!retry.ok) {
+              mapHttpError(retry.status, `Gemini chat failed (HTTP ${retry.status}).`);
+            }
+            res = retry;
+          } else {
+            mapHttpError(res.status, `Gemini chat failed (HTTP ${res.status}).`);
+          }
         }
 
         const body = (await res.json()) as {
           candidates?: Array<{
+            finishReason?: string;
             content?: { parts?: Array<{ text?: string; thought?: boolean }> };
           }>;
         };
+        const candidate = body.candidates?.[0];
         const text =
-          body.candidates?.[0]?.content?.parts
+          candidate?.content?.parts
             ?.filter((p) => !p.thought)
             .map((p) => p.text ?? "")
             .join("")
