@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { WorkflowModuleNav } from "@/components/workflow/WorkflowModuleNav";
+import { WorkflowPageShell } from "@/components/workflow/WorkflowPageShell";
+import { WorkflowStatStrip } from "@/components/workflow/WorkflowStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -57,6 +58,28 @@ function priorityTone(priority: string) {
   return "pending" as const;
 }
 
+function priorityLabel(priority: string) {
+  if (priority === "high") return "High";
+  if (priority === "low") return "Low";
+  return "Normal";
+}
+
+function statusLabel(status: string) {
+  if (status === "done") return "Done";
+  if (status === "pending") return "Pending";
+  return status;
+}
+
+function resetCreateForm() {
+  return {
+    title: "",
+    description: "",
+    assigneeUserId: "",
+    dueAt: "",
+    priority: "normal",
+  };
+}
+
 export function TasksShellView() {
   const { user } = useAuth();
   const [scope, setScope] = useState<Scope>("mine");
@@ -84,11 +107,8 @@ export function TasksShellView() {
     };
     if (res.ok && body.ok && body.data) {
       setAssignees(body.data.items);
-      if (!assigneeUserId && user?.id) {
-        setAssigneeUserId(user.id);
-      }
     }
-  }, [assigneeUserId, user?.id]);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,8 +144,33 @@ export function TasksShellView() {
     void load();
   }, [load]);
 
+  function openCreateForm() {
+    const blank = resetCreateForm();
+    setTitle(blank.title);
+    setDescription(blank.description);
+    setAssigneeUserId(blank.assigneeUserId);
+    setDueAt(blank.dueAt);
+    setPriority(blank.priority);
+    setFormOpen(true);
+    setError(null);
+  }
+
+  function closeCreateForm() {
+    setFormOpen(false);
+    const blank = resetCreateForm();
+    setTitle(blank.title);
+    setDescription(blank.description);
+    setAssigneeUserId(blank.assigneeUserId);
+    setDueAt(blank.dueAt);
+    setPriority(blank.priority);
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
+    if (!assigneeUserId) {
+      setError("Choose who should receive this task.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -134,8 +179,8 @@ export function TasksShellView() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description: description || null,
+          title: title.trim(),
+          description: description.trim() || null,
           assigneeUserId,
           dueAt: dueAt ? new Date(`${dueAt}T17:00:00`).toISOString() : null,
           priority,
@@ -149,11 +194,7 @@ export function TasksShellView() {
         setError(body.error?.message ?? "Could not create task.");
         return;
       }
-      setFormOpen(false);
-      setTitle("");
-      setDescription("");
-      setDueAt("");
-      setPriority("normal");
+      closeCreateForm();
       await load();
     } catch {
       setError("Could not create task.");
@@ -216,268 +257,314 @@ export function TasksShellView() {
     }
   }
 
+  const summaryStats = useMemo(() => {
+    if (!counts) return [];
+    return [
+      {
+        label: "My pending",
+        value: loading ? "—" : counts.myPending,
+        icon: "ME",
+        hint: "Waiting on you",
+      },
+      {
+        label: "Assigned by me",
+        value: loading ? "—" : counts.assignedByMePending,
+        icon: "OUT",
+        hint: "Still open",
+      },
+      {
+        label: "Overdue",
+        value: loading ? "—" : counts.overdue,
+        icon: "LATE",
+        hint: counts.overdue > 0 ? "Needs attention" : "All on track",
+      },
+      {
+        label: "Done (7 days)",
+        value: loading ? "—" : counts.doneRecently,
+        icon: "OK",
+        hint: "Recently completed",
+      },
+    ];
+  }, [counts, loading]);
+
+  const scopeLabel =
+    scope === "mine"
+      ? "My tasks"
+      : scope === "assigned_by_me"
+        ? "Assigned by me"
+        : "Completed";
+
   return (
-    <section className="view active scrollable" aria-label="Tasks">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h3>Tasks</h3>
-            <p className="muted" style={{ marginTop: "0.25rem" }}>
-              Assign work across the firm. Completions notify the assigner.
+    <WorkflowPageShell
+      title="Tasks"
+      subtitle="Assign work across the firm. When someone completes a task, the assigner is notified."
+      ariaLabel="Tasks"
+      actions={
+        <>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => (formOpen ? closeCreateForm() : openCreateForm())}
+          >
+            {formOpen ? "Close form" : "New task"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </>
+      }
+      summary={summaryStats.length > 0 ? <WorkflowStatStrip stats={summaryStats} /> : null}
+    >
+      <div className="wf-subtabs" role="tablist" aria-label="Task lists">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={scope === "mine"}
+          className={`tab-btn${scope === "mine" ? " active" : ""}`}
+          onClick={() => setScope("mine")}
+        >
+          My tasks
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={scope === "assigned_by_me"}
+          className={`tab-btn${scope === "assigned_by_me" ? " active" : ""}`}
+          onClick={() => setScope("assigned_by_me")}
+        >
+          Assigned by me
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={scope === "completed"}
+          className={`tab-btn${scope === "completed" ? " active" : ""}`}
+          onClick={() => setScope("completed")}
+        >
+          Completed
+        </button>
+      </div>
+
+      {error ? (
+        <p className="form-error" role="alert">{error}</p>
+      ) : null}
+
+      {formOpen ? (
+        <form className="wf-form-panel" onSubmit={onCreate} aria-label="New task form">
+          <div className="wf-form-panel-header">
+            <h4>Assign a new task</h4>
+            <p className="wf-form-hint muted">
+              Give a clear title, pick the right person, and add a due date if timing matters.
+              The assignee gets a notification; you get one when they mark it done.
             </p>
           </div>
-          <div className="panel-actions">
-            <Button type="button" size="sm" onClick={() => setFormOpen((v) => !v)}>
-              {formOpen ? "Close" : "New task"}
+          <div className="wf-form-grid">
+            <label className="wf-span-full">
+              Task title
+              <input
+                className="filter-input"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Prepare witness bundle for hearing"
+                required
+                maxLength={200}
+              />
+            </label>
+            <label>
+              Assign to
+              <select
+                className="filter-select"
+                value={assigneeUserId}
+                onChange={(e) => setAssigneeUserId(e.target.value)}
+                required
+              >
+                <option value="">Select employee…</option>
+                {assignees.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.fullName}
+                    {a.email ? ` · ${a.email}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="wf-field-hint">Active staff with a LexZim login</span>
+            </label>
+            <label>
+              Due date
+              <input
+                className="filter-input"
+                type="date"
+                value={dueAt}
+                min={todayInput()}
+                onChange={(e) => setDueAt(e.target.value)}
+              />
+              <span className="wf-field-hint">Optional. Leave blank for no fixed deadline.</span>
+            </label>
+            <label>
+              Priority
+              <select
+                className="filter-select"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label className="wf-span-full">
+              Description
+              <textarea
+                className="filter-input"
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Context, links, or steps the assignee should follow…"
+              />
+            </label>
+          </div>
+          <div className="wf-form-actions">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Assigning…" : "Assign task"}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
-              Refresh
+            <Button type="button" size="sm" variant="outline" onClick={() => closeCreateForm()}>
+              Cancel
             </Button>
           </div>
-        </div>
-        <div className="panel-body">
-          <WorkflowModuleNav />
+        </form>
+      ) : null}
 
-          {counts ? (
-            <div className="toolbar" style={{ marginTop: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
-              <Badge tone="pending">My pending: {counts.myPending}</Badge>
-              <Badge tone="closed">Assigned by me: {counts.assignedByMePending}</Badge>
-              <Badge tone={counts.overdue > 0 ? "danger" : "closed"}>
-                Overdue: {counts.overdue}
-              </Badge>
-              <Badge tone="open">Done (7d): {counts.doneRecently}</Badge>
-            </div>
-          ) : null}
-
-          <div className="toolbar" style={{ marginTop: "1rem", marginBottom: "1rem" }}>
-            <button
-              type="button"
-              className={`tab-btn${scope === "mine" ? " active" : ""}`}
-              onClick={() => setScope("mine")}
-            >
-              My tasks
-            </button>
-            <button
-              type="button"
-              className={`tab-btn${scope === "assigned_by_me" ? " active" : ""}`}
-              onClick={() => setScope("assigned_by_me")}
-            >
-              Assigned by me
-            </button>
-            <button
-              type="button"
-              className={`tab-btn${scope === "completed" ? " active" : ""}`}
-              onClick={() => setScope("completed")}
-            >
-              Completed
-            </button>
-          </div>
-
-          {error ? <p className="form-error" role="alert">{error}</p> : null}
-
-          {formOpen ? (
-            <form
-              className="panel"
-              style={{ padding: "1rem", marginBottom: "1rem" }}
-              onSubmit={onCreate}
-            >
-              <h4 style={{ marginBottom: "0.75rem" }}>New task</h4>
-              <div className="form-grid" style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
-                <label>
-                  Title
-                  <input
-                    className="filter-input"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Assignee
-                  <select
-                    className="filter-select"
-                    value={assigneeUserId}
-                    onChange={(e) => setAssigneeUserId(e.target.value)}
-                    required
-                  >
-                    <option value="">Select…</option>
-                    {assignees.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Due date
-                  <input
-                    className="filter-input"
-                    type="date"
-                    value={dueAt}
-                    min={todayInput()}
-                    onChange={(e) => setDueAt(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Priority
-                  <select
-                    className="filter-select"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-                <label style={{ gridColumn: "1 / -1" }}>
-                  Description
-                  <textarea
-                    className="filter-input"
-                    rows={3}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? "Saving…" : "Assign task"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setFormOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
-
-          {loading ? (
-            <p className="muted">Loading tasks…</p>
-          ) : items.length === 0 ? (
-            <EmptyState
-              title="No tasks here"
-              detail="Create a task and assign it to any active employee."
-              icon="check"
-            />
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Assignee</th>
-                    <th>Assigner</th>
-                    <th>Due</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((t) => (
-                    <tr key={t.id}>
-                      <td>
-                        <strong>{t.title}</strong>
-                        {t.description ? (
-                          <div className="muted" style={{ fontSize: "0.85rem" }}>
-                            {t.description}
-                          </div>
-                        ) : null}
-                        {t.completionFeedback ? (
-                          <div className="muted" style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>
-                            Feedback: {t.completionFeedback}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>{t.assigneeName ?? "—"}</td>
-                      <td>{t.assignerName ?? "—"}</td>
-                      <td>
-                        {formatShortDate(t.dueAt)}
-                        {t.overdue ? (
-                          <>
-                            {" "}
-                            <Badge tone="danger">Overdue</Badge>
-                          </>
-                        ) : null}
-                      </td>
-                      <td>
-                        <Badge tone={priorityTone(t.priority)}>{t.priority}</Badge>
-                      </td>
-                      <td>
-                        <Badge tone={t.status === "done" ? "open" : "pending"}>
-                          {t.status}
-                        </Badge>
-                      </td>
-                      <td>
-                        {t.status === "pending" &&
-                        (t.assigneeUserId === user?.id || t.assignerUserId === user?.id) ? (
-                          completeId === t.id ? (
-                            <div style={{ display: "grid", gap: "0.35rem", minWidth: "180px" }}>
-                              <textarea
-                                className="filter-input"
-                                rows={2}
-                                placeholder="Completion feedback (optional)"
-                                value={feedback}
-                                onChange={(e) => setFeedback(e.target.value)}
-                              />
-                              <div style={{ display: "flex", gap: "0.35rem" }}>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={saving}
-                                  onClick={() => void onComplete(t.id)}
-                                >
-                                  Confirm
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setCompleteId(null);
-                                    setFeedback("");
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
+      {loading ? (
+        <p className="wf-empty-loading">Loading {scopeLabel.toLowerCase()}…</p>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title={`No tasks in ${scopeLabel.toLowerCase()}`}
+          detail="Create a task and assign it to any active employee with a login."
+          icon="check"
+        />
+      ) : (
+        <div className="wf-table-wrap">
+          <table className="data data-dense wf-data-table">
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Assignee</th>
+                <th>Assigner</th>
+                <th>Due</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    <div className="wf-cell-primary">{t.title}</div>
+                    {t.description ? (
+                      <div className="wf-cell-meta">{t.description}</div>
+                    ) : null}
+                    {t.completionFeedback ? (
+                      <div className="wf-cell-meta">
+                        Completion note: {t.completionFeedback}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>{t.assigneeName ?? "—"}</td>
+                  <td>{t.assignerName ?? "—"}</td>
+                  <td>
+                    {formatShortDate(t.dueAt)}
+                    {t.overdue ? (
+                      <div style={{ marginTop: "0.25rem" }}>
+                        <Badge tone="danger">Overdue</Badge>
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>
+                    <Badge tone={priorityTone(t.priority)}>
+                      {priorityLabel(t.priority)}
+                    </Badge>
+                  </td>
+                  <td>
+                    <Badge tone={t.status === "done" ? "open" : "pending"}>
+                      {statusLabel(t.status)}
+                    </Badge>
+                  </td>
+                  <td>
+                    <div className="wf-row-actions">
+                      {t.status === "pending" &&
+                      (t.assigneeUserId === user?.id || t.assignerUserId === user?.id) ? (
+                        completeId === t.id ? (
+                          <div className="wf-complete-panel">
+                            <textarea
+                              className="filter-input"
+                              rows={2}
+                              placeholder="Completion feedback (optional)"
+                              value={feedback}
+                              onChange={(e) => setFeedback(e.target.value)}
+                            />
+                            <div className="wf-row-actions">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={saving}
+                                onClick={() => void onComplete(t.id)}
+                              >
+                                Confirm done
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setCompleteId(null);
+                                  setFeedback("");
+                                }}
+                              >
+                                Cancel
+                              </Button>
                             </div>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setCompleteId(t.id)}
-                            >
-                              Complete
-                            </Button>
-                          )
-                        ) : null}
-                        {t.status === "done" && t.assignerUserId === user?.id ? (
+                          </div>
+                        ) : (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled={saving}
-                            onClick={() => void onReopen(t.id)}
+                            onClick={() => setCompleteId(t.id)}
                           >
-                            Reopen
+                            Mark done
                           </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <p className="muted" style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
-            Approvals for leave, advances, and invoices live in{" "}
-            <Link href="/workflow/approvals">Approvals</Link>.
-          </p>
+                        )
+                      ) : null}
+                      {t.status === "done" && t.assignerUserId === user?.id ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={saving}
+                          onClick={() => void onReopen(t.id)}
+                        >
+                          Reopen
+                        </Button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </section>
+      )}
+
+      <p className="wf-footnote">
+        Approvals for leave, salary advances, and invoices live in{" "}
+        <Link href="/workflow/approvals">Approvals</Link>.
+      </p>
+    </WorkflowPageShell>
   );
 }

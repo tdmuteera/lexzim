@@ -1,6 +1,7 @@
 /* LexZim global styles — TPfigu design system (ported from tpfigu-build/css.js) */
 @import "./tpfigu.css";
 @import "./hr-module.css";
+@import "./workflow-module.css";
 @import "./ai-chat.css";
 
 /*

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { WorkflowModuleNav } from "@/components/workflow/WorkflowModuleNav";
+import { WorkflowPageShell } from "@/components/workflow/WorkflowPageShell";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -72,84 +72,66 @@ export function ApprovalsInboxView() {
   }, [load]);
 
   return (
-    <section className="view active scrollable" aria-label="Approvals">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h3>Approvals inbox</h3>
-            <p className="muted" style={{ marginTop: "0.25rem" }}>
-              Leave, salary advances, invoice approval, and password resets waiting on you.
-            </p>
-          </div>
-          <div className="panel-actions">
-            <Button type="button" size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
-              Refresh
-            </Button>
-          </div>
+    <WorkflowPageShell
+      title="Approvals inbox"
+      subtitle="Leave, salary advances, invoice approval, and password resets waiting on you."
+      ariaLabel="Approvals"
+      actions={
+        <Button type="button" size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
+          Refresh
+        </Button>
+      }
+    >
+      {error ? (
+        <p className="form-error" role="alert">{error}</p>
+      ) : null}
+
+      {loading ? (
+        <p className="wf-empty-loading">Loading approvals…</p>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title="Nothing waiting"
+          detail="When leave, advances, invoices, or password resets need your tick, they appear here."
+          icon="check"
+        />
+      ) : (
+        <div className="wf-table-wrap">
+          <table className="data data-dense wf-data-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Item</th>
+                <th>When</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={`${item.kind}-${item.id}`}>
+                  <td>
+                    <Badge tone={kindTone(item.kind)}>{kindLabel(item.kind)}</Badge>
+                  </td>
+                  <td>
+                    <div className="wf-cell-primary">{item.title}</div>
+                    <div className="wf-cell-meta">{item.subtitle}</div>
+                  </td>
+                  <td>{formatWhen(item.createdAt)}</td>
+                  <td>
+                    <Link href={item.href} className="btn btn-sm btn-outline">
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="panel-body">
-          <WorkflowModuleNav />
+      )}
 
-          {error ? (
-            <p className="form-error" role="alert" style={{ marginTop: "1rem" }}>
-              {error}
-            </p>
-          ) : null}
-
-          {loading ? (
-            <p className="muted" style={{ marginTop: "1rem" }}>
-              Loading approvals…
-            </p>
-          ) : items.length === 0 ? (
-            <div style={{ marginTop: "1rem" }}>
-              <EmptyState
-                title="Nothing waiting"
-                detail="When leave, advances, invoices, or password resets need your tick, they appear here."
-                icon="check"
-              />
-            </div>
-          ) : (
-            <div className="table-wrap" style={{ marginTop: "1rem" }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Item</th>
-                    <th>When</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={`${item.kind}-${item.id}`}>
-                      <td>
-                        <Badge tone={kindTone(item.kind)}>{kindLabel(item.kind)}</Badge>
-                      </td>
-                      <td>
-                        <strong>{item.title}</strong>
-                        <div className="muted" style={{ fontSize: "0.85rem" }}>
-                          {item.subtitle}
-                        </div>
-                      </td>
-                      <td>{formatWhen(item.createdAt)}</td>
-                      <td>
-                        <Link href={item.href} className="btn btn-sm btn-outline">
-                          Open
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <p className="muted" style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
-            Firm tasks are under <Link href="/workflow/tasks">Tasks</Link>. Approvals still
-            happen on their source screens; this inbox links you there.
-          </p>
-        </div>
-      </div>
-    </section>
+      <p className="wf-footnote">
+        Firm tasks are under <Link href="/workflow/tasks">Tasks</Link>. Approvals still happen on
+        their source screens; this inbox links you there.
+      </p>
+    </WorkflowPageShell>
   );
 }
