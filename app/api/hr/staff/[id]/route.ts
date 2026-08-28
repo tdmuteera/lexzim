@@ -3,7 +3,13 @@ import { AuthError } from "@/lib/auth/types";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { parseStaffProfileInput } from "@/lib/hr/validation";
 import { createDirectoryPerson } from "@/lib/repos/directory-people";
-import { getStaffProfile, updateStaffProfile } from "@/lib/repos/hr";
+import {
+  archiveStaffProfile,
+  deleteStaffProfile,
+  getStaffProfile,
+  reactivateStaffProfile,
+  updateStaffProfile,
+} from "@/lib/repos/hr";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -71,7 +77,41 @@ export async function PATCH(request: Request, context: RouteContext) {
     const session = await requirePermission("hr.manage");
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
+    const action = typeof body.action === "string" ? body.action.trim() : "";
+
+    if (action === "archive" || action === "reactivate") {
+      const existing = await getStaffProfile(firmId, id);
+      if (!existing) {
+        throw new AuthError("not_found", "Staff record not found.");
+      }
+
+      const profile =
+        action === "archive"
+          ? await archiveStaffProfile(firmId, id)
+          : await reactivateStaffProfile(firmId, id);
+      if (!profile) {
+        throw new AuthError("not_found", "Staff record not found.");
+      }
+
+      await writeAuditLog({
+        action: action === "archive" ? "hr_staff.archive" : "hr_staff.reactivate",
+        firmId,
+        userId: session.id,
+        entityType: "hr_staff_profile",
+        entityId: profile.id,
+        metadata: {
+          fullName: profile.fullName,
+          isActive: profile.isActive,
+          endDate: profile.endDate?.toISOString() ?? null,
+        },
+        ipOrUserAgent: clientInfo(request),
+      });
+
+      const full = await getStaffProfile(firmId, profile.id);
+      return jsonOk({ staff: full ? serializeStaff(full) : null });
+    }
+
     const input = parseStaffProfileInput(body);
 
     const existing = await getStaffProfile(firmId, id);
@@ -128,6 +168,41 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const full = await getStaffProfile(firmId, profile.id);
     return jsonOk({ staff: full ? serializeStaff(full) : null });
+  } catch (err) {
+    return jsonError(err, request);
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    const session = await requirePermission("hr.manage");
+    const firmId = tenantFirmId(session);
+    const { id } = await context.params;
+
+    const existing = await getStaffProfile(firmId, id);
+    if (!existing) {
+      throw new AuthError("not_found", "Staff record not found.");
+    }
+
+    const deleted = await deleteStaffProfile(firmId, id);
+    if (!deleted) {
+      throw new AuthError("not_found", "Staff record not found.");
+    }
+
+    await writeAuditLog({
+      action: "hr_staff.delete",
+      firmId,
+      userId: session.id,
+      entityType: "hr_staff_profile",
+      entityId: deleted.id,
+      metadata: {
+        fullName: deleted.fullName,
+        userId: deleted.userId,
+      },
+      ipOrUserAgent: clientInfo(request),
+    });
+
+    return jsonOk({ deleted: true });
   } catch (err) {
     return jsonError(err, request);
   }

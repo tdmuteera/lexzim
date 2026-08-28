@@ -249,6 +249,64 @@ export async function updateStaffProfile(
   return row;
 }
 
+export async function archiveStaffProfile(firmId: string, id: string) {
+  const existing = await getStaffProfile(firmId, id);
+  if (!existing) {
+    throw new AuthError("not_found", "Staff record not found.");
+  }
+
+  const db = getDb();
+  const now = new Date();
+  const endDate = existing.profile.endDate ?? now;
+  const rows = await db
+    .update(hrStaffProfiles)
+    .set({ isActive: false, endDate, updatedAt: now })
+    .where(and(eq(hrStaffProfiles.firmId, firmId), eq(hrStaffProfiles.id, id)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function reactivateStaffProfile(firmId: string, id: string) {
+  const existing = await getStaffProfile(firmId, id);
+  if (!existing) {
+    throw new AuthError("not_found", "Staff record not found.");
+  }
+
+  const db = getDb();
+  const now = new Date();
+  const rows = await db
+    .update(hrStaffProfiles)
+    .set({ isActive: true, updatedAt: now })
+    .where(and(eq(hrStaffProfiles.firmId, firmId), eq(hrStaffProfiles.id, id)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function deleteStaffProfile(firmId: string, id: string) {
+  const existing = await getStaffProfile(firmId, id);
+  if (!existing) {
+    throw new AuthError("not_found", "Staff record not found.");
+  }
+
+  const contracts = await listHrContracts(firmId, { staffProfileId: id });
+  for (const row of contracts) {
+    if (row.contract.contractDocumentPath) {
+      try {
+        await deleteFirmFile(row.contract.contractDocumentPath, firmId);
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  const db = getDb();
+  const rows = await db
+    .delete(hrStaffProfiles)
+    .where(and(eq(hrStaffProfiles.firmId, firmId), eq(hrStaffProfiles.id, id)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function listHrContracts(
   firmId: string,
   opts?: { staffProfileId?: string; status?: string },

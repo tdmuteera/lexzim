@@ -91,6 +91,7 @@ export function HrStaffView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rowActionId, setRowActionId] = useState<string | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -292,6 +293,93 @@ export function HrStaffView() {
     }
   }
 
+  async function onArchive(row: StaffItem) {
+    if (!canManage) return;
+    if (
+      !confirm(
+        `Archive ${row.fullName}? They will be marked inactive and hidden when "Active only" is checked.`,
+      )
+    ) {
+      return;
+    }
+    setRowActionId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/staff/${row.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: { message: string } };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not archive staff record.");
+        return;
+      }
+      if (editingId === row.id) resetForm();
+      await load();
+    } catch {
+      setError("Could not archive staff record.");
+    } finally {
+      setRowActionId(null);
+    }
+  }
+
+  async function onReactivate(row: StaffItem) {
+    if (!canManage) return;
+    setRowActionId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/staff/${row.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reactivate" }),
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: { message: string } };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not reactivate staff record.");
+        return;
+      }
+      if (editingId === row.id) resetForm();
+      await load();
+    } catch {
+      setError("Could not reactivate staff record.");
+    } finally {
+      setRowActionId(null);
+    }
+  }
+
+  async function onDelete(row: StaffItem) {
+    if (!canManage) return;
+    if (
+      !confirm(
+        `Permanently delete ${row.fullName}? Related HR records (contracts, leave, advances, payroll lines) will also be removed. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setRowActionId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/staff/${row.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = (await res.json()) as { ok?: boolean; error?: { message: string } };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not delete staff record.");
+        return;
+      }
+      if (editingId === row.id) resetForm();
+      await load();
+    } catch {
+      setError("Could not delete staff record.");
+    } finally {
+      setRowActionId(null);
+    }
+  }
+
   const availableUsers = linkableUsers.filter(
     (u) => !u.linkedProfileId || u.linkedProfileId === editingId,
   );
@@ -304,7 +392,7 @@ export function HrStaffView() {
       { label: "Active", value: loading ? "—" : active, icon: "OK" },
       { label: "Login linked", value: loading ? "—" : linked, icon: "IN" },
       {
-        label: "Inactive",
+        label: "Archived",
         value: loading ? "—" : items.length - active,
         icon: "OFF",
       },
@@ -597,14 +685,48 @@ export function HrStaffView() {
                     <td>{formatShortDate(row.startDate)}</td>
                     <td>
                       <Badge tone={row.isActive ? "open" : "closed"}>
-                        {row.isActive ? "Active" : "Inactive"}
+                        {row.isActive ? "Active" : "Archived"}
                       </Badge>
                     </td>
                     {canManage ? (
                       <td>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                          Edit
-                        </Button>
+                        <div className="hr-row-actions">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEdit(row)}
+                            disabled={rowActionId === row.id}
+                          >
+                            Edit
+                          </Button>
+                          {row.isActive ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onArchive(row)}
+                              disabled={rowActionId === row.id}
+                            >
+                              Archive
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onReactivate(row)}
+                              disabled={rowActionId === row.id}
+                            >
+                              Reactivate
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onDelete(row)}
+                            disabled={rowActionId === row.id}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     ) : null}
                   </tr>
