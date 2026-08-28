@@ -65,10 +65,21 @@ export function SettingsView() {
     setSection(parseSection(searchParams.get("section")));
   }, [searchParams]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    const mainPanel = document.querySelector(".settings-main-panel");
+    if (!mainPanel) return;
+    const top = mainPanel.getBoundingClientRect().top;
+    if (top > 72 || top < 0) {
+      mainPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [section]);
+
   const activeLabel = NAV.find((n) => n.id === section)?.label ?? "Settings";
 
   return (
-    <div className="view active settings-view" aria-label="Settings">
+    <div className="view active scrollable settings-view" aria-label="Settings">
       <div className="settings-hero">
         <span className="settings-hero-icon">
           <Icon name="gear" />
