@@ -665,25 +665,10 @@ input.input:focus, select.input:focus, textarea.input:focus {
   min-width: 0;
   flex: 0 0 auto;
 }
-.content:has(.settings-view) {
-  overflow: hidden;
-}
-.content:has(.settings-view) > * {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 .page-motion {
   width: 100%;
   min-width: 0;
   position: relative;
-}
-.content:has(.settings-view) > .page-motion {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 .page-motion-accent {
   display: block;
@@ -1878,16 +1863,20 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
 }
 .ai-input-bar input:focus { border-color: var(--gold); }
 
-/* Settings */
+/* Settings — scroll via .content; no nested overflow traps */
 .settings-grid {
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0.85rem;
-  flex: 1; min-height: 0; align-items: stretch;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0.85rem;
+  flex: 0 0 auto;
+  min-height: min-content;
+  align-items: start;
 }
 .settings-view {
-  height: 100%;
-  max-height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  height: auto;
+  max-height: none;
+  min-height: min-content;
+  overflow: visible;
   gap: 0.75rem;
 }
 .settings-hero {
@@ -1922,16 +1911,34 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
 .settings-nav-panel,
 .settings-main-panel {
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 .settings-nav-panel .panel-body,
 .settings-main-panel .panel-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  flex: none;
+  min-height: min-content;
+  overflow: visible;
+}
+@media (min-width: 901px) {
+  .settings-nav-panel {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100dvh - var(--topbar-h) - 2.5rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-nav-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
 }
 .settings-main-panel > .panel-head {
   padding-left: 2.25rem;
@@ -2175,7 +2182,10 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   background: var(--danger-bg);
 }
 .settings-danger-zone .settings-section-title { color: var(--danger); }
-.settings-grid > .panel { min-height: 0; overflow: hidden; }
+.settings-grid > .panel {
+  min-height: 0;
+  overflow: visible;
+}
 .settings-nav {
   display: flex; flex-direction: column; gap: 0.35rem; padding: 0.7rem !important;
 }
@@ -2663,9 +2673,6 @@ table.data-table tbody tr:hover { background: rgba(160,124,56,0.07); }
   }
   .settings-nav button:last-child {
     grid-column: 1 / -1;
-  }
-  .settings-main-panel {
-    min-height: 0;
   }
   .settings-main-panel > .panel-head {
     padding-left: 1rem;

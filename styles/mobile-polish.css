@@ -1,19 +1,12 @@
 /* Mobile-only layout polish and scroll fixes (max-width: 900px). Desktop unchanged. */
 
 @media (max-width: 900px) {
-  /* Settings: desktop uses internal panel scroll; mobile uses main content scroll */
-  .content:has(.settings-view) {
+  /* Settings scroll: handled in tpfigu base (natural .content scroll) */
+  .content {
     overflow-y: auto;
-    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-  }
-
-  .content:has(.settings-view) > *,
-  .content:has(.settings-view) > .page-motion {
-    flex: 0 0 auto;
-    min-height: min-content;
-    display: block;
+    touch-action: pan-y;
   }
 
   .settings-view {
