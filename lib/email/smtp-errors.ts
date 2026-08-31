@@ -31,7 +31,7 @@ export function mapSmtpError(err: unknown): AuthError {
   ) {
     return new AuthError(
       "validation",
-      "Could not reach the mail server (mail.tpfiguattorneys.com). Confirm port 465 with SSL/TLS is enabled. If this persists, your host or cloud provider may block outbound SMTP; try port 587 without SSL/TLS and ask your mail host to allow relay from LexZim.",
+      "Could not reach the mail server. If LexZim runs on Railway Hobby or Trial, outbound SMTP (ports 465 and 587) is blocked by Railway, not your cPanel host. Upgrade to Railway Pro and redeploy, then test again with the same settings. On Pro, also try port 587 with SSL/TLS off if 465 fails. See docs/user/Email_Setup.md.",
     );
   }
 

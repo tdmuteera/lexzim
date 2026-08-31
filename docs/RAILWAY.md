@@ -45,12 +45,21 @@ Railway → your service → **Variables**. Add at minimum:
 | `DATABASE_URL` | Transaction pooler, port 6543 |
 | `DIRECT_URL` | Session pooler, port 5432 |
 | `AUTH_SECRET` | long random hex |
-| `GEMINI_API_KEY` | if using managed AI |
+| `GEMINI_API_KEY` | Managed AI (embeddings / Gemini chat) |
+| `OPENAI_API_KEY` | Managed AI (Legal Research auto-route when Claude absent) |
+| `ANTHROPIC_API_KEY` | Managed AI (Legal Research prefers Claude when present) |
 | `PORTAL_ENABLED` | `1` if portal should be on |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_REPLY_TO` | Optional shared email relay. Prefer firm **Settings → Email** BYO SMTP for pilots. Never commit passwords. See `docs/EMAIL.md`. |
 | `EMAIL_MOCK` | `1` for CI / mock transport only (not production) |
 
 Redeploy after saving variables.
+
+### Outbound email (SMTP) on Railway
+
+Railway **Hobby, Trial, and Free plans block outbound SMTP** (ports 465 and 587). Firm settings pointing at cPanel (`mail.tpfiguattorneys.com`) will show "Could not reach the mail server" even with correct credentials.
+
+- **Production with cPanel SMTP:** use Railway **Pro**, then **redeploy** after upgrading. See `docs/user/Email_Setup.md`.
+- **Hobby plan:** SMTP to cPanel will not work until you upgrade or add an HTTPS email API integration.
 
 ### Firm From address (pilot)
 
@@ -79,6 +88,7 @@ Supabase → **Authentication → URL configuration**:
 2. `GET https://<railway-host>/api/db-status` → connected (no `postgres://` in body)
 3. Login at `/login` (Managing Partner account from your Supabase data)
 4. Optional ops: `/ops/diagnostics` (platform admin)
+5. AI Legal Assistant: open `/ai` and confirm the header does not show **API key missing**. If it does, add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and/or `GEMINI_API_KEY` in Railway Variables (or set firm BYO keys in **Settings → AI**), then redeploy. Probe: `GET /api/ai/status?probe=1` while logged in.
 
 Smoke from your PC (app must be up):
 

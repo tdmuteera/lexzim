@@ -216,6 +216,12 @@ export function EmailSettingsPanel() {
           <code>info@tpfiguattorneys.com</code>. IMAP/POP3/CalDAV are for phone or Outlook only;
           LexZim sends outbound mail via SMTP.
         </aside>
+        <aside className="settings-hint settings-callout" style={{ marginTop: "0.65rem" }}>
+          <strong>Railway hosting:</strong> Hobby and Trial plans block outbound SMTP to cPanel
+          (ports 465/587). If test send times out, upgrade to Railway Pro and redeploy, or see{" "}
+          <code>docs/user/Email_Setup.md</code>. Your cPanel username and password can still be
+          correct.
+        </aside>
         {error ? <StatusBanner tone="error">{error}</StatusBanner> : null}
         {success ? <StatusBanner tone="success">{success}</StatusBanner> : null}
         {passwordSet && !passwordReadable ? (

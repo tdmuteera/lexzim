@@ -39,6 +39,16 @@ npx tsx scripts/set-tpfigu-email-smtp.ts
 
 Then enter the mailbox password once in **Settings → Email** if it was not passed via env.
 
+### Railway and outbound SMTP (important)
+
+Railway **blocks outbound SMTP on Free, Trial, and Hobby plans**. Connecting to `mail.tpfiguattorneys.com` on port 465 or 587 will time out even when credentials are correct.
+
+**Option A (keep cPanel SMTP):** Upgrade the LexZim Railway project to **Pro**, then **redeploy** the service. After redeploy, use the same firm settings (host `mail.tpfiguattorneys.com`, port 465, SSL/TLS on). Railway docs: [Outbound networking](https://docs.railway.com/networking/outbound-networking).
+
+**Option B (stay on Hobby):** Use a transactional email provider with an **HTTPS API** (Resend, SendGrid, Brevo). LexZim today sends via SMTP only; API relay integration is the long-term path for Hobby plans.
+
+**If already on Pro and still failing:** In Railway Shell, test reachability to your mail host. Try port **587** with **SSL/TLS unchecked** in Settings → Email. Confirm cPanel allows connections from Railway IPs.
+
 ## Managed relay (Railway / ops)
 
 If the firm has no SMTP yet, a deployment may provide a shared relay (`SMTP_HOST`, `SMTP_FROM`, and related `SMTP_*` on Railway Variables). Firm settings always win when both exist. Never commit passwords to git. Ask LexZim ops if test send says email is not configured.
