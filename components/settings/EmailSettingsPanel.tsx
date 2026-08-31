@@ -185,7 +185,7 @@ export function EmailSettingsPanel() {
         setTestFeedback(msg);
         return;
       }
-      const recipient = result.data?.to ?? testTo.trim() || fromEmail;
+      const recipient = result.data?.to ?? (testTo.trim() || fromEmail);
       setTestFeedback(`Test email sent to ${recipient}. Check inbox and spam.`);
       toast(`Test email sent to ${recipient}.`);
     } catch {
