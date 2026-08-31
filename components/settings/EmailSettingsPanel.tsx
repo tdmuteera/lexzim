@@ -146,21 +146,14 @@ export function EmailSettingsPanel() {
           note, and attachment, then click Send. LexZim does not auto-email clients.
         </p>
         <aside
-          className="settings-hint"
-          style={{
-            marginTop: "0.75rem",
-            padding: "0.65rem 0.75rem",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            background: "var(--surface-muted, #f8f8f6)",
-            fontSize: "0.85rem",
-            lineHeight: 1.45,
-          }}
+          className="settings-hint settings-callout"
+          style={{ marginTop: "0.75rem" }}
         >
-          <strong>Pilot guidance (T Pfigu Attorneys):</strong> set From/Reply-To to the address your
-          partner provides (commonly their public info mailbox, for example{" "}
-          <code>info@tpfiguattorneys.com</code>). This is configured per firm in Settings. LexZim
-          never applies that address as a global default for other firms.
+          <strong>T Pfigu Attorneys (cPanel mail):</strong> SMTP host{" "}
+          <code>mail.tpfiguattorneys.com</code>, port <code>465</code>, enable{" "}
+          <strong>SSL/TLS (465)</strong>, username <code>info@tpfiguattorneys.com</code>, From{" "}
+          <code>info@tpfiguattorneys.com</code>. IMAP/POP3/CalDAV are for phone or Outlook only;
+          LexZim sends outbound mail via SMTP.
         </aside>
         {error ? (
           <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
@@ -191,7 +184,7 @@ export function EmailSettingsPanel() {
                 <input
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
-                  placeholder="smtp.example.com"
+                  placeholder="mail.tpfiguattorneys.com"
                   style={inputStyle}
                 />
               </label>
@@ -202,7 +195,12 @@ export function EmailSettingsPanel() {
                   </div>
                   <input
                     value={port}
-                    onChange={(e) => setPort(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setPort(next);
+                      if (next === "465") setSecure(true);
+                      if (next === "587") setSecure(false);
+                    }}
                     inputMode="numeric"
                     style={inputStyle}
                   />
@@ -230,6 +228,7 @@ export function EmailSettingsPanel() {
                 <input
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
+                  placeholder="info@tpfiguattorneys.com"
                   autoComplete="off"
                   style={inputStyle}
                 />
@@ -261,7 +260,7 @@ export function EmailSettingsPanel() {
                 <input
                   value={fromName}
                   onChange={(e) => setFromName(e.target.value)}
-                  placeholder="Firm name"
+                  placeholder="T Pfigu Attorneys"
                   style={inputStyle}
                 />
               </label>
@@ -273,7 +272,7 @@ export function EmailSettingsPanel() {
                   type="email"
                   value={fromEmail}
                   onChange={(e) => setFromEmail(e.target.value)}
-                  placeholder="name@yourfirm.co.zw"
+                  placeholder="info@tpfiguattorneys.com"
                   style={inputStyle}
                 />
               </label>
@@ -285,7 +284,7 @@ export function EmailSettingsPanel() {
                   type="email"
                   value={replyTo}
                   onChange={(e) => setReplyTo(e.target.value)}
-                  placeholder="name@yourfirm.co.zw"
+                  placeholder="info@tpfiguattorneys.com"
                   style={inputStyle}
                 />
               </label>

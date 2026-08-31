@@ -13,7 +13,31 @@ Path: **Settings → Email**. Permission: `settings.manage`.
 
 The password is stored encrypted (same vault as BYO AI keys) and is stripped from firm backup exports.
 
-For the T Pfigu Attorneys pilot, set From/Reply-To in **that firm’s Settings** to the address the partner provides after SMTP credentials arrive. LexZim does not apply a pilot address as a default for other firms.
+For the **T Pfigu Attorneys** pilot, use the firm cPanel mailbox below in **Settings → Email** (permission `settings.manage`).
+
+| Field | Value |
+|---|---|
+| SMTP host | `mail.tpfiguattorneys.com` |
+| Port | `465` |
+| SSL/TLS | On (secure connection) |
+| Username | `info@tpfiguattorneys.com` |
+| Password | The mailbox password (never commit or paste into chat) |
+| From name | `T Pfigu Attorneys` |
+| From email | `info@tpfiguattorneys.com` |
+| Reply-to | `info@tpfiguattorneys.com` (optional, same address) |
+
+**Incoming mail (Outlook/phone only):** IMAP `mail.tpfiguattorneys.com` port **993** (SSL). LexZim does not read inbound mail; it only **sends** via SMTP.
+
+**Calendar/Contacts (CalDAV/CardDAV):** LexZim uses its built-in calendar. cPanel CalDAV URLs are for Apple/Google/Outlook sync outside LexZim, not for LexZim email setup.
+
+Ops can seed non-secret SMTP fields with:
+
+```bash
+# optional: T_PFIGU_SMTP_PASSWORD=... npx tsx scripts/set-tpfigu-email-smtp.ts
+npx tsx scripts/set-tpfigu-email-smtp.ts
+```
+
+Then enter the mailbox password once in **Settings → Email** if it was not passed via env.
 
 ## Managed relay (Railway / ops)
 
