@@ -27,6 +27,7 @@ export type FirmEmailConfig = {
   secure: boolean;
   user: string;
   password: string;
+  passwordStored: boolean;
   fromName: string;
   fromEmail: string;
   replyTo: string;
@@ -42,6 +43,7 @@ export type FirmEmailConfigPublic = {
   fromEmail: string;
   replyTo: string;
   passwordSet: boolean;
+  passwordReadable: boolean;
   configured: boolean;
 };
 
@@ -67,7 +69,8 @@ export async function getFirmEmailConfig(firmId: string): Promise<FirmEmailConfi
 
   if (!host?.trim() || !fromEmail?.trim()) return null;
 
-  const password = passwordEnc?.trim() ? decryptByoKey(passwordEnc) ?? "" : "";
+  const passwordStored = Boolean(passwordEnc?.trim());
+  const password = passwordStored ? decryptByoKey(passwordEnc!) ?? "" : "";
 
   return {
     host: host.trim(),
@@ -75,6 +78,7 @@ export async function getFirmEmailConfig(firmId: string): Promise<FirmEmailConfi
     secure: secureRaw === "true",
     user: user?.trim() ?? "",
     password,
+    passwordStored,
     fromName: fromName?.trim() || "LexZim",
     fromEmail: fromEmail.trim(),
     replyTo: replyTo?.trim() ?? "",
@@ -97,6 +101,8 @@ export async function getFirmEmailConfigPublic(
     ]);
 
   const passwordSet = Boolean(passwordEnc?.trim());
+  const passwordReadable =
+    !passwordSet || Boolean(passwordEnc?.trim() && decryptByoKey(passwordEnc));
   return {
     host: host?.trim() ?? "",
     port: parsePort(portRaw),
@@ -106,7 +112,8 @@ export async function getFirmEmailConfigPublic(
     fromEmail: fromEmail?.trim() ?? "",
     replyTo: replyTo?.trim() ?? "",
     passwordSet,
-    configured: Boolean(host?.trim() && fromEmail?.trim()),
+    passwordReadable,
+    configured: Boolean(host?.trim() && fromEmail?.trim() && passwordSet && passwordReadable),
   };
 }
 

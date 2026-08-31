@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -18,8 +18,41 @@ type EmailConfig = {
   fromEmail: string;
   replyTo: string;
   passwordSet: boolean;
+  passwordReadable: boolean;
   configured: boolean;
 };
+
+function StatusBanner({
+  tone,
+  children,
+}: {
+  tone: "error" | "success" | "warn";
+  children: ReactNode;
+}) {
+  const colors =
+    tone === "error"
+      ? { border: "rgba(168,83,69,0.35)", bg: "var(--danger-bg)", text: "var(--danger)" }
+      : tone === "success"
+        ? { border: "rgba(46,125,90,0.35)", bg: "rgba(46,125,90,0.08)", text: "var(--success, #2e7d5a)" }
+        : { border: "rgba(160,124,56,0.35)", bg: "rgba(160,124,56,0.08)", text: "var(--gold-2)" };
+  return (
+    <p
+      role={tone === "error" ? "alert" : "status"}
+      className="settings-callout"
+      style={{
+        marginTop: "0.75rem",
+        marginBottom: 0,
+        borderColor: colors.border,
+        background: colors.bg,
+        color: colors.text,
+        fontSize: "0.85rem",
+        lineHeight: 1.45,
+      }}
+    >
+      {children}
+    </p>
+  );
+}
 
 export function EmailSettingsPanel() {
   const { toast } = useToast();
@@ -27,6 +60,8 @@ export function EmailSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
 
   const [host, setHost] = useState("");
   const [port, setPort] = useState("587");
@@ -38,6 +73,8 @@ export function EmailSettingsPanel() {
   const [fromEmail, setFromEmail] = useState("");
   const [replyTo, setReplyTo] = useState("");
   const [testTo, setTestTo] = useState("");
+  const [passwordReadable, setPasswordReadable] = useState(true);
+  const [configured, setConfigured] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +99,8 @@ export function EmailSettingsPanel() {
       setFromEmail(c.fromEmail);
       setReplyTo(c.replyTo);
       setPasswordSet(c.passwordSet);
+      setPasswordReadable(c.passwordReadable);
+      setConfigured(c.configured);
       setPassword("");
     } catch {
       setError("Could not load email settings.");
@@ -77,6 +116,13 @@ export function EmailSettingsPanel() {
   async function save() {
     setSaving(true);
     setError(null);
+    setSuccess(null);
+    setTestFeedback(null);
+    if (!passwordSet && !password.trim()) {
+      setError("Enter the mailbox password before saving SMTP settings.");
+      setSaving(false);
+      return;
+    }
     try {
       const result = await diagnosticJson<{ config: EmailConfig }>("/api/settings/email", {
         method: "PUT",
@@ -99,7 +145,10 @@ export function EmailSettingsPanel() {
         return;
       }
       setPasswordSet(result.data.config.passwordSet);
+      setPasswordReadable(result.data.config.passwordReadable);
+      setConfigured(result.data.config.configured);
       setPassword("");
+      setSuccess("Email settings saved.");
       toast("Email settings saved.");
     } catch {
       setError("Could not save.");
@@ -111,6 +160,17 @@ export function EmailSettingsPanel() {
   async function sendTest() {
     setTesting(true);
     setError(null);
+    setSuccess(null);
+    setTestFeedback(null);
+    if (!configured) {
+      setTestFeedback(
+        passwordSet && !passwordReadable
+          ? "Stored password could not be read. Re-enter the mailbox password, save, then test again."
+          : "Save complete SMTP settings (including password) before sending a test email.",
+      );
+      setTesting(false);
+      return;
+    }
     try {
       const result = await diagnosticJson<{ to: string }>("/api/settings/email/test", {
         method: "POST",
@@ -118,17 +178,18 @@ export function EmailSettingsPanel() {
         body: JSON.stringify({ to: testTo.trim() || undefined }),
       });
       if (!result.ok) {
-        setError(
-          errorMessageWithRef(
-            result.error?.message ?? "Test send failed.",
-            result.requestId,
-          ),
+        const msg = errorMessageWithRef(
+          result.error?.message ?? "Test send failed.",
+          result.requestId,
         );
+        setTestFeedback(msg);
         return;
       }
-      toast(`Test email sent to ${result.data?.to ?? "recipient"}.`);
+      const recipient = result.data?.to ?? testTo.trim() || fromEmail;
+      setTestFeedback(`Test email sent to ${recipient}. Check inbox and spam.`);
+      toast(`Test email sent to ${recipient}.`);
     } catch {
-      setError("Test send failed.");
+      setTestFeedback("Test send failed. Check your connection and SMTP settings.");
     } finally {
       setTesting(false);
     }
@@ -155,10 +216,13 @@ export function EmailSettingsPanel() {
           <code>info@tpfiguattorneys.com</code>. IMAP/POP3/CalDAV are for phone or Outlook only;
           LexZim sends outbound mail via SMTP.
         </aside>
-        {error ? (
-          <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-            {error}
-          </p>
+        {error ? <StatusBanner tone="error">{error}</StatusBanner> : null}
+        {success ? <StatusBanner tone="success">{success}</StatusBanner> : null}
+        {passwordSet && !passwordReadable ? (
+          <StatusBanner tone="warn">
+            A password is stored but could not be read by the server. Re-enter the mailbox
+            password below and click Save email settings.
+          </StatusBanner>
         ) : null}
       </div>
 
@@ -300,6 +364,11 @@ export function EmailSettingsPanel() {
               style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
             >
               <h3 className="settings-section-title">Test send</h3>
+              {testFeedback ? (
+                <StatusBanner tone={testFeedback.startsWith("Test email sent") ? "success" : "error"}>
+                  {testFeedback}
+                </StatusBanner>
+              ) : null}
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
                   Recipient (defaults to from address)
@@ -308,7 +377,7 @@ export function EmailSettingsPanel() {
                   type="email"
                   value={testTo}
                   onChange={(e) => setTestTo(e.target.value)}
-                  placeholder="you@yourfirm.co.zw"
+                  placeholder="djtado04@gmail.com"
                   style={inputStyle}
                 />
               </label>

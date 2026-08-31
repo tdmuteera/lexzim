@@ -3,6 +3,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 import { AuthError } from "@/lib/auth/types";
 import { getFirmEmailConfig } from "@/lib/email/config";
+import { mapSmtpError } from "@/lib/email/smtp-errors";
 
 export type EmailAttachment = {
   filename: string;
@@ -38,6 +39,42 @@ function isEmailMock(): boolean {
   return process.env.EMAIL_MOCK === "1" || process.env.SMTP_MOCK === "1";
 }
 
+function smtpTransportOptions(input: {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+}) {
+  return {
+    host: input.host,
+    port: input.port,
+    secure: input.secure,
+    auth: input.user ? { user: input.user, pass: input.password } : undefined,
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 30_000,
+    ...(input.secure
+      ? { tls: { minVersion: "TLSv1.2" as const } }
+      : { requireTLS: true }),
+  };
+}
+
+function assertSmtpPassword(user: string, password: string, passwordStored: boolean) {
+  if (!user.trim()) return;
+  if (password.trim()) return;
+  if (passwordStored) {
+    throw new AuthError(
+      "validation",
+      "Stored SMTP password could not be read. Re-enter the mailbox password in Settings → Email and save.",
+    );
+  }
+  throw new AuthError(
+    "validation",
+    "SMTP password is required. Enter the mailbox password and save before sending.",
+  );
+}
+
 /**
  * Resolve SMTP transport for a firm. BYO firm SMTP wins; otherwise fall back to
  * server env (SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_FROM),
@@ -66,12 +103,16 @@ async function resolveTransport(firmId: string): Promise<{
 
   const firmCfg = await getFirmEmailConfig(firmId);
   if (firmCfg) {
-    const transporter = nodemailer.createTransport({
-      host: firmCfg.host,
-      port: firmCfg.port,
-      secure: firmCfg.secure,
-      auth: firmCfg.user ? { user: firmCfg.user, pass: firmCfg.password } : undefined,
-    });
+    assertSmtpPassword(firmCfg.user, firmCfg.password, firmCfg.passwordStored);
+    const transporter = nodemailer.createTransport(
+      smtpTransportOptions({
+        host: firmCfg.host,
+        port: firmCfg.port,
+        secure: firmCfg.secure,
+        user: firmCfg.user,
+        password: firmCfg.password,
+      }),
+    );
     const from = firmCfg.fromName
       ? `${firmCfg.fromName} <${firmCfg.fromEmail}>`
       : firmCfg.fromEmail;
@@ -110,7 +151,11 @@ async function resolveTransport(firmId: string): Promise<{
 
 export async function verifyFirmEmail(firmId: string): Promise<void> {
   const { transporter } = await resolveTransport(firmId);
-  await transporter.verify();
+  try {
+    await transporter.verify();
+  } catch (err) {
+    throw mapSmtpError(err);
+  }
 }
 
 export async function sendFirmEmail(
@@ -125,23 +170,27 @@ export async function sendFirmEmail(
 
   const { transporter, from, replyTo, transport } = await resolveTransport(firmId);
 
-  const info = await transporter.sendMail({
-    from,
-    to,
-    replyTo,
-    subject,
-    text: input.text,
-    html: input.html,
-    attachments: input.attachments?.map((a) => ({
-      filename: a.filename,
-      content: a.content,
-      contentType: a.contentType,
-    })),
-  });
+  try {
+    const info = await transporter.sendMail({
+      from,
+      to,
+      replyTo,
+      subject,
+      text: input.text,
+      html: input.html,
+      attachments: input.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
+    });
 
-  return {
-    messageId: info.messageId ?? null,
-    from,
-    transport,
-  };
+    return {
+      messageId: info.messageId ?? null,
+      from,
+      transport,
+    };
+  } catch (err) {
+    throw mapSmtpError(err);
+  }
 }
