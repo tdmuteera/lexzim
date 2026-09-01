@@ -17,22 +17,31 @@ const GREETING_PREFIX_RE =
 const SMALLTALK_RE =
   /\b(weather|joke|how are you|who are you|your name|what can you do|help me think|random|bored|how's it going|what time|news)\b/i;
 
+function normalizeChatQuestion(question: string): string {
+  return question
+    .replace(/\bdoccuments?\b/gi, "document")
+    .replace(/\bdocumnets?\b/gi, "document")
+    .replace(/\bdocuements?\b/gi, "document")
+    .replace(/\bdocumments?\b/gi, "document")
+    .replace(/\bwordd\b/gi, "word");
+}
+
 const DOCUMENT_RE =
-  /\b(draft|write|prepare|generate|produce|create|convert|craft|compose|send|export|download)\b.{0,100}\b(letter|affidavit|notice|agreement|contract|opinion|memo|memorandum|word|docx|document|advisory|heads of argument|plea|summons)\b/i;
+  /\b(draft|write|prepare|generate|produce|create|convert|craft|compose|send|export|download)\b.{0,120}\b(letter|affidavit|notice|agreement|contract|opinion|memo|memorandum|word|docx|document|advisory|heads of argument|plea|summons|declaration|lawsuit)\b/i;
 
 /** Broader Word/export asks (craft a 2 page word document, downloadable docx, …). */
 const DOCUMENT_EXPORT_RE =
-  /\b((?:\d+\s*[- ]?\s*)?page[s]?\s+)?(word\s*doc(?:ument)?s?|\.?docx|downloadable\s+(?:word\s*)?doc(?:ument)?|word\s+file)\b|\b(download|send|give|provide|attach)\b.{0,60}\b(word|docx|document|file|link)\b/i;
+  /\b((?:\d+\s*[- ]?\s*)?page[s]?\s+)?(word\s*doc(?:ument)?s?|\.?docx|downloadable\s+(?:word\s*)?doc(?:ument)?|word\s+file)\b|\b(download|send|give|provide|attach|export)\b.{0,80}\b(word|docx|pdf|excel|spreadsheet|document|file|link)\b|\bsend\b.{0,40}\bas\b.{0,20}\b(a\s+)?(word|docx|pdf|excel|document|file)\b/i;
 
 /** Short confirmations after a draft was offered in chat. */
 const DOC_FOLLOWUP_RE =
-  /^(yes|yeah|yep|yup|please|ok|okay|sure)\b[\s,.!]*((send|give|provide|make|prepare|create|download).{0,40})?(the\s+)?(download(?:able)?|word|docx|document|file|link)\b|\bwhere\s+is\s+(the\s+)?(download(?:able)?\s+)?(link|file|document|docx|word)\b|^(send|give|provide)\s+(me\s+)?(the\s+)?(download(?:able)?|link|word|docx|document|file)\b/i;
+  /^(yes|yeah|yep|yup|please|ok|okay|sure)\b[\s,.!]*((send|give|provide|make|prepare|create|download).{0,40})?(the\s+)?(download(?:able)?|word|docx|document|file|link)\b|\bwhere\s+is\s+(the\s+)?(download(?:able)?\s+)?(link|file|document|docx|word)\b|^(send|give|provide)\s+(me\s+)?(the\s+)?(download(?:able)?|link|word|docx|document|file|this)\b/i;
 
 const FORMAT_RE =
   /\b(times new roman|arial|calibri|trebuchet|font|line spacing|1\.5|double.?spac|letterhead)\b/i;
 
 const LEGAL_RE =
-  /\b(act|statute|section|s\.?\s*\d|statutory instrument|\bsi\b|constitution|high court|magistrate|divorce|custody|maintenance|conveyanc|labour|criminal|civil procedure|case law|precedent|plaintiff|defendant|applicant|respondent|injunction|interdict|damages|contract law|delict|estate|will|probate|compan(?:y|ies)|company law|companies act|cobea?\b|copac|zimlii|veritas|director|resident|local director|agricultural land|farm(?:ing)?|offer letter|99[- ]year|zimra|land|plot|dam|water rights?|water act|references?|sources?|cite|citation|authority|authorities|zimbabwean?\b|register(?:ed|ation)?)\b/i;
+  /\b(act|statute|section|s\.?\s*\d|statutory instrument|\bsi\b|constitution|high court|magistrate|divorce|custody|maintenance|conveyanc|labour|criminal|crime|offence|offense|incest|rape|theft|civil procedure|case law|precedent|plaintiff|defendant|applicant|respondent|injunction|interdict|damages|contract law|delict|estate|will|probate|compan(?:y|ies)|company law|companies act|cobea?\b|copac|zimlii|veritas|director|resident|local director|agricultural land|farm(?:ing)?|offer letter|99[- ]year|zimra|land|plot|dam|water rights?|water act|references?|sources?|cite|citation|authority|authorities|zimbabwe(?:an)?\b|register(?:ed|ation)?)\b/i;
 
 /** Explicit “give me the sources / references” follow-ups are legal, not chat. */
 const CITATION_FOLLOWUP_RE =
@@ -43,7 +52,7 @@ function stripGreetingPrefix(q: string): string {
 }
 
 export function isDocumentRequest(question: string): boolean {
-  const q = question.trim();
+  const q = normalizeChatQuestion(question).trim();
   if (!q) return false;
   if (DOCUMENT_RE.test(q) || DOCUMENT_EXPORT_RE.test(q) || DOC_FOLLOWUP_RE.test(q)) {
     return true;
@@ -55,7 +64,7 @@ export function isDocumentRequest(question: string): boolean {
 }
 
 export function classifyChatIntent(question: string): ChatIntent {
-  const q = question.trim();
+  const q = normalizeChatQuestion(question).trim();
   if (!q) return "chat";
 
   if (CITATION_FOLLOWUP_RE.test(q) || /^(references?|sources?|citations?)\s*[?.!]?\s*$/i.test(q)) {
@@ -90,7 +99,7 @@ export function wantsDocumentExport(question: string): boolean {
 
 /** Word/docx/download asks only — not plain "draft a letter" without a file/export cue. */
 export function wantsExplicitWordFile(question: string): boolean {
-  const q = question.trim();
+  const q = normalizeChatQuestion(question).trim();
   if (!q) return false;
   if (DOCUMENT_EXPORT_RE.test(q) || DOC_FOLLOWUP_RE.test(q)) return true;
   if (FORMAT_RE.test(q) && /\b(word|docx|download|send|file|link)\b/i.test(q)) return true;
@@ -99,13 +108,16 @@ export function wantsExplicitWordFile(question: string): boolean {
 
 /** User wants the prior chat draft exported, not a new document authored. */
 export function isWordExportFollowup(question: string): boolean {
-  if (!wantsExplicitWordFile(question)) return false;
-  const q = question.trim();
+  const q = normalizeChatQuestion(question).trim();
+  if (!wantsExplicitWordFile(q)) return false;
+  if (/\b(draft|write|prepare|create|compose|generate)\b/i.test(q) && !/\b(this|that|it|above)\b/i.test(q)) {
+    return false;
+  }
   if (/^(yes|yeah|yep|yup|please|ok|okay|sure)\b/i.test(q)) return true;
-  if (/\b(this|that|it|above|the\s+(draft|document|agreement|letter|same))\b/i.test(q)) {
+  if (/\b(this|that|it|above|the\s+(draft|document|agreement|letter|same|summons|notice))\b/i.test(q)) {
     return true;
   }
-  if (q.length < 90 && /\b(send|download|give|provide|export)\b/i.test(q)) return true;
+  if (q.length < 120 && /\b(send|download|give|provide|export)\b/i.test(q)) return true;
   if (/^send\b/i.test(q) && !/\bdraft\b/i.test(q)) return true;
   return false;
 }

@@ -2,8 +2,8 @@ import "server-only";
 
 import { chatWithProviderFailover } from "@/lib/ai/chat-router";
 import { loadChatHistory } from "@/lib/ai/chat-history";
+import { repairRestartedNumberedLists } from "@/lib/ai/chat-format";
 import {
-  isPromiseOnlyDraft,
   isSubstantialDocumentDraft,
   maybePackChatDocument,
 } from "@/lib/ai/drafting/maybe-pack";
@@ -39,8 +39,9 @@ import type {
 } from "@/lib/ai/citations/tiers";
 import {
   CHAT_SYSTEM_PROMPT,
-  DOCUMENT_PROMPT_ADDENDUM,
+  DOCUMENT_INTAKE_ADDENDUM,
   FORCE_FULL_DRAFT_SYSTEM,
+  WORD_EXPORT_ADDENDUM,
 } from "@/lib/ai/rag/legal-research-prompt";
 
 export const LEGAL_DISCLAIMER = "";
@@ -111,21 +112,6 @@ function loadPriorDocumentDraft(
     if (m.role !== "assistant") continue;
     const content = m.content.trim();
     if (isSubstantialDocumentDraft(content)) return m.content;
-    if (isPromiseOnlyDraft(content)) continue;
-    if (content.length >= 200) return m.content;
-  }
-  return null;
-}
-
-function priorSubstantialAssistantDraft(
-  history: Array<{ role: string; content: string }>,
-): string | null {
-  for (let i = history.length - 1; i >= 0; i -= 1) {
-    const m = history[i];
-    if (m.role !== "assistant") continue;
-    if (isSubstantialDocumentDraft(m.content)) return m.content;
-    if (isPromiseOnlyDraft(m.content)) continue;
-    if (m.content.trim().length >= 200) return m.content;
   }
   return null;
 }
@@ -277,22 +263,25 @@ export async function aiLegalAsk(input: {
 
   const mergeMeta = { ...retrieval.retrievalMeta, intent };
 
-  const systemPrompt = wantDoc
-    ? `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_PROMPT_ADDENDUM}`
-    : CHAT_SYSTEM_PROMPT;
-
   const history = await loadChatHistory({
     firmId: input.firmId,
     conversationId,
-    limit: 12,
+    limit: 16,
   });
   const threadMessages = await listMessages(input.firmId, conversationId);
   const priorDraft = loadPriorDocumentDraft(threadMessages);
-  const wordExportFollowup =
-    wantWordFile &&
-    isWordExportFollowup(question) &&
-    priorDraft &&
-    isSubstantialDocumentDraft(priorDraft);
+  const packablePrior = Boolean(priorDraft && isSubstantialDocumentDraft(priorDraft));
+  const wordExportFollowup = Boolean(
+    wantWordFile && packablePrior && isWordExportFollowup(question),
+  );
+
+  let systemPrompt = CHAT_SYSTEM_PROMPT;
+  if (wantWordFile && !wordExportFollowup) {
+    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${WORD_EXPORT_ADDENDUM}`;
+  } else if (wantDoc && !wantWordFile) {
+    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_INTAKE_ADDENDUM}`;
+  }
+
   const packContext = runResearch ? buildKbContext(retrieval) : "";
   const webContextBlock = runResearch ? formatWebLookupBlock(web.hits) : "";
   const attachmentBlock = attachmentContext
@@ -336,7 +325,7 @@ export async function aiLegalAsk(input: {
     failoverNotice = chat.meta.failoverNotice;
     chatProvider = chat.provider;
 
-    if (wantDoc && !isSubstantialDocumentDraft(answerText)) {
+    if (wantWordFile && !packablePrior && !isSubstantialDocumentDraft(answerText)) {
       const forced = await chatWithProviderFailover(
         input.firmId,
         [
@@ -420,6 +409,8 @@ export async function aiLegalAsk(input: {
     };
   }
   }
+
+  answerText = repairRestartedNumberedLists(answerText);
 
   const document = wantWordFile
     ? await maybePackChatDocument({

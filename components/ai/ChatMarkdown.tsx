@@ -57,13 +57,54 @@ function splitBlocks(src: string): MdBlock[] {
       out.push({ type: "ul", items });
       continue;
     }
-    if (/^\s*\d+\.\s+/.test(line)) {
+    if (/^\s*\d+[.)]\s+/.test(line)) {
       const items: string[] = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i] ?? "")) {
-        items.push((lines[i] ?? "").replace(/^\s*\d+\.\s+/, ""));
-        i += 1;
+      while (i < lines.length) {
+        const cur = lines[i] ?? "";
+        const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(cur);
+        if (numbered) {
+          const chunks = [numbered[1]];
+          i += 1;
+          while (i < lines.length) {
+            const nxt = lines[i] ?? "";
+            if (nxt.trim() === "") {
+              let j = i + 1;
+              while (j < lines.length && (lines[j] ?? "").trim() === "") j += 1;
+              const peek = lines[j] ?? "";
+              if (
+                /^\s*\d+[.)]\s+/.test(peek) ||
+                /^\s*[-*]\s+/.test(peek) ||
+                /^(#{1,3})\s+/.test(peek) ||
+                peek.startsWith("```") ||
+                peek === ""
+              ) {
+                i = j;
+                break;
+              }
+              i += 1;
+              continue;
+            }
+            if (
+              /^\s*\d+[.)]\s+/.test(nxt) ||
+              /^\s*[-*]\s+/.test(nxt) ||
+              /^(#{1,3})\s+/.test(nxt) ||
+              nxt.startsWith("```")
+            ) {
+              break;
+            }
+            chunks.push(nxt.trim());
+            i += 1;
+          }
+          items.push(chunks.filter(Boolean).join(" "));
+          continue;
+        }
+        if (cur.trim() === "") {
+          i += 1;
+          continue;
+        }
+        break;
       }
-      out.push({ type: "ol", items });
+      if (items.length) out.push({ type: "ol", items });
       continue;
     }
     if (line.trim() === "") {
@@ -77,7 +118,7 @@ function splitBlocks(src: string): MdBlock[] {
       (lines[i] ?? "").trim() !== "" &&
       !/^(#{1,3})\s+/.test(lines[i] ?? "") &&
       !/^\s*[-*]\s+/.test(lines[i] ?? "") &&
-      !/^\s*\d+\.\s+/.test(lines[i] ?? "") &&
+      !/^\s*\d+[.)]\s+/.test(lines[i] ?? "") &&
       !(lines[i] ?? "").startsWith("```")
     ) {
       para.push(lines[i] ?? "");

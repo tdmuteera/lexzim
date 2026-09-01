@@ -14,6 +14,6 @@ export async function loadChatHistory(opts: {
     .slice(-limit)
     .map((m) => ({
       role: m.role as "user" | "assistant",
-      content: m.content.slice(0, 6000),
+      content: m.content.slice(0, 24_000),
     }));
 }
