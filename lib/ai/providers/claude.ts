@@ -8,6 +8,7 @@ import {
   RateLimitedError,
 } from "@/lib/ai/errors";
 import { withAiRetry } from "@/lib/ai/retry";
+import { getAnthropicWorkspaceId } from "@/lib/ai/secrets";
 import {
   CLAUDE_CHAT_MODEL_ID,
   GEMINI_EMBEDDINGS_MODEL_ID,
@@ -19,10 +20,30 @@ import {
   type LlmProvider,
 } from "@/lib/ai/types";
 
-function mapHttpError(status: number, fallback: string): never {
-  if (status === 401 || status === 403) throw new InvalidKeyError();
+function mapHttpError(status: number, detail: string): never {
+  const lower = detail.toLowerCase();
+  if (status === 401 || status === 403) throw new InvalidKeyError(detail);
   if (status === 429) throw new RateLimitedError();
-  throw new ProviderError(fallback, status);
+  if (lower.includes("anthropic-workspace-id is required")) {
+    throw new ProviderError(
+      "Anthropic key needs ANTHROPIC_WORKSPACE_ID (wrkspc_…) in server env, or use a single-workspace API key from console.anthropic.com.",
+      status,
+    );
+  }
+  throw new ProviderError(detail, status);
+}
+
+async function readAnthropicError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: { message?: string; type?: string };
+    };
+    const msg = body.error?.message?.trim();
+    if (msg) return msg;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
 }
 
 /**
@@ -71,6 +92,7 @@ export function createClaudeProvider(opts?: {
           throw new ProviderError("At least one user/assistant message is required.");
         }
 
+        const workspaceId = getAnthropicWorkspaceId();
         let res: Response;
         try {
           res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -79,6 +101,7 @@ export function createClaudeProvider(opts?: {
               "Content-Type": "application/json",
               "x-api-key": key,
               "anthropic-version": "2023-06-01",
+              ...(workspaceId ? { "anthropic-workspace-id": workspaceId } : {}),
             },
             body: JSON.stringify({
               model,
@@ -93,7 +116,11 @@ export function createClaudeProvider(opts?: {
         }
 
         if (!res.ok) {
-          mapHttpError(res.status, `Claude chat failed (HTTP ${res.status}).`);
+          const detail = await readAnthropicError(
+            res,
+            `Claude chat failed (HTTP ${res.status}).`,
+          );
+          mapHttpError(res.status, detail);
         }
 
         const body = (await res.json()) as {

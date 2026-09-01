@@ -19,8 +19,12 @@ export function humanAiError(message: string | undefined, status?: number): stri
   ) {
     return "The Gemini API key is not configured on the server. Ask a Managing Partner to set GEMINI_API_KEY under Settings → AI.";
   }
-  if (m.includes("invalid") && m.includes("key")) {
-    return "The Gemini API key was rejected. Ask a Managing Partner to check GEMINI_API_KEY.";
+  if (
+    m.includes("anthropic-workspace-id") ||
+    m.includes("workspace_id") ||
+    m.includes("identity-linked")
+  ) {
+    return "Anthropic key needs ANTHROPIC_WORKSPACE_ID in Railway (wrkspc_… from Claude Console → Workspaces), or create a single-workspace API key.";
   }
   if (m.includes("rate") || m.includes("429") || status === 429) {
     return "The AI provider is rate-limiting requests. Wait a moment and try again.";

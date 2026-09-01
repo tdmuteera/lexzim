@@ -115,6 +115,13 @@ export async function getAiConnectivityReport(input: {
     else if (code === "rate_limited") connectivity = "rate_limited";
     else if (code === "network_error") connectivity = "unreachable";
 
+    const detail =
+      err instanceof AiProviderError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : messageFor(connectivity, normalized);
+
     const canLegal =
       connectivity !== "missing_key" &&
       connectivity !== "invalid_key" &&
@@ -127,10 +134,8 @@ export async function getAiConnectivityReport(input: {
       probed: true,
       canSendLegalResearch: canLegal,
       canSendMatterAssist: true,
-      sendBlockedReason: canLegal
-        ? null
-        : `${messageFor(connectivity, normalized)} Chat send is disabled until this is fixed.`,
-      message: messageFor(connectivity, normalized),
+      sendBlockedReason: canLegal ? null : detail,
+      message: detail,
     };
   }
 }

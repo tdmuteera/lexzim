@@ -25,6 +25,9 @@ const ENV_KEYS: Record<LlmProviderId, string> = {
   openai: "OPENAI_API_KEY",
 };
 
+/** Required for multi-workspace identity-linked Anthropic keys (wrkspc_…). */
+export const ANTHROPIC_WORKSPACE_ENV = "ANTHROPIC_WORKSPACE_ID";
+
 function vaultSecret(): Buffer {
   const raw =
     process.env.AI_VAULT_SECRET?.trim() ||
@@ -67,6 +70,11 @@ export function decryptByoKey(stored: string): string | null {
 export function getManagedApiKey(provider: LlmProviderId): string | null {
   const key = process.env[ENV_KEYS[provider]]?.trim();
   return key ? key : null;
+}
+
+export function getAnthropicWorkspaceId(): string | null {
+  const id = process.env[ANTHROPIC_WORKSPACE_ENV]?.trim();
+  return id ? id : null;
 }
 
 export async function getByoApiKey(

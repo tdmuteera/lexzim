@@ -96,6 +96,7 @@ type MatterHeader = {
 type AiStatus = {
   keyStatus: "missing" | "present";
   connectivity: AiConnectivityState;
+  connectivityMessage?: string;
   probed: boolean;
   packVersion: string;
   systemChunkCount: number;
@@ -939,6 +940,10 @@ export function LegalResearchChatView() {
                   <span className="ai-chip danger">AI unreachable</span>
                 ) : status.connectivity === "rate_limited" ? (
                   <span className="ai-chip warn">Rate limited</span>
+                ) : status.connectivityMessage ? (
+                  <span className="ai-chip warn" title={status.connectivityMessage}>
+                    AI setup issue
+                  </span>
                 ) : (
                   <span className="ai-chip warn">AI {status.connectivity}</span>
                 )}
@@ -1052,7 +1057,9 @@ export function LegalResearchChatView() {
                 className={`ai-banner ${connBanner.tone === "danger" ? "danger" : "warn"}`}
                 role="status"
               >
-                {connBanner.text}
+                {status?.connectivityMessage && connBanner.tone === "warn"
+                  ? status.connectivityMessage
+                  : connBanner.text}
               </div>
             ) : null}
             {sendBlocked && sendBlockedReason ? (
