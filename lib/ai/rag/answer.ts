@@ -7,7 +7,7 @@ import {
   isSubstantialDocumentDraft,
   maybePackChatDocument,
 } from "@/lib/ai/drafting/maybe-pack";
-import { classifyChatIntent, wantsDocumentExport, wantsExplicitWordFile } from "@/lib/ai/intent";
+import { classifyChatIntent, wantsDocumentExport, wantsExplicitWordFile, isWordExportFollowup } from "@/lib/ai/intent";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
@@ -23,6 +23,7 @@ import {
   createConversation,
   createMessage,
   getConversation,
+  listMessages,
 } from "@/lib/repos/ai-conversations";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
@@ -100,6 +101,20 @@ function estimateChatQuality(
   if (wantDoc || words > 140) return "capable";
   if (intent === "chat") return "budget";
   return "standard";
+}
+
+function loadPriorDocumentDraft(
+  rows: Array<{ role: string; content: string }>,
+): string | null {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const m = rows[i];
+    if (m.role !== "assistant") continue;
+    const content = m.content.trim();
+    if (isSubstantialDocumentDraft(content)) return m.content;
+    if (isPromiseOnlyDraft(content)) continue;
+    if (content.length >= 200) return m.content;
+  }
+  return null;
 }
 
 function priorSubstantialAssistantDraft(
@@ -271,7 +286,13 @@ export async function aiLegalAsk(input: {
     conversationId,
     limit: 12,
   });
-  const priorDraft = priorSubstantialAssistantDraft(history);
+  const threadMessages = await listMessages(input.firmId, conversationId);
+  const priorDraft = loadPriorDocumentDraft(threadMessages);
+  const wordExportFollowup =
+    wantWordFile &&
+    isWordExportFollowup(question) &&
+    priorDraft &&
+    isSubstantialDocumentDraft(priorDraft);
   const packContext = runResearch ? buildKbContext(retrieval) : "";
   const webContextBlock = runResearch ? formatWebLookupBlock(web.hits) : "";
   const attachmentBlock = attachmentContext
@@ -285,6 +306,9 @@ export async function aiLegalAsk(input: {
   let failoverNotice: string | null = null;
   let chatProvider;
 
+  if (wordExportFollowup) {
+    answerText = priorDraft!;
+  } else {
   try {
     const chat = await chatWithProviderFailover(
       input.firmId,
@@ -395,6 +419,7 @@ export async function aiLegalAsk(input: {
       disclaimer: "",
     };
   }
+  }
 
   const document = wantWordFile
     ? await maybePackChatDocument({
@@ -498,7 +523,7 @@ export async function aiLegalAsk(input: {
     firmId: input.firmId,
     userId: input.userId,
     provider: usedProvider,
-    model: usedModel || chatProvider.defaultChatModel,
+    model: usedModel || chatProvider?.defaultChatModel || "export-pack",
     mode: "legal_research",
     success: true,
     latencyMs: retrieval.retrievalMeta.latencyMs + chatLatency,

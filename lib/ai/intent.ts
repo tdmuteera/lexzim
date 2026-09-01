@@ -97,6 +97,19 @@ export function wantsExplicitWordFile(question: string): boolean {
   return false;
 }
 
+/** User wants the prior chat draft exported, not a new document authored. */
+export function isWordExportFollowup(question: string): boolean {
+  if (!wantsExplicitWordFile(question)) return false;
+  const q = question.trim();
+  if (/^(yes|yeah|yep|yup|please|ok|okay|sure)\b/i.test(q)) return true;
+  if (/\b(this|that|it|above|the\s+(draft|document|agreement|letter|same))\b/i.test(q)) {
+    return true;
+  }
+  if (q.length < 90 && /\b(send|download|give|provide|export)\b/i.test(q)) return true;
+  if (/^send\b/i.test(q) && !/\bdraft\b/i.test(q)) return true;
+  return false;
+}
+
 /**
  * House style by default (Trebuchet MS 12pt, 1.5, justified black).
  * Overrides only when the user explicitly names another font/size/spacing.
