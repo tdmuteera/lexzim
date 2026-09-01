@@ -88,6 +88,15 @@ export function wantsDocumentExport(question: string): boolean {
   return isDocumentRequest(question) || classifyChatIntent(question) === "document";
 }
 
+/** Word/docx/download asks only — not plain "draft a letter" without a file/export cue. */
+export function wantsExplicitWordFile(question: string): boolean {
+  const q = question.trim();
+  if (!q) return false;
+  if (DOCUMENT_EXPORT_RE.test(q) || DOC_FOLLOWUP_RE.test(q)) return true;
+  if (FORMAT_RE.test(q) && /\b(word|docx|download|send|file|link)\b/i.test(q)) return true;
+  return false;
+}
+
 /**
  * House style by default (Trebuchet MS 12pt, 1.5, justified black).
  * Overrides only when the user explicitly names another font/size/spacing.

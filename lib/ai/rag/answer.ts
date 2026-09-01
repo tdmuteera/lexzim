@@ -4,9 +4,10 @@ import { chatWithProviderFailover } from "@/lib/ai/chat-router";
 import { loadChatHistory } from "@/lib/ai/chat-history";
 import {
   isPromiseOnlyDraft,
+  isSubstantialDocumentDraft,
   maybePackChatDocument,
 } from "@/lib/ai/drafting/maybe-pack";
-import { classifyChatIntent, wantsDocumentExport } from "@/lib/ai/intent";
+import { classifyChatIntent, wantsDocumentExport, wantsExplicitWordFile } from "@/lib/ai/intent";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
@@ -38,6 +39,7 @@ import type {
 import {
   CHAT_SYSTEM_PROMPT,
   DOCUMENT_PROMPT_ADDENDUM,
+  FORCE_FULL_DRAFT_SYSTEM,
 } from "@/lib/ai/rag/legal-research-prompt";
 
 export const LEGAL_DISCLAIMER = "";
@@ -106,6 +108,7 @@ function priorSubstantialAssistantDraft(
   for (let i = history.length - 1; i >= 0; i -= 1) {
     const m = history[i];
     if (m.role !== "assistant") continue;
+    if (isSubstantialDocumentDraft(m.content)) return m.content;
     if (isPromiseOnlyDraft(m.content)) continue;
     if (m.content.trim().length >= 200) return m.content;
   }
@@ -165,6 +168,7 @@ export async function aiLegalAsk(input: {
 
   const intent = classifyChatIntent(question);
   const wantDoc = wantsDocumentExport(question) || intent === "document";
+  const wantWordFile = wantsExplicitWordFile(question);
   const runResearch = intent === "legal";
   const attachmentContext = input.attachmentContext?.trim() || "";
   const skipUser = Boolean(input.skipCreateUserMessage);
@@ -308,29 +312,57 @@ export async function aiLegalAsk(input: {
     failoverNotice = chat.meta.failoverNotice;
     chatProvider = chat.provider;
 
-    if (wantDoc && isPromiseOnlyDraft(answerText)) {
+    if (wantDoc && !isSubstantialDocumentDraft(answerText)) {
       const forced = await chatWithProviderFailover(
         input.firmId,
         [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: FORCE_FULL_DRAFT_SYSTEM },
           ...history.slice(0, -1),
           ...(priorDraft
             ? [{ role: "assistant" as const, content: priorDraft.slice(0, 8000) }]
             : []),
-          { role: "user", content: question },
+          {
+            role: "user",
+            content: `${question}\n\nOutput the complete document only. No chat preamble.`,
+          },
         ],
         {
-          temperature: 0.3,
+          temperature: 0.2,
           maxOutputTokens: Math.max(4096, maxOutputTokens),
-          quality: "capable",
+          quality: "max",
         },
       );
-      answerText = forced.result.text.trim() || answerText;
       chatLatency += forced.result.latencyMs;
-      usedProvider = forced.meta.usedProvider;
-      usedModel = forced.meta.usedModel;
-      if (forced.meta.failoverNotice) failoverNotice = forced.meta.failoverNotice;
-      chatProvider = forced.provider;
+      const forcedText = forced.result.text.trim();
+      if (isSubstantialDocumentDraft(forcedText)) {
+        answerText = forcedText;
+        usedProvider = forced.meta.usedProvider;
+        usedModel = forced.meta.usedModel;
+        if (forced.meta.failoverNotice) failoverNotice = forced.meta.failoverNotice;
+        chatProvider = forced.provider;
+      } else {
+        const retry = await chatWithProviderFailover(
+          input.firmId,
+          [
+            { role: "system", content: systemPrompt },
+            ...history.slice(0, -1),
+            { role: "user", content: question },
+          ],
+          {
+            temperature: 0.3,
+            maxOutputTokens: Math.max(4096, maxOutputTokens),
+            quality: "max",
+          },
+        );
+        chatLatency += retry.result.latencyMs;
+        const retryText = retry.result.text.trim();
+        if (isSubstantialDocumentDraft(retryText)) answerText = retryText;
+        else if (retryText.length > answerText.length) answerText = retryText;
+        usedProvider = retry.meta.usedProvider;
+        usedModel = retry.meta.usedModel;
+        if (retry.meta.failoverNotice) failoverNotice = retry.meta.failoverNotice;
+        chatProvider = retry.provider;
+      }
     }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
@@ -364,17 +396,19 @@ export async function aiLegalAsk(input: {
     };
   }
 
-  const document = await maybePackChatDocument({
-    firmId: input.firmId,
-    userId: input.userId,
-    question,
-    answerText,
-    attachmentContext,
-    priorDraftText: priorDraft,
-  });
+  const document = wantWordFile
+    ? await maybePackChatDocument({
+        firmId: input.firmId,
+        userId: input.userId,
+        question,
+        answerText,
+        attachmentContext,
+        priorDraftText: priorDraft,
+      })
+    : null;
 
   const finalAnswer =
-    wantDoc && document ? summarizeDocumentForChat(answerText, document) : answerText;
+    wantWordFile && document ? summarizeDocumentForChat(answerText, document) : answerText;
 
   let sourceTiers: SourceTiers = EMPTY_TIERS;
   let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;

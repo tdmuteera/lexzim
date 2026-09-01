@@ -3,7 +3,7 @@ import "server-only";
 import { putAiDraft } from "@/lib/ai/draft-store";
 import { packInstructionDocx } from "@/lib/ai/drafting/instruction-docx";
 import { HOUSE_STYLE_FONT, HOUSE_STYLE_LINE_SPACING } from "@/lib/ai/drafting/house-style";
-import { wantsDocumentExport } from "@/lib/ai/intent";
+import { wantsExplicitWordFile } from "@/lib/ai/intent";
 
 export type PackedChatDocument = {
   id: string;
@@ -31,11 +31,50 @@ export function isPromiseOnlyDraft(text: string): boolean {
   return false;
 }
 
+/** Model obeyed "chat summary only" instead of outputting document body. */
+export function isMetaChatSummary(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (
+    /^(i('|')ve|i have)\s+(drafted|prepared|created|written)\s+(a\s+)?\d*[- ]?page/i.test(t)
+  ) {
+    return true;
+  }
+  if (/formatted in trebuchet|download it below|download below|spacing\)\s*$/im.test(t)) {
+    return true;
+  }
+  if (
+    t.length < 500 &&
+    /\b(i('|')ve|i have)\s+(drafted|prepared|created|written)\b/i.test(t) &&
+    !/\b(whereas|agreement|clause|party|hereinafter|witness)\b/i.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isSubstantialDocumentDraft(text: string): boolean {
+  const t = text.trim();
+  if (!t || isPromiseOnlyDraft(t) || isMetaChatSummary(t)) return false;
+  if (t.length >= 1200) return true;
+  if (t.length < 280) return false;
+  const paragraphs = t.split(/\n\n+/).filter((p) => p.trim().length > 25);
+  const hasStructure =
+    /\b(whereas|agreement|clause|party|hereinafter|witness|dear\s|re:|between)\b/i.test(t);
+  return paragraphs.length >= 3 || (hasStructure && t.length >= 400);
+}
+
 function pickBestDraftBody(answerText: string, priorDraftText?: string | null): string {
   const current = answerText.trim();
   const prior = priorDraftText?.trim() || "";
-  if (current && !isPromiseOnlyDraft(current) && current.length >= 200) return current;
-  if (prior && !isPromiseOnlyDraft(prior) && prior.length >= 200) return prior;
+  if (isSubstantialDocumentDraft(current)) return current;
+  if (isSubstantialDocumentDraft(prior)) return prior;
+  if (current && !isPromiseOnlyDraft(current) && !isMetaChatSummary(current) && current.length >= 200) {
+    return current;
+  }
+  if (prior && !isPromiseOnlyDraft(prior) && !isMetaChatSummary(prior) && prior.length >= 200) {
+    return prior;
+  }
   if (current.length >= prior.length) return current;
   return prior || current;
 }
@@ -61,12 +100,12 @@ export async function maybePackChatDocument(input: {
   const q = input.question;
   const attached = Boolean(input.attachmentContext?.trim());
   const asked =
-    wantsDocumentExport(q) ||
+    wantsExplicitWordFile(q) ||
     (attached && /\b(word|docx|document|letter|convert|times new roman|line spacing)\b/i.test(q));
   if (!asked) return null;
 
   const body = pickBestDraftBody(input.answerText, input.priorDraftText);
-  if (!body.trim()) return null;
+  if (!body.trim() || !isSubstantialDocumentDraft(body)) return null;
 
   try {
     const packed = await packInstructionDocx({
