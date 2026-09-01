@@ -817,15 +817,19 @@ export function AiSettingsPanel() {
               />
             </label>
             <label className="settings-field">
-              <span>Claude BYO</span>
+              <span>Claude BYO (optional override)</span>
               <input
                 className="input"
                 type="password"
                 autoComplete="off"
                 value={byoClaude}
                 onChange={(e) => setByoClaude(e.target.value)}
-                placeholder="Leave blank to keep"
+                placeholder="Leave blank to use Railway ANTHROPIC_API_KEY"
               />
+              <p className="settings-hint">
+                Must be a real API key starting with <code>sk-ant-</code>, not a workspace name.
+                If you pasted the wrong value here, leave blank and Save to clear it.
+              </p>
             </label>
             <label className="settings-field">
               <span>OpenAI BYO</span>

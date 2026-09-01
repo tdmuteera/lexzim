@@ -46,6 +46,11 @@ export async function aiTestProvider(opts: {
     };
   }
 
+  const keyHint =
+    key.source === "byo"
+      ? "Firm BYO key is in use (Settings → AI → Claude BYO). Clear that field and save to use Railway ANTHROPIC_API_KEY."
+      : "Server env key is in use (Railway ANTHROPIC_API_KEY / GEMINI_API_KEY).";
+
   try {
     const result = await provider.chat(
       [{ role: "user", content: "Reply with the single word OK." }],
@@ -68,7 +73,7 @@ export async function aiTestProvider(opts: {
         model,
         latencyMs: 0,
         errorCode: err.code,
-        message: err.message,
+        message: `${err.message} ${keyHint}`,
       };
     }
     return {
