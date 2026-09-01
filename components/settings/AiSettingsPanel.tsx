@@ -21,6 +21,8 @@ type KeyInfo = {
   >;
 };
 
+type ChatModelOption = { id: string; label: string };
+
 type SettingsData = {
   providerDefault: string;
   modelDefault: string;
@@ -104,11 +106,11 @@ export function AiSettingsPanel() {
   } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(null);
   const [lastTestMessage, setLastTestMessage] = useState<string | null>(null);
-  const [providerDefault, setProviderDefault] = useState<ProviderId>("gemini");
-  const [modelDefault, setModelDefault] = useState("gemini-3.6-flash");
+  const [providerDefault, setProviderDefault] = useState<ProviderId>("claude");
+  const [modelDefault, setModelDefault] = useState("claude-sonnet-4-5");
   const [embeddingsModel, setEmbeddingsModel] = useState("gemini-embedding-001");
   const [webLookupEnabled, setWebLookupEnabled] = useState(true);
-  const [routingMode, setRoutingMode] = useState<RoutingMode>("auto");
+  const [routingMode, setRoutingMode] = useState<RoutingMode>("manual");
   const [keyMode, setKeyMode] = useState<"direct" | "proxy">("direct");
   const [monthlySoftBudget, setMonthlySoftBudget] = useState("500");
   const [budgetUnlimited, setBudgetUnlimited] = useState(false);
@@ -128,6 +130,10 @@ export function AiSettingsPanel() {
     ProviderId,
     { chat: string; embeddings: string }
   > | null>(null);
+  const [chatModelCatalog, setChatModelCatalog] = useState<
+    Record<ProviderId, ChatModelOption[]> | null
+  >(null);
+  const [modelPickerMode, setModelPickerMode] = useState<"catalog" | "custom">("catalog");
 
   const loadProxy = useCallback(async () => {
     try {
@@ -171,6 +177,7 @@ export function AiSettingsPanel() {
           settings: SettingsData;
           key: KeyInfo;
           models?: Record<ProviderId, { chat: string; embeddings: string }>;
+          chatModelCatalog?: Record<ProviderId, ChatModelOption[]>;
           help: {
             testing: string;
             production: string;
@@ -191,7 +198,8 @@ export function AiSettingsPanel() {
       setKey(body.data.key);
       setHelp(body.data.help);
       setModels(body.data.models ?? null);
-      applySettingsToForm(body.data.settings);
+      setChatModelCatalog(body.data.chatModelCatalog ?? null);
+      applySettingsToForm(body.data.settings, body.data.chatModelCatalog);
       if (body.data.key.status === "missing") {
         setConnectionStatus("missing");
       }
@@ -223,9 +231,11 @@ export function AiSettingsPanel() {
 
   function onProviderChange(next: ProviderId) {
     setProviderDefault(next);
-    // Only bump the chat model. Keep embeddings as-is so hybrid setups
-    // (e.g. OpenAI chat + Gemini KB vectors) are not wiped on provider switch.
-    if (models?.[next]?.chat) {
+    const catalog = chatModelCatalog?.[next];
+    if (catalog?.[0]?.id) {
+      setModelDefault(catalog[0].id);
+      setModelPickerMode("catalog");
+    } else if (models?.[next]?.chat) {
       setModelDefault(models[next].chat);
     }
   }
@@ -234,12 +244,22 @@ export function AiSettingsPanel() {
     if (!models?.[providerDefault]) return;
     setModelDefault(models[providerDefault].chat);
     setEmbeddingsModel(models[providerDefault].embeddings);
+    const inCatalog = chatModelCatalog?.[providerDefault]?.some(
+      (m) => m.id === models[providerDefault].chat,
+    );
+    setModelPickerMode(inCatalog ? "catalog" : "custom");
   }
 
-  function applySettingsToForm(s: SettingsData) {
-    const p = (s.providerDefault || "gemini") as ProviderId;
+  function applySettingsToForm(
+    s: SettingsData,
+    catalog?: Record<ProviderId, ChatModelOption[]> | null,
+  ) {
+    const p = (s.providerDefault || "claude") as ProviderId;
     setProviderDefault(p === "claude" || p === "openai" ? p : "gemini");
     setModelDefault(s.modelDefault);
+    const cat = catalog ?? chatModelCatalog;
+    const inCatalog = cat?.[p]?.some((m) => m.id === s.modelDefault);
+    setModelPickerMode(inCatalog ? "catalog" : "custom");
     setEmbeddingsModel(s.embeddingsModel);
     setWebLookupEnabled(s.webLookupEnabled);
     setRoutingMode(s.routingMode === "manual" ? "manual" : "auto");
@@ -310,7 +330,7 @@ export function AiSettingsPanel() {
         return;
       }
       setSettings(body.data.settings);
-      applySettingsToForm(body.data.settings);
+      applySettingsToForm(body.data.settings, chatModelCatalog);
       if (body.data.key) setKey(body.data.key);
       setByoGemini("");
       setByoClaude("");
@@ -459,23 +479,23 @@ export function AiSettingsPanel() {
           <h3 className="settings-section-title">Routing & models</h3>
           <div className="settings-fields">
             <label className="settings-field">
-              <span>Routing</span>
+              <span>Routing (firm-wide)</span>
               <select
                 className="input"
                 value={routingMode}
                 onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
               >
-                <option value="auto">
-                  Auto (Legal Research: Claude key → OpenAI key → Gemini)
-                </option>
                 <option value="manual">
-                  Manual: always use Default provider below for chat
+                  Manual: always use Default provider + Chat model for every user
+                </option>
+                <option value="auto">
+                  Auto: use Default when keyed, otherwise fall back Claude → OpenAI → Gemini
                 </option>
               </select>
               <p className="settings-hint">
-                {routingMode === "auto"
-                  ? "Auto mode picks the chat provider from available API keys for Legal Research. Changing Default provider alone does not switch Auto legal chat until you set Manual, or until only that provider’s key is present."
-                  : "Manual mode uses Default provider + chat model for every AI chat."}
+                {routingMode === "manual"
+                  ? "Recommended. The provider and model you save here apply to the whole firm: AI chat, Matter Assist, and tests."
+                  : "Falls back to another provider only when the chosen API key is missing."}
                 {help?.routing ? ` ${help.routing}` : ""}
               </p>
             </label>
@@ -496,31 +516,63 @@ export function AiSettingsPanel() {
             </label>
 
             <label className="settings-field">
-              <span>Default provider (switch here after you paste that provider’s API key)</span>
+              <span>Default provider (firm-wide API)</span>
               <select
                 className="input"
                 value={providerDefault}
                 onChange={(e) => onProviderChange(e.target.value as ProviderId)}
               >
                 {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
-                  <option key={id} value={id}>
+                  <option
+                    key={id}
+                    value={id}
+                    disabled={key != null && key.providers?.[id]?.status !== "present"}
+                  >
                     {PROVIDER_LABELS[id]}
+                    {key?.providers?.[id]?.status === "present"
+                      ? ` (${key.providers[id].source === "server_env" ? "server key" : "BYO"})`
+                      : " (no key)"}
                   </option>
                 ))}
               </select>
+              <p className="settings-hint">
+                Server keys come from <code>ANTHROPIC_API_KEY</code> in .env.local (local) or
+                Railway Variables (production). Paste a BYO key below to override for this firm only.
+              </p>
             </label>
 
             <label className="settings-field">
-              <span>Chat model</span>
-              <input
+              <span>Chat model (firm-wide)</span>
+              <select
                 className="input"
-                value={modelDefault}
-                onChange={(e) => setModelDefault(e.target.value)}
-              />
+                value={modelPickerMode === "catalog" ? modelDefault : "__custom__"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__custom__") {
+                    setModelPickerMode("custom");
+                    return;
+                  }
+                  setModelPickerMode("catalog");
+                  setModelDefault(v);
+                }}
+              >
+                {(chatModelCatalog?.[providerDefault] ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+                <option value="__custom__">Custom model ID…</option>
+              </select>
+              {modelPickerMode === "custom" ? (
+                <input
+                  className="input"
+                  style={{ marginTop: "0.5rem" }}
+                  value={modelDefault}
+                  onChange={(e) => setModelDefault(e.target.value)}
+                  placeholder="Paste exact model ID from the provider"
+                />
+              ) : null}
               <p className="settings-hint">
-                Preferred model first. If OpenAI blocks it or it fails, LexZim
-                tries cheaper OpenAI models, then Gemini. Word/document requests
-                prefer stronger drafting models (mini / 4o) before nano.
+                Every staff member uses this model until you change it and save. Test connection
+                after switching.
               </p>
             </label>
 

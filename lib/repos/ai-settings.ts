@@ -45,11 +45,11 @@ export async function upsertAiSettings(
       .insert(aiSettings)
       .values({
         firmId,
-        providerDefault: input.providerDefault ?? "gemini",
-        modelDefault: input.modelDefault ?? "gemini-3.6-flash",
+        providerDefault: input.providerDefault ?? "claude",
+        modelDefault: input.modelDefault ?? "claude-sonnet-4-5",
         embeddingsModel: input.embeddingsModel ?? "gemini-embedding-001",
         webLookupEnabled: input.webLookupEnabled ?? true,
-        routingMode: input.routingMode ?? "auto",
+        routingMode: input.routingMode ?? "manual",
         monthlySoftBudget:
           input.monthlySoftBudget === undefined ? 500 : input.monthlySoftBudget,
         maxOutputTokens: input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,

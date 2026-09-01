@@ -76,7 +76,7 @@ export async function getAiConnectivityReport(input: {
       probed: false,
       canSendLegalResearch: false,
       canSendMatterAssist: true,
-      sendBlockedReason: `AI key missing for ${normalized}. Legal Research needs a working chat+embed path. Matter Assist can still answer from live matter facts.`,
+      sendBlockedReason: `AI key missing for ${normalized}. Add a key in Settings → AI.`,
       message: messageFor("missing_key", normalized),
     };
   }
@@ -95,14 +95,9 @@ export async function getAiConnectivityReport(input: {
 
   try {
     const provider = await getProvider(input.firmId, { mode: "legal_research" });
-    try {
-      await withAiRetry(() => provider.embed("lexzim connectivity probe", {}));
-    } catch (embedErr) {
-      if (provider.id !== "claude") throw embedErr;
-      await withAiRetry(() =>
-        provider.chat([{ role: "user", content: "ok" }], { maxOutputTokens: 16, temperature: 0 }),
-      );
-    }
+    await withAiRetry(() =>
+      provider.chat([{ role: "user", content: "ok" }], { maxOutputTokens: 16, temperature: 0 }),
+    );
     return {
       ...base,
       connectivity: "ready",
@@ -134,7 +129,7 @@ export async function getAiConnectivityReport(input: {
       canSendMatterAssist: true,
       sendBlockedReason: canLegal
         ? null
-        : `${messageFor(connectivity, normalized)} Legal Research send is disabled until this is fixed. Matter Assist may still use live matter facts.`,
+        : `${messageFor(connectivity, normalized)} Chat send is disabled until this is fixed.`,
       message: messageFor(connectivity, normalized),
     };
   }

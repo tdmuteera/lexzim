@@ -1,12 +1,10 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
-import {
-  DEFAULT_GEMINI_CHAT_MODEL,
-  DEFAULT_GEMINI_EMBEDDINGS_MODEL,
-} from "@/lib/ai/test-provider";
+import { DEFAULT_GEMINI_EMBEDDINGS_MODEL } from "@/lib/ai/test-provider";
+import { CHAT_MODEL_CATALOG } from "@/lib/ai/model-catalog";
 import { publicKeyInfo, setByoApiKey } from "@/lib/ai/secrets";
-import { DEFAULT_MODELS, type LlmProviderId } from "@/lib/ai/types";
+import { CLAUDE_CHAT_MODEL_ID, DEFAULT_MODELS, type LlmProviderId } from "@/lib/ai/types";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   getAiSettings,
@@ -36,11 +34,11 @@ function serializeSettings(
   } | null,
 ) {
   return {
-    providerDefault: row?.providerDefault ?? "gemini",
-    modelDefault: row?.modelDefault ?? DEFAULT_GEMINI_CHAT_MODEL,
+    providerDefault: row?.providerDefault ?? "claude",
+    modelDefault: row?.modelDefault ?? CLAUDE_CHAT_MODEL_ID,
     embeddingsModel: row?.embeddingsModel ?? DEFAULT_GEMINI_EMBEDDINGS_MODEL,
     webLookupEnabled: row?.webLookupEnabled ?? true,
-    routingMode: normalizeRoutingMode(row?.routingMode),
+    routingMode: row ? normalizeRoutingMode(row.routingMode) : "manual",
     monthlySoftBudget: row ? row.monthlySoftBudget : 500,
     maxOutputTokens: row?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     matterContextEnabled: row?.matterContextEnabled ?? true,
@@ -102,19 +100,20 @@ export async function GET(request: Request) {
       settings: serializeSettings(row),
       key,
       models: DEFAULT_MODELS,
+      chatModelCatalog: CHAT_MODEL_CATALOG,
       connectionHint: key.status === "missing" ? "missing" : ("present" as const),
       help: {
         testing:
-          "Managed keys: set GEMINI_API_KEY, ANTHROPIC_API_KEY, and/or OPENAI_API_KEY on the server.",
+          "Managed keys: set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY on the server (.env.local locally, Railway Variables in production).",
         production:
-          "Pilots may use LexZim-managed env keys or firm BYO keys (encrypted per firm).",
+          "Firm-wide: Managing Partner picks provider + model in Settings → AI. All staff use that choice (manual routing). Server env keys are shared; optional BYO keys override per firm.",
         byo: key.byoNote,
         embeddings:
           "Claude has no embeddings API: LexZim falls back to Gemini embeddings when a Gemini key is present. OpenAI embeddings use dimensions=768 to match the database.",
         routing:
-          "Auto Legal Research order: Claude key → OpenAI key → Gemini. To force OpenAI for every chat, set Routing to Manual and Default provider to OpenAI, then Save settings. Embeddings can stay on gemini-embedding-001 while chat uses gpt-4.1.",
+          "Manual (recommended): every AI chat uses Default provider + Chat model below for the whole firm. Auto only falls back to another provider when the chosen key is missing.",
         safety:
-          "Assistive only: lawyers must verify primary sources before relying on answers. There is no correctness guarantee. Web lookup stays off unless enabled and is limited to allowlisted sites (results labelled [UNVERIFIED]). Matter context can be turned off firm-wide.",
+          "Assistive only: verify important answers before relying on them.",
         keyMode:
           "Direct: firm BYO or server managed keys. LexZim Proxy: Firm-edition licence token; master keys stay on the proxy (never in the browser).",
       },
@@ -142,7 +141,7 @@ export async function PATCH(request: Request) {
       byoKeys?: Partial<Record<LlmProviderId, string | null>>;
     };
 
-    const providerDefault = parseProviderId(body.providerDefault ?? "gemini");
+    const providerDefault = parseProviderId(body.providerDefault ?? "claude");
     const defaults = DEFAULT_MODELS[providerDefault];
     const routingMode = parseRoutingMode(body.routingMode);
     const keyMode = parseKeyMode(body.keyMode);

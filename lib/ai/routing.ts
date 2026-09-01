@@ -1,14 +1,12 @@
 import "server-only";
 
 import { resolveProviderApiKey } from "@/lib/ai/secrets";
+import { defaultChatModelForProvider } from "@/lib/ai/model-catalog";
 import {
-  CLAUDE_CHAT_MODEL_ID,
-  GEMINI_CHAT_MODEL_ID,
   GEMINI_EMBEDDINGS_MODEL_ID,
   OPENAI_EMBEDDINGS_MODEL_ID,
   type LlmProviderId,
 } from "@/lib/ai/types";
-import type { AiConversationMode } from "@/lib/db/ai-types";
 import {
   getAiSettings,
   normalizeRoutingMode,
@@ -25,84 +23,83 @@ export type ResolvedAiRoute = {
 };
 
 function normalizeProviderId(raw: string | null | undefined): LlmProviderId {
-  const id = (raw ?? "gemini").trim().toLowerCase();
+  const id = (raw ?? "claude").trim().toLowerCase();
   if (id === "claude" || id === "openai" || id === "gemini") return id;
-  return "gemini";
+  return "claude";
+}
+
+const PROVIDER_FALLBACK_ORDER: LlmProviderId[] = ["claude", "openai", "gemini"];
+
+/** First provider in order with a configured key (BYO or server env). */
+async function resolveAvailableProvider(
+  firmId: string,
+  preferred: LlmProviderId,
+): Promise<{ providerId: LlmProviderId; reason: string }> {
+  const order = [preferred, ...PROVIDER_FALLBACK_ORDER.filter((id) => id !== preferred)];
+  for (const id of order) {
+    const resolved = await resolveProviderApiKey(firmId, id);
+    if (resolved.key) {
+      return {
+        providerId: id,
+        reason: id === preferred ? `preferred_${id}` : `fallback_${id}`,
+      };
+    }
+  }
+  return { providerId: preferred, reason: `missing_${preferred}` };
+}
+
+function embeddingsModelFor(
+  providerId: LlmProviderId,
+  settingsEmbeddings: string | null | undefined,
+): string {
+  if (settingsEmbeddings?.trim()) return settingsEmbeddings.trim();
+  return providerId === "openai" ? OPENAI_EMBEDDINGS_MODEL_ID : GEMINI_EMBEDDINGS_MODEL_ID;
+}
+
+function chatModelForProvider(
+  providerId: LlmProviderId,
+  preferredProvider: LlmProviderId,
+  modelDefault: string | null | undefined,
+): string {
+  const custom = modelDefault?.trim();
+  if (providerId === preferredProvider && custom) return custom;
+  return defaultChatModelForProvider(providerId);
 }
 
 /**
- * Resolve chat provider for a mode.
- * Auto (default): legal_research prefers Claude → OpenAI → Gemini (first key present).
- * Manual: always firm providerDefault + modelDefault.
+ * Resolve chat provider for the whole firm.
+ * Manual: always providerDefault + modelDefault (no provider fallback).
+ * Auto: providerDefault when keyed, else Claude → OpenAI → Gemini.
  */
 export async function resolveAiRoute(
   firmId: string,
-  mode?: AiConversationMode | string | null,
+  _mode?: string | null,
 ): Promise<ResolvedAiRoute> {
   const settings = await getAiSettings(firmId);
   const routingMode = normalizeRoutingMode(settings?.routingMode);
   const providerDefault = normalizeProviderId(settings?.providerDefault);
-  const embeddingsModel =
-    settings?.embeddingsModel?.trim() ||
-    (providerDefault === "openai" ? OPENAI_EMBEDDINGS_MODEL_ID : GEMINI_EMBEDDINGS_MODEL_ID);
+  const embeddingsModel = embeddingsModelFor(providerDefault, settings?.embeddingsModel);
 
   if (routingMode === "manual") {
     return {
       providerId: providerDefault,
-      chatModel: settings?.modelDefault?.trim() || defaultChat(providerDefault),
+      chatModel: chatModelForProvider(
+        providerDefault,
+        providerDefault,
+        settings?.modelDefault,
+      ),
       embeddingsModel,
       routingMode,
-      reason: "manual_provider_default",
+      reason: `manual_${providerDefault}`,
     };
   }
 
-  if (mode === "legal_research") {
-    const claude = await resolveProviderApiKey(firmId, "claude");
-    if (claude.key) {
-      return {
-        providerId: "claude",
-        chatModel: CLAUDE_CHAT_MODEL_ID,
-        embeddingsModel,
-        routingMode,
-        reason: "auto_legal_prefers_claude",
-      };
-    }
-    const openai = await resolveProviderApiKey(firmId, "openai");
-    if (openai.key) {
-      // Prefer firm embeddings model when set (often Gemini pack vectors).
-      const embed =
-        settings?.embeddingsModel?.trim() ||
-        OPENAI_EMBEDDINGS_MODEL_ID;
-      return {
-        providerId: "openai",
-        chatModel: settings?.modelDefault?.trim()?.startsWith("gpt")
-          ? settings.modelDefault.trim()
-          : defaultChat("openai"),
-        embeddingsModel: embed,
-        routingMode,
-        reason: "auto_legal_prefers_openai",
-      };
-    }
-    return {
-      providerId: "gemini",
-      chatModel: GEMINI_CHAT_MODEL_ID,
-      embeddingsModel: settings?.embeddingsModel?.trim() || GEMINI_EMBEDDINGS_MODEL_ID,
-      routingMode,
-      reason: "auto_legal_gemini_fallback",
-    };
-  }
-
+  const { providerId, reason } = await resolveAvailableProvider(firmId, providerDefault);
   return {
-    providerId: providerDefault,
-    chatModel: settings?.modelDefault?.trim() || defaultChat(providerDefault),
+    providerId,
+    chatModel: chatModelForProvider(providerId, providerDefault, settings?.modelDefault),
     embeddingsModel,
     routingMode,
-    reason: "auto_non_legal_provider_default",
+    reason: `auto_${reason}`,
   };
-}
-
-function defaultChat(id: LlmProviderId): string {
-  if (id === "claude") return CLAUDE_CHAT_MODEL_ID;
-  if (id === "openai") return "gpt-4.1";
-  return GEMINI_CHAT_MODEL_ID;
 }

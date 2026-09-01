@@ -18,7 +18,10 @@ import {
 } from "@/lib/ai/types";
 import type { AiConversationMode } from "@/lib/db/ai-types";
 import { assertCanUse } from "@/lib/licensing/policy";
-import { getAiSettings } from "@/lib/repos/ai-settings";
+import {
+  getAiSettings,
+  normalizeRoutingMode,
+} from "@/lib/repos/ai-settings";
 
 function buildDirectProvider(opts: {
   id: LlmProviderId;
@@ -59,6 +62,7 @@ export async function getProvider(
 ): Promise<LlmProvider> {
   const settings = await getAiSettings(firmId);
   const keyMode = settings?.keyMode === "proxy" ? "proxy" : "direct";
+  const routingMode = normalizeRoutingMode(settings?.routingMode);
   const route = await resolveAiRoute(firmId, opts?.mode);
 
   if (keyMode === "proxy") {
@@ -105,9 +109,9 @@ export async function getProvider(
     embedFallback,
   });
 
-  // Preferred OpenAI/Claude chat fails (blocked model / outage) → try Gemini when keyed.
+  // Auto routing only: fall back to Gemini chat when the chosen provider fails.
   const chatFallbacks: LlmProvider[] = [];
-  if (route.providerId !== "gemini") {
+  if (routingMode === "auto" && route.providerId !== "gemini") {
     const geminiResolved = await resolveProviderApiKey(firmId, "gemini");
     if (geminiResolved.key) {
       chatFallbacks.push(

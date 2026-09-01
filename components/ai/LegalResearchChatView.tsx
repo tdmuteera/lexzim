@@ -687,16 +687,10 @@ export function LegalResearchChatView() {
             body.data.exploreSources ??
             body.data.retrievalMeta?.exploreSources ??
             [];
-      const showDisclaimer =
-        mode === "legal_research"
-          ? intent === "legal" ||
-            citations.length > 0 ||
-            grounding === "weak" ||
-            grounding === "unsupported" ||
-            grounding === "strong"
-          : citations.length > 0 ||
-            grounding === "weak" ||
-            grounding === "unsupported";
+      const showDisclaimer = mode === "matter_assist" &&
+        (citations.length > 0 ||
+          grounding === "weak" ||
+          grounding === "unsupported");
       setMessages((prev) => [
         ...prev,
         {
@@ -894,7 +888,6 @@ export function LegalResearchChatView() {
   }
 
   const keyMissing = status?.keyStatus === "missing";
-  const kbEmpty = status != null && status.systemChunkCount === 0;
   const connBanner = connectivityBanner(status?.connectivity);
 
   return (
@@ -1072,12 +1065,6 @@ export function LegalResearchChatView() {
                 {status?.corePracticeNote ?? CORE_PRACTICE_NOTE}
               </div>
             ) : null}
-            {mode === "legal_research" && kbEmpty ? (
-              <div className="ai-banner warn" role="status">
-                The Zimbabwe knowledge pack is empty. Legal answers will still work from general
-                knowledge, with extra caution. Re-ingest under Settings → Knowledge pack when you can.
-              </div>
-            ) : null}
             {mode === "matter_assist" && keyMissing ? (
               <div className="ai-banner warn" role="status">
                 API key missing: Matter Assist still answers from live matter facts. LLM polish and
@@ -1094,7 +1081,7 @@ export function LegalResearchChatView() {
                 </h2>
                 <p>
                   {mode === "legal_research"
-                    ? "Ask anything. For Zimbabwe law, I stay careful and only cite when it helps."
+                    ? "Ask anything. I'm here to help."
                     : "Search for a matter, then ask about it, draft a document, or talk through the file."}
                 </p>
               </div>
@@ -1107,12 +1094,12 @@ export function LegalResearchChatView() {
               >
                 <div className="ai-bubble-head">
                   <strong>{m.role === "user" ? "You" : "LexZim"}</strong>
-                  {m.role === "assistant" && m.researchStatus?.webConsulted ? (
+                  {m.role === "assistant" && mode !== "legal_research" && m.researchStatus?.webConsulted ? (
                     <span className="ai-chip" title="Allowlisted online sources consulted">
                       web consulted
                     </span>
                   ) : null}
-                  {m.role === "assistant" && m.researchStatus?.webUnavailable ? (
+                  {m.role === "assistant" && mode !== "legal_research" && m.researchStatus?.webUnavailable ? (
                     <span className="ai-chip warn" title="Online verification failed">
                       web unavailable
                     </span>
@@ -1181,10 +1168,14 @@ export function LegalResearchChatView() {
                     ) : null}
                   </p>
                 ) : null}
-                {m.role === "assistant" && m.citations && m.citations.length > 0 ? (
+                {mode !== "legal_research" &&
+                m.role === "assistant" &&
+                m.citations &&
+                m.citations.length > 0 ? (
                   <PrimarySourcesBlock messageId={m.id} citations={m.citations} />
                 ) : null}
-                {m.role === "assistant" &&
+                {mode !== "legal_research" &&
+                m.role === "assistant" &&
                 m.supportingSources &&
                 m.supportingSources.length > 0 ? (
                   <SupportingSourcesBlock
@@ -1192,12 +1183,13 @@ export function LegalResearchChatView() {
                     citations={m.supportingSources}
                   />
                 ) : null}
-                {m.role === "assistant" &&
+                {mode !== "legal_research" &&
+                m.role === "assistant" &&
                 m.exploreSources &&
                 m.exploreSources.length > 0 ? (
                   <ExploreSourcesBlock messageId={m.id} sources={m.exploreSources} />
                 ) : null}
-                {m.role === "assistant" && m.showDisclaimer ? (
+                {mode !== "legal_research" && m.role === "assistant" && m.showDisclaimer ? (
                   <p className="ai-disclaimer muted" role="note">
                     {LEGAL_FOOTER_DISCLAIMER}
                   </p>
