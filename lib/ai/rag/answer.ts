@@ -1,12 +1,22 @@
 import "server-only";
 
-import { getProvider } from "@/lib/ai/providers";
+import { chatWithProviderFailover } from "@/lib/ai/chat-router";
 import { loadChatHistory } from "@/lib/ai/chat-history";
 import {
   isPromiseOnlyDraft,
   maybePackChatDocument,
 } from "@/lib/ai/drafting/maybe-pack";
-import { wantsDocumentExport } from "@/lib/ai/intent";
+import { classifyChatIntent, wantsDocumentExport } from "@/lib/ai/intent";
+import {
+  retrieveLegalContext,
+  type RetrieveLegalContextResult,
+} from "@/lib/ai/rag/retrieve";
+import { buildSourcePanel, type SourceCandidate } from "@/lib/ai/rag/source-panel";
+import {
+  formatWebLookupBlock,
+  lookupTrustedWeb,
+  type WebLookupResult,
+} from "@/lib/ai/web/trusted-lookup";
 import type { AiCitation } from "@/lib/db/ai-types";
 import {
   createConversation,
@@ -19,13 +29,16 @@ import {
 } from "@/lib/repos/ai-settings";
 import { recordAiUsageEvent } from "@/lib/repos/ai-usage";
 import { AiProviderError } from "@/lib/ai/errors";
-import { CHAT_SYSTEM_PROMPT } from "@/lib/ai/rag/legal-research-prompt";
 import type { VerifyGrounding } from "@/lib/ai/rag/verify";
 import type {
   ExploreSource,
   ResearchStatus,
   SourceTiers,
 } from "@/lib/ai/citations/tiers";
+import {
+  CHAT_SYSTEM_PROMPT,
+  DOCUMENT_PROMPT_ADDENDUM,
+} from "@/lib/ai/rag/legal-research-prompt";
 
 export const LEGAL_DISCLAIMER = "";
 
@@ -43,7 +56,7 @@ const EMPTY_RESEARCH_STATUS: ResearchStatus = {
   webConsulted: false,
   webUnavailable: false,
   currentnessChecked: false,
-  currentnessUnverified: false,
+  currentnessUnverified: true,
   fabricatedRejected: false,
   verifiedPrimary: false,
 };
@@ -59,16 +72,15 @@ export type LegalAskResult = {
   grounding: VerifyGrounding | "skipped";
   sourceTiers: SourceTiers;
   exploreSources: ExploreSource[];
-  retrievalMeta: {
-    query: string;
-    intent: string;
-    hitCount: number;
-    empty: boolean;
-    emptyReason: string;
+  retrievalMeta: RetrieveLegalContextResult["retrievalMeta"] & {
+    intent?: string;
+    showCitations?: boolean;
     chatLatencyMs?: number;
     grounding?: string;
     researchStatus?: ResearchStatus;
-    showCitations?: boolean;
+    failoverNotice?: string | null;
+    usedProvider?: string;
+    intendedProvider?: string;
   };
   notFound: boolean;
   disclaimer: string;
@@ -77,10 +89,14 @@ export type LegalAskResult = {
 
 type ChatQuality = "budget" | "standard" | "capable" | "max";
 
-function estimateChatQuality(question: string, wantDoc: boolean): ChatQuality {
+function estimateChatQuality(
+  question: string,
+  intent: string,
+  wantDoc: boolean,
+): ChatQuality {
   const words = question.split(/\s+/).filter(Boolean).length;
   if (wantDoc || words > 140) return "capable";
-  if (words <= 8) return "budget";
+  if (intent === "chat") return "budget";
   return "standard";
 }
 
@@ -94,6 +110,13 @@ function priorSubstantialAssistantDraft(
     if (m.content.trim().length >= 200) return m.content;
   }
   return null;
+}
+
+function buildKbContext(retrieval: RetrieveLegalContextResult): string {
+  if (retrieval.hits.length === 0) return "";
+  return retrieval.hits
+    .map((h, i) => `[${i + 1}] ${h.citationLabel}\n${h.text}`)
+    .join("\n\n---\n\n");
 }
 
 function extractDocumentOutline(body: string): string[] {
@@ -126,7 +149,7 @@ function summarizeDocumentForChat(
 }
 
 /**
- * LexZim chat: multi-turn history + LLM reply. No RAG, web lookup, or verify rules.
+ * LexZim legal chat v2: Claude-first failover, web + KB on legal questions, filtered source panels.
  */
 export async function aiLegalAsk(input: {
   firmId: string;
@@ -140,7 +163,9 @@ export async function aiLegalAsk(input: {
   const question = input.question.trim();
   if (!question) throw new Error("question is required");
 
-  const wantDoc = wantsDocumentExport(question);
+  const intent = classifyChatIntent(question);
+  const wantDoc = wantsDocumentExport(question) || intent === "document";
+  const runResearch = intent === "legal";
   const attachmentContext = input.attachmentContext?.trim() || "";
   const skipUser = Boolean(input.skipCreateUserMessage);
 
@@ -184,47 +209,58 @@ export async function aiLegalAsk(input: {
     Math.max(256, settings?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
   );
 
-  const mergeMeta = {
-    query: question,
-    intent: "chat",
-    hitCount: 0,
-    empty: true,
-    emptyReason: "basic_mode",
+  let retrieval: RetrieveLegalContextResult = {
+    hits: [],
+    citations: [],
+    retrievalMeta: {
+      query: question,
+      embeddingsModel: "",
+      topK: 6,
+      candidateK: 12,
+      minSimilarity: 0.42,
+      candidateCount: 0,
+      hitCount: 0,
+      empty: true,
+      emptyReason: runResearch ? "not_attempted" : "skipped_for_chat",
+      latencyMs: 0,
+    },
   };
 
-  let provider;
-  try {
-    provider = await getProvider(input.firmId, { mode: "legal_research" });
-  } catch (err) {
-    const errorCode =
-      err instanceof AiProviderError ? err.code : "provider_error";
-    const fallback =
-      "I cannot reach the language model right now. Check Settings → AI, then try again.";
-    const assistantMessage = await createMessage({
-      firmId: input.firmId,
-      conversationId,
-      role: "assistant",
-      content: fallback,
-      confidence: 0.2,
-      citationsJson: [],
-      retrievalMetaJson: { ...mergeMeta, generatorError: errorCode, grounding: "skipped" },
-    });
-    return {
-      conversationId,
-      userMessageId: userMessage.id,
-      assistantMessageId: assistantMessage.id,
-      answer: fallback,
-      confidence: "low",
-      confidenceScore: 0.2,
-      citations: [],
-      grounding: "skipped",
-      sourceTiers: EMPTY_TIERS,
-      exploreSources: [],
-      retrievalMeta: mergeMeta,
-      notFound: false,
-      disclaimer: "",
-    };
+  let web: WebLookupResult = {
+    enabled: false,
+    attempted: false,
+    hits: [],
+    citations: [],
+    answerText: "",
+    latencyMs: 0,
+  };
+
+  if (runResearch) {
+    try {
+      retrieval = await retrieveLegalContext({
+        firmIdForProvider: input.firmId,
+        query: question,
+      });
+    } catch {
+      /* proceed without KB */
+    }
+
+    try {
+      web = await lookupTrustedWeb({
+        firmId: input.firmId,
+        query: question,
+        enabled: settings?.webLookupEnabled !== false,
+      });
+    } catch {
+      /* proceed without web */
+    }
   }
+
+  const mergeMeta = { ...retrieval.retrievalMeta, intent };
+
+  const systemPrompt = wantDoc
+    ? `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_PROMPT_ADDENDUM}`
+    : CHAT_SYSTEM_PROMPT;
 
   const history = await loadChatHistory({
     firmId: input.firmId,
@@ -232,35 +268,51 @@ export async function aiLegalAsk(input: {
     limit: 12,
   });
   const priorDraft = priorSubstantialAssistantDraft(history);
+  const packContext = runResearch ? buildKbContext(retrieval) : "";
+  const webContextBlock = runResearch ? formatWebLookupBlock(web.hits) : "";
   const attachmentBlock = attachmentContext
     ? `\n\n${attachmentContext.slice(0, 24_000)}`
     : "";
 
   let answerText: string;
   let chatLatency = 0;
+  let usedProvider = "claude";
+  let usedModel = "";
+  let failoverNotice: string | null = null;
+  let chatProvider;
+
   try {
-    const chat = await provider.chat(
+    const chat = await chatWithProviderFailover(
+      input.firmId,
       [
-        { role: "system", content: CHAT_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...history.slice(0, -1),
         {
           role: "user",
-          content: `${question}${attachmentBlock}`,
+          content:
+            `${question}${attachmentBlock}` +
+            (packContext ? `\n\n[Zimbabwe knowledge pack excerpts]\n${packContext}` : "") +
+            (webContextBlock ? `\n\n${webContextBlock}` : ""),
         },
       ],
       {
         temperature: 0.7,
         maxOutputTokens,
-        quality: estimateChatQuality(question, wantDoc),
+        quality: estimateChatQuality(question, intent, wantDoc),
       },
     );
-    answerText = chat.text.trim();
-    chatLatency = chat.latencyMs;
+    answerText = chat.result.text.trim();
+    chatLatency = chat.result.latencyMs;
+    usedProvider = chat.meta.usedProvider;
+    usedModel = chat.meta.usedModel;
+    failoverNotice = chat.meta.failoverNotice;
+    chatProvider = chat.provider;
 
     if (wantDoc && isPromiseOnlyDraft(answerText)) {
-      const forced = await provider.chat(
+      const forced = await chatWithProviderFailover(
+        input.firmId,
         [
-          { role: "system", content: CHAT_SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           ...history.slice(0, -1),
           ...(priorDraft
             ? [{ role: "assistant" as const, content: priorDraft.slice(0, 8000) }]
@@ -273,12 +325,19 @@ export async function aiLegalAsk(input: {
           quality: "capable",
         },
       );
-      answerText = forced.text.trim() || answerText;
-      chatLatency += forced.latencyMs;
+      answerText = forced.result.text.trim() || answerText;
+      chatLatency += forced.result.latencyMs;
+      usedProvider = forced.meta.usedProvider;
+      usedModel = forced.meta.usedModel;
+      if (forced.meta.failoverNotice) failoverNotice = forced.meta.failoverNotice;
+      chatProvider = forced.provider;
     }
   } catch (err) {
     const errorCode = err instanceof AiProviderError ? err.code : "provider_error";
-    const fallback = "The model did not finish that reply. Please try again.";
+    const fallback =
+      err instanceof Error && err.message
+        ? err.message
+        : "The model did not finish that reply. Check Settings → AI and Railway keys.";
     const assistantMessage = await createMessage({
       firmId: input.firmId,
       conversationId,
@@ -287,16 +346,6 @@ export async function aiLegalAsk(input: {
       confidence: 0.2,
       citationsJson: [],
       retrievalMetaJson: { ...mergeMeta, generatorError: errorCode, grounding: "skipped" },
-    });
-    await recordAiUsageEvent({
-      firmId: input.firmId,
-      userId: input.userId,
-      provider: provider.id,
-      model: provider.defaultChatModel,
-      mode: "legal_research",
-      success: false,
-      errorCode,
-      latencyMs: chatLatency,
     });
     return {
       conversationId,
@@ -327,35 +376,98 @@ export async function aiLegalAsk(input: {
   const finalAnswer =
     wantDoc && document ? summarizeDocumentForChat(answerText, document) : answerText;
 
+  let sourceTiers: SourceTiers = EMPTY_TIERS;
+  let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;
+  let showCitations = false;
+  let confidenceScore = 0.9;
+
+  if (runResearch) {
+    const candidates: SourceCandidate[] = [];
+    for (const h of retrieval.hits) {
+      candidates.push({
+        citation: {
+          citationLabel: h.citationLabel,
+          title: h.title,
+          excerpt: h.text.slice(0, 240),
+          sourceUrl: h.sourceUrl,
+          verified: true,
+          sourceKind: "primary",
+        },
+        chunkText: h.text,
+        fromKb: true,
+      });
+    }
+    for (const c of web.citations) {
+      const hit = web.hits.find((w) => w.url === c.sourceUrl);
+      candidates.push({
+        citation: c,
+        chunkText: hit?.snippet ?? c.excerpt,
+        fromKb: false,
+      });
+    }
+
+    const built = buildSourcePanel({
+      question,
+      answer: answerText,
+      candidates,
+      webAttempted: web.attempted,
+      webHitCount: web.hits.length,
+    });
+    sourceTiers = built.tiers;
+    researchStatus = built.researchStatus;
+    showCitations =
+      sourceTiers.primary.length > 0 ||
+      sourceTiers.supporting.length > 0 ||
+      sourceTiers.furtherReading.length > 0;
+    confidenceScore =
+      sourceTiers.primary.length > 0 ? 0.85 : web.hits.length > 0 ? 0.65 : 0.55;
+  }
+
+  const confidenceLabel: ConfidenceLabel =
+    confidenceScore >= 0.75 ? "high" : confidenceScore >= 0.45 ? "medium" : "low";
+  const notFound =
+    runResearch && retrieval.hits.length === 0 && web.hits.length === 0;
+
   const assistantMessage = await createMessage({
     firmId: input.firmId,
     conversationId,
     role: "assistant",
     content: finalAnswer,
-    confidence: 0.9,
-    citationsJson: [],
+    confidence: confidenceScore,
+    citationsJson: showCitations ? sourceTiers.primary : [],
     retrievalMetaJson: {
       ...mergeMeta,
-      confidenceLabel: "high",
+      confidenceLabel,
       chatLatencyMs: chatLatency,
-      showCitations: false,
-      grounding: "skipped",
-      sourceTiers: EMPTY_TIERS,
-      researchStatus: EMPTY_RESEARCH_STATUS,
+      showCitations,
+      grounding: runResearch ? "weak" : "skipped",
+      sourceTiers,
+      researchStatus,
       document,
       wantDoc,
-      notFound: false,
+      notFound,
+      failoverNotice,
+      usedProvider,
+      intendedProvider: "claude",
+      webLookup: {
+        enabled: web.enabled,
+        attempted: web.attempted,
+        hitCount: web.hits.length,
+        errorCode: web.errorCode,
+        message: web.message,
+        latencyMs: web.latencyMs,
+      },
     },
   });
 
   await recordAiUsageEvent({
     firmId: input.firmId,
     userId: input.userId,
-    provider: provider.id,
-    model: provider.defaultChatModel,
+    provider: usedProvider,
+    model: usedModel || chatProvider.defaultChatModel,
     mode: "legal_research",
     success: true,
-    latencyMs: chatLatency,
+    latencyMs: retrieval.retrievalMeta.latencyMs + chatLatency,
   });
 
   return {
@@ -363,20 +475,23 @@ export async function aiLegalAsk(input: {
     userMessageId: userMessage.id,
     assistantMessageId: assistantMessage.id,
     answer: finalAnswer,
-    confidence: "high",
-    confidenceScore: 0.9,
-    citations: [],
-    grounding: "skipped",
-    sourceTiers: EMPTY_TIERS,
-    exploreSources: [],
+    confidence: confidenceLabel,
+    confidenceScore,
+    citations: showCitations ? sourceTiers.primary : [],
+    grounding: runResearch ? "weak" : "skipped",
+    sourceTiers,
+    exploreSources: sourceTiers.furtherReading,
     retrievalMeta: {
       ...mergeMeta,
       chatLatencyMs: chatLatency,
-      showCitations: false,
-      grounding: "skipped",
-      researchStatus: EMPTY_RESEARCH_STATUS,
+      showCitations,
+      grounding: runResearch ? "weak" : "skipped",
+      researchStatus,
+      failoverNotice,
+      usedProvider,
+      intendedProvider: "claude",
     },
-    notFound: false,
+    notFound,
     disclaimer: "",
     document,
   };

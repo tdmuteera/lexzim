@@ -54,6 +54,7 @@ type ChatBubble = {
   grounding?: "strong" | "weak" | "unsupported" | "skipped" | null;
   showDisclaimer?: boolean;
   researchStatus?: ResearchStatus | null;
+  failoverNotice?: string | null;
 };
 
 function researchStatusFromMeta(
@@ -231,7 +232,7 @@ function PrimarySourcesBlock({
   return (
     <div className="ai-citations">
       <div className="ai-citations-head">
-        <div className="label">Primary sources</div>
+        <div className="label">Show sources</div>
         <button
           type="button"
           className="ai-sources-toggle"
@@ -307,7 +308,7 @@ function ExploreSourcesBlock({
   return (
     <div className="ai-citations ai-explore">
       <div className="ai-citations-head">
-        <div className="label">Sources to look into</div>
+        <div className="label">Sources worth looking into</div>
         <button
           type="button"
           className="ai-sources-toggle"
@@ -546,6 +547,10 @@ export function LegalResearchChatView() {
                   ? (m.retrievalMetaJson.document as ChatBubble["document"])
                   : null,
               researchStatus: researchStatusFromMeta(m.retrievalMetaJson),
+              failoverNotice:
+                typeof m.retrievalMetaJson?.failoverNotice === "string"
+                  ? m.retrievalMetaJson.failoverNotice
+                  : null,
             };
           }),
       );
@@ -654,6 +659,7 @@ export function LegalResearchChatView() {
             intent?: string;
             showCitations?: boolean;
             exploreSources?: ExploreSource[];
+            failoverNotice?: string | null;
           };
         };
         error?: { message: string };
@@ -674,20 +680,23 @@ export function LegalResearchChatView() {
         (body.data.retrievalMeta?.grounding as ChatBubble["grounding"]) ??
         null;
       const intent = body.data.retrievalMeta?.intent;
+      const showCitations = body.data.retrievalMeta?.showCitations;
       const tiers = body.data.sourceTiers;
-      const citations =
-        grounding === "skipped" || intent === "chat"
-          ? []
-          : tiers?.primary ?? body.data.citations ?? [];
-      const supportingSources =
-        grounding === "skipped" || intent === "chat" ? [] : tiers?.supporting ?? [];
-      const exploreSources =
-        grounding === "skipped" || intent === "chat"
-          ? []
-          : tiers?.furtherReading ??
-            body.data.exploreSources ??
-            body.data.retrievalMeta?.exploreSources ??
-            [];
+      const hideSources =
+        intent === "chat" ||
+        grounding === "skipped" ||
+        showCitations === false;
+      const citations = hideSources
+        ? []
+        : tiers?.primary ?? body.data.citations ?? [];
+      const supportingSources = hideSources ? [] : tiers?.supporting ?? [];
+      const exploreSources = hideSources
+        ? []
+        : tiers?.furtherReading ??
+          body.data.exploreSources ??
+          body.data.retrievalMeta?.exploreSources ??
+          [];
+      const failoverNotice = body.data.retrievalMeta?.failoverNotice ?? null;
       const showDisclaimer = mode === "matter_assist" &&
         (citations.length > 0 ||
           grounding === "weak" ||
@@ -709,6 +718,7 @@ export function LegalResearchChatView() {
           researchStatus: researchStatusFromMeta(
             (body.data!.retrievalMeta as Record<string, unknown> | undefined) ?? null,
           ),
+          failoverNotice,
         },
       ]);
 
@@ -1101,12 +1111,12 @@ export function LegalResearchChatView() {
               >
                 <div className="ai-bubble-head">
                   <strong>{m.role === "user" ? "You" : "LexZim"}</strong>
-                  {m.role === "assistant" && mode !== "legal_research" && m.researchStatus?.webConsulted ? (
+                  {m.role === "assistant" && m.researchStatus?.webConsulted ? (
                     <span className="ai-chip" title="Allowlisted online sources consulted">
                       web consulted
                     </span>
                   ) : null}
-                  {m.role === "assistant" && mode !== "legal_research" && m.researchStatus?.webUnavailable ? (
+                  {m.role === "assistant" && m.researchStatus?.webUnavailable ? (
                     <span className="ai-chip warn" title="Online verification failed">
                       web unavailable
                     </span>
@@ -1175,14 +1185,15 @@ export function LegalResearchChatView() {
                     ) : null}
                   </p>
                 ) : null}
-                {mode !== "legal_research" &&
-                m.role === "assistant" &&
-                m.citations &&
-                m.citations.length > 0 ? (
+                {m.role === "assistant" && m.failoverNotice ? (
+                  <div className="ai-banner warn" role="status" style={{ marginTop: "0.5rem" }}>
+                    {m.failoverNotice}
+                  </div>
+                ) : null}
+                {m.role === "assistant" && m.citations && m.citations.length > 0 ? (
                   <PrimarySourcesBlock messageId={m.id} citations={m.citations} />
                 ) : null}
-                {mode !== "legal_research" &&
-                m.role === "assistant" &&
+                {m.role === "assistant" &&
                 m.supportingSources &&
                 m.supportingSources.length > 0 ? (
                   <SupportingSourcesBlock
@@ -1190,8 +1201,7 @@ export function LegalResearchChatView() {
                     citations={m.supportingSources}
                   />
                 ) : null}
-                {mode !== "legal_research" &&
-                m.role === "assistant" &&
+                {m.role === "assistant" &&
                 m.exploreSources &&
                 m.exploreSources.length > 0 ? (
                   <ExploreSourcesBlock messageId={m.id} sources={m.exploreSources} />
