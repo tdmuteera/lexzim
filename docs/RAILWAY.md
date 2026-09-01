@@ -47,7 +47,8 @@ Railway → your service → **Variables**. Add at minimum:
 | `AUTH_SECRET` | long random hex |
 | `GEMINI_API_KEY` | Managed AI (embeddings / Gemini chat) |
 | `OPENAI_API_KEY` | Managed AI (Legal Research auto-route when Claude absent) |
-| `ANTHROPIC_API_KEY` | Managed AI (Legal Research prefers Claude when present) |
+| `ANTHROPIC_API_KEY` | Managed AI (firm default when Manual + Claude in Settings) |
+| `DEVELOPER_UNLOCK_PASSWORD` | Optional privileged scripts / developer unlock (server only, never commit) |
 | `PORTAL_ENABLED` | `1` if portal should be on |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_REPLY_TO` | Optional shared email relay. Prefer firm **Settings → Email** BYO SMTP for pilots. Never commit passwords. See `docs/EMAIL.md`. |
 | `EMAIL_MOCK` | `1` for CI / mock transport only (not production) |
