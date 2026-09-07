@@ -1,0 +1,19 @@
+---
+description: Finance and new module UI must match LexZim desk quality
+globs: components/**/*.tsx,styles/**/*.css
+alwaysApply: true
+---
+
+# LexZim UI quality (new panels)
+
+When adding or extending a screen (especially Finance, HR, Workflow):
+
+1. Match an existing desk: `finance-desk-view`, `panel` / `panel-head` / `panel-subtitle`, callout (`finance-desk-callout`), `toolbar`, `data-table`, `EmptyState`, `filter-select`.
+2. Do not ship raw unstyled forms: labels above fields with consistent gap; use a CSS grid (`finance-form-grid` / `quote-form-grid`), not ad-hoc inline stacks.
+3. Errors use a visible banner (e.g. `finance-status-banner-error`), never bare black text.
+4. Module tabs: one underline only (`border-bottom` on `.tab.active`). No second `::after` ink line.
+5. Parse API envelopes as `body.data` (`jsonOk`), not top-level `body.items`.
+6. Cross-link related desks in the panel head and callout.
+7. Mobile: grids collapse; filters wrap; allocation rows stack.
+
+Before marking a prompt done, open the new UI mentally against Trust or Invoicing. If it looks like a prototype dump, fix the interface in the same change.

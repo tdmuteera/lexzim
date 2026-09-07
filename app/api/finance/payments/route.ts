@@ -67,6 +67,16 @@ export async function GET(request: Request) {
       items: items.map(serializeIntakeListItem),
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/relation .* does not exist|undefined_table/i.test(msg)) {
+      return jsonError(
+        new AuthError(
+          "failed",
+          "Payments tables are missing on this database. Run migration 0045_phase11_finance_depth, then refresh.",
+        ),
+        request,
+      );
+    }
     return jsonError(err, request);
   }
 }

@@ -1,0 +1,27 @@
+---
+description: Developer unlock gate for privileged LexZim / DB changes
+alwaysApply: true
+---
+
+# Developer unlock (privileged changes)
+
+Read `developer-authority/AGREEMENT.md` when the user asks for destructive data work, staff/MP deletion, password resets, or other operator overrides.
+
+## Ordinary work
+
+Normal feature coding, refactors, docs, and migrations the user explicitly requested as product work do **not** need unlock.
+
+## Privileged work (stop and ask)
+
+Before hard-deletes, financial wipes, deleting/demoting Managing Partner, force-removing staff, one-off DB rewrites on shared/pilot data, or Auth password resets:
+
+1. Summarise the exact blast radius.
+2. Ask the user for the **developer unlock password**, or explicit confirmation that `DEVELOPER_UNLOCK_PASSWORD` in `.env.local` may be used for **this** action.
+3. Verify via `npm run developer:unlock -- --check` or a `developer:*` script that calls `assertDeveloperUnlock`.
+4. Do not put the password in committed files, rules, docs, or commit messages.
+5. Do not repeat the password in chat summaries after use.
+6. Prefer `scripts/developer-*.ts` over raw SQL.
+
+## Auth passwords
+
+You cannot read plaintext login passwords from the database. With unlock, you may reset a temporary password via admin Auth APIs and tell the developer once.

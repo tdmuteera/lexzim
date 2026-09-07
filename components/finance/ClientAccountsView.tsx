@@ -208,41 +208,50 @@ export function ClientAccountsView() {
   }, [selectedId]);
 
   return (
-    <section className="view active scrollable" aria-label="Client accounts">
+    <section className="view active scrollable finance-desk-view" aria-label="Client accounts">
       <div className="panel">
-        <div className="panel-head" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <h3 style={{ marginRight: "auto" }}>Client accounts</h3>
-          <Link href="/finance/payments" className="btn btn-ghost btn-sm">
-            Payments
-          </Link>
-          <Link href="/finance/trust" className="btn btn-ghost btn-sm">
-            Trust
-          </Link>
-          <Link href="/finance/requisitions" className="btn btn-ghost btn-sm">
-            Requisitions
-          </Link>
-          <Badge tone={visibility === "all" ? "open" : "pending"}>
-            {visibility === "all" ? "All clients (finance)" : "Assigned clients only"}
-          </Badge>
+        <div className="panel-head">
+          <div>
+            <h3>Client accounts</h3>
+            <p className="panel-subtitle muted">Trust · fees · disbursements per client</p>
+          </div>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+            <Link href="/finance/payments" className="btn btn-ghost btn-sm">
+              Payments
+            </Link>
+            <Link href="/finance/trust" className="btn btn-ghost btn-sm">
+              Trust
+            </Link>
+            <Link href="/finance/requisitions" className="btn btn-ghost btn-sm">
+              Requisitions
+            </Link>
+            <Badge tone={visibility === "all" ? "open" : "pending"}>
+              {visibility === "all" ? "All clients (finance)" : "Assigned clients only"}
+            </Badge>
+          </div>
         </div>
         <div className="panel-body">
-          <p style={{ marginTop: 0 }}>
-            Bookkeeper view of each client&apos;s trust balance, fee billing, unbilled
-            disbursements, and payment intakes. Every client can hold a trust balance. Trust
-            money stays separate from firm fee revenue.
-          </p>
+          <div className="finance-desk-callout" role="note">
+            <div className="finance-desk-callout-title">Client money vs firm fees</div>
+            <p>
+              Bookkeeper view of each client&apos;s trust balance, fee billing, unbilled
+              disbursements, and payment intakes. Trust money stays separate from firm fee
+              revenue.
+            </p>
+          </div>
 
           {error ? (
-            <p className="error" role="alert">
+            <div className="finance-status-banner finance-status-banner-error" role="alert">
               {error}
-            </p>
+            </div>
           ) : null}
 
           {!selectedId ? (
             <>
-              <label style={{ display: "block", marginBottom: "0.75rem", maxWidth: 360 }}>
-                Search clients
+              <label className="finance-filter-field" style={{ maxWidth: 360, marginBottom: "0.85rem" }}>
+                <span>Search clients</span>
                 <input
+                  className="filter-select"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Name or client number"
