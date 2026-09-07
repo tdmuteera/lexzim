@@ -38,6 +38,12 @@ import type {
   SourceTiers,
 } from "@/lib/ai/citations/tiers";
 import { formatLongDate } from "@/lib/format/dates";
+import {
+  CHAT_SYSTEM_PROMPT,
+  DOCUMENT_INTAKE_ADDENDUM,
+  FORCE_FULL_DRAFT_SYSTEM,
+  WORD_EXPORT_ADDENDUM,
+} from "@/lib/ai/rag/legal-research-prompt";
 
 export const LEGAL_DISCLAIMER = "";
 
