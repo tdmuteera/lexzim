@@ -2,6 +2,7 @@ import "server-only";
 
 import { putAiDraft } from "@/lib/ai/draft-store";
 import { packInstructionDocx } from "@/lib/ai/drafting/instruction-docx";
+import { draftDisplayTitle } from "@/lib/ai/drafting/draft-file-name";
 import { HOUSE_STYLE_FONT, HOUSE_STYLE_LINE_SPACING } from "@/lib/ai/drafting/house-style";
 import { repairRestartedNumberedLists } from "@/lib/ai/chat-format";
 import {
@@ -40,25 +41,6 @@ function pickBestDraftBody(answerText: string, priorDraftText?: string | null): 
   return prior || current;
 }
 
-function titleFromDraftBody(body: string): string | null {
-  for (const raw of body.replace(/\r\n/g, "\n").split("\n")) {
-    const line = raw.trim().replace(/^#{1,6}\s+/, "").replace(/\*\*/g, "").trim();
-    if (line.length < 8 || line.length > 120) continue;
-    if (/^(whereas|now therefore|signed|between|seller|purchaser|and$|or$)/i.test(line)) continue;
-    if (/^[-_*]{3,}$/.test(line)) continue;
-    if (/^[A-Z0-9]/.test(line)) return line.slice(0, 80);
-  }
-  return null;
-}
-
-function fileTitleFromQuestion(question: string, draftBody?: string | null): string {
-  const fromDraft = draftBody ? titleFromDraftBody(draftBody) : null;
-  if (fromDraft) return fromDraft;
-  const q = question.trim();
-  if (/advisory letter/i.test(q)) return "Client advisory letter";
-  return q.slice(0, 80) || "LexZim draft";
-}
-
 /** Pack a Word file when the user asked for a document or conversion. */
 export async function maybePackChatDocument(input: {
   firmId: string;
@@ -83,11 +65,12 @@ export async function maybePackChatDocument(input: {
 
   try {
     const packed = await packInstructionDocx({
-      title: fileTitleFromQuestion(q, body),
+      title: draftDisplayTitle({ question: q, body }),
       body,
-      question: q.includes("trebuchet") || q.includes("times new roman")
-        ? q
-        : `${q}\n\nUse Trebuchet MS 12pt 1.5 spacing.`,
+      question:
+        q.includes("trebuchet") || q.includes("times new roman")
+          ? q
+          : `${q}\n\nUse Trebuchet MS 12pt 1.5 spacing.`,
     });
     const stored = putAiDraft({
       firmId: input.firmId,

@@ -37,12 +37,7 @@ import type {
   ResearchStatus,
   SourceTiers,
 } from "@/lib/ai/citations/tiers";
-import {
-  CHAT_SYSTEM_PROMPT,
-  DOCUMENT_INTAKE_ADDENDUM,
-  FORCE_FULL_DRAFT_SYSTEM,
-  WORD_EXPORT_ADDENDUM,
-} from "@/lib/ai/rag/legal-research-prompt";
+import { formatLongDate } from "@/lib/format/dates";
 
 export const LEGAL_DISCLAIMER = "";
 
@@ -277,7 +272,7 @@ export async function aiLegalAsk(input: {
 
   let systemPrompt = CHAT_SYSTEM_PROMPT;
   if (wantWordFile && !wordExportFollowup) {
-    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${WORD_EXPORT_ADDENDUM}`;
+    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${WORD_EXPORT_ADDENDUM}\n\nToday's date is ${formatLongDate()}. Use it as the document date unless the user specified another date.`;
   } else if (wantDoc && !wantWordFile) {
     systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_INTAKE_ADDENDUM}`;
   }
@@ -313,7 +308,7 @@ export async function aiLegalAsk(input: {
         },
       ],
       {
-        temperature: 0.7,
+        temperature: wantDoc ? 0.2 : 0.25,
         maxOutputTokens,
         quality: estimateChatQuality(question, intent, wantDoc),
       },
@@ -329,7 +324,7 @@ export async function aiLegalAsk(input: {
       const forced = await chatWithProviderFailover(
         input.firmId,
         [
-          { role: "system", content: FORCE_FULL_DRAFT_SYSTEM },
+          { role: "system", content: `${FORCE_FULL_DRAFT_SYSTEM}\n\nToday's date is ${formatLongDate()}.` },
           ...history.slice(0, -1),
           ...(priorDraft
             ? [{ role: "assistant" as const, content: priorDraft.slice(0, 8000) }]
