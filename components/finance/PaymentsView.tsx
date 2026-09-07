@@ -203,6 +203,9 @@ export function PaymentsView() {
     const payload = data.data ?? data;
     setItems(payload.items ?? []);
     if (Array.isArray(payload.feeCategories)) setFeeCategories(payload.feeCategories);
+    if (payload.migrationNeeded && payload.migrationHint) {
+      setError(String(payload.migrationHint));
+    }
   }, [filterClientId, filterDestination, filterFrom, filterTo]);
 
   const loadLookups = useCallback(async () => {

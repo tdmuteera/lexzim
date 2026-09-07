@@ -16,6 +16,7 @@ import {
   matters,
   trustLedgerEntries,
 } from "@/lib/db/schema";
+import { isMissingRelationError } from "@/lib/db/missing-relation";
 import {
   listFeePayments,
   listInvoices,
@@ -240,8 +241,7 @@ async function intakeCountsByClient(
       map.set(row.clientId, Number(row.count) || 0);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/relation .* does not exist|undefined_table/i.test(msg)) {
+    if (isMissingRelationError(err)) {
       // Migration 0045 not applied yet: treat as zero intakes.
       return map;
     }
@@ -387,13 +387,11 @@ export async function getClientAccountDetail(
         matterId,
         limit: 50,
       }).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/relation .* does not exist|undefined_table/i.test(msg)) return [];
+        if (isMissingRelationError(err)) return [];
         throw err;
       }),
       listRecoverableRequisitions(firmId, { clientId, limit: 50 }).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/relation .* does not exist|undefined_table/i.test(msg)) return [];
+        if (isMissingRelationError(err)) return [];
         throw err;
       }),
     ]);

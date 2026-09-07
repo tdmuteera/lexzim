@@ -4,6 +4,7 @@
  */
 import { jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
+import { isMissingRelationError } from "@/lib/db/missing-relation";
 import {
   buildCommissionMonthReport,
   currentYearMonth,
@@ -29,12 +30,11 @@ export async function GET(request: Request) {
 
     return jsonOk({ report });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/relation .* does not exist|undefined_table/i.test(msg)) {
+    if (isMissingRelationError(err)) {
       return jsonError(
         new AuthError(
           "failed",
-          "Commission settings table is missing on this database. Run migration 0045_phase11_finance_depth, then refresh.",
+          "Commission settings table is missing on this database. Run npm run db:migrate (migration 0045_phase11_finance_depth), then refresh.",
         ),
         request,
       );

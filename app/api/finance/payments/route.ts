@@ -2,6 +2,7 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { dollarsToCents } from "@/lib/billing/money";
+import { isMissingRelationError } from "@/lib/db/missing-relation";
 import {
   FEE_CATEGORIES,
   FEE_CATEGORY_LABELS,
@@ -14,6 +15,9 @@ import {
 } from "@/lib/repos/payment-intakes";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
+
+const MIGRATION_HINT =
+  "Phase 11 Payments tables are missing. Run npm run db:migrate (migration 0045_phase11_finance_depth) on this database, then refresh.";
 
 function serializeIntakeListItem(row: Awaited<ReturnType<typeof listPaymentIntakes>>[number]) {
   return {
@@ -48,15 +52,25 @@ export async function GET(request: Request) {
     const minRaw = url.searchParams.get("minAmount");
     const maxRaw = url.searchParams.get("maxAmount");
 
-    const items = await listPaymentIntakes(firmId, {
-      clientId: url.searchParams.get("clientId")?.trim() || undefined,
-      matterId: url.searchParams.get("matterId")?.trim() || undefined,
-      destination: url.searchParams.get("destination")?.trim() || undefined,
-      from: fromRaw ? new Date(fromRaw) : undefined,
-      to: toRaw ? new Date(toRaw) : undefined,
-      minAmountCents: minRaw ? dollarsToCents(minRaw) ?? undefined : undefined,
-      maxAmountCents: maxRaw ? dollarsToCents(maxRaw) ?? undefined : undefined,
-    });
+    let items: Awaited<ReturnType<typeof listPaymentIntakes>> = [];
+    let migrationNeeded = false;
+    try {
+      items = await listPaymentIntakes(firmId, {
+        clientId: url.searchParams.get("clientId")?.trim() || undefined,
+        matterId: url.searchParams.get("matterId")?.trim() || undefined,
+        destination: url.searchParams.get("destination")?.trim() || undefined,
+        from: fromRaw ? new Date(fromRaw) : undefined,
+        to: toRaw ? new Date(toRaw) : undefined,
+        minAmountCents: minRaw ? dollarsToCents(minRaw) ?? undefined : undefined,
+        maxAmountCents: maxRaw ? dollarsToCents(maxRaw) ?? undefined : undefined,
+      });
+    } catch (err) {
+      if (isMissingRelationError(err)) {
+        migrationNeeded = true;
+      } else {
+        throw err;
+      }
+    }
 
     return jsonOk({
       destinations: PAYMENT_DESTINATIONS,
@@ -65,17 +79,12 @@ export async function GET(request: Request) {
         label: FEE_CATEGORY_LABELS[id],
       })),
       items: items.map(serializeIntakeListItem),
+      migrationNeeded,
+      migrationHint: migrationNeeded ? MIGRATION_HINT : null,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/relation .* does not exist|undefined_table/i.test(msg)) {
-      return jsonError(
-        new AuthError(
-          "failed",
-          "Payments tables are missing on this database. Run migration 0045_phase11_finance_depth, then refresh.",
-        ),
-        request,
-      );
+    if (isMissingRelationError(err)) {
+      return jsonError(new AuthError("failed", MIGRATION_HINT), request);
     }
     return jsonError(err, request);
   }
@@ -137,6 +146,9 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
+    if (isMissingRelationError(err)) {
+      return jsonError(new AuthError("failed", MIGRATION_HINT), request);
+    }
     return jsonError(err, request);
   }
 }
