@@ -107,7 +107,8 @@ export function RequisitionsView() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || "Could not load requisitions.");
-    setItems(data.items ?? []);
+    const payload = data.data ?? data;
+    setItems(payload.items ?? []);
   }, [filterType, filterStatus]);
 
   const loadLookups = useCallback(async () => {
@@ -118,8 +119,9 @@ export function RequisitionsView() {
     ]);
     if (cRes.ok) {
       const data = await cRes.json();
+      const payload = data.data ?? data;
       setClients(
-        (data.items ?? []).map(
+        (payload.items ?? []).map(
           (c: { id: string; displayName?: string; clientNumber?: string }) => ({
             id: c.id,
             label: c.displayName || c.clientNumber || c.id.slice(0, 8),
@@ -129,8 +131,9 @@ export function RequisitionsView() {
     }
     if (mRes.ok) {
       const data = await mRes.json();
+      const payload = data.data ?? data;
       setMatters(
-        (data.items ?? []).map(
+        (payload.items ?? []).map(
           (m: {
             id: string;
             title: string;
@@ -147,8 +150,9 @@ export function RequisitionsView() {
     }
     if (aRes.ok) {
       const data = await aRes.json();
+      const payload = data.data ?? data;
       setAccounts(
-        (data.items ?? [])
+        (payload.items ?? payload.accounts ?? [])
           .filter((a: { isActive?: boolean }) => a.isActive !== false)
           .map((a: { id: string; name: string; accountKind: string }) => ({
             id: a.id,
@@ -193,15 +197,16 @@ export function RequisitionsView() {
       });
       const data = await res.json().catch(() => ({}));
       if (!cancelled && res.ok) {
+        const payload = data.data ?? data;
         setTrustPreview({
-          trustBalanceCents: data.trustBalanceCents ?? null,
-          shortfallCents: data.shortfallCents ?? null,
-          message: data.shortfall?.message ?? data.approvalTier?.reason ?? null,
-          allowFirmFloat: data.shortfall?.allowFirmFloat !== false,
-          blockIfShort: data.shortfall?.blockIfShort === true,
+          trustBalanceCents: payload.trustBalanceCents ?? null,
+          shortfallCents: payload.shortfallCents ?? null,
+          message: payload.shortfall?.message ?? payload.approvalTier?.reason ?? null,
+          allowFirmFloat: payload.shortfall?.allowFirmFloat !== false,
+          blockIfShort: payload.shortfall?.blockIfShort === true,
         });
         const short =
-          data.shortfallCents != null && Number(data.shortfallCents) > 0;
+          payload.shortfallCents != null && Number(payload.shortfallCents) > 0;
         setPayFrom(short ? "firm_float" : "trust");
       }
     })();

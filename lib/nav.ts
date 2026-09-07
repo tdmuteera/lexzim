@@ -104,6 +104,24 @@ export const navSections: NavSection[] = [
         permission: "trust.view",
       },
       {
+        href: "/finance/payments",
+        label: "Payments",
+        icon: "invoice",
+        permission: "finance.payments.view",
+      },
+      {
+        href: "/finance/client-accounts",
+        label: "Client accounts",
+        icon: "list",
+        permission: "finance.view",
+      },
+      {
+        href: "/finance/requisitions",
+        label: "Requisitions",
+        icon: "clipboard",
+        permission: "finance.requisitions.view",
+      },
+      {
         href: "/finance/reconciliations",
         label: "Reconciliations",
         icon: "check",
@@ -120,6 +138,12 @@ export const navSections: NavSection[] = [
         label: "Finance reports",
         icon: "chart",
         permission: "finance.view",
+      },
+      {
+        href: "/finance/commission",
+        label: "Commission",
+        icon: "chart",
+        permission: "finance.commission.view",
       },
     ],
   },

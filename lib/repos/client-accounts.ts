@@ -222,21 +222,30 @@ async function intakeCountsByClient(
   const map = new Map<string, number>();
   if (clientIds.length === 0) return map;
   const db = getDb();
-  const rows = await db
-    .select({
-      clientId: financePaymentIntakes.clientId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(financePaymentIntakes)
-    .where(
-      and(
-        eq(financePaymentIntakes.firmId, firmId),
-        inArray(financePaymentIntakes.clientId, clientIds),
-      ),
-    )
-    .groupBy(financePaymentIntakes.clientId);
-  for (const row of rows) {
-    map.set(row.clientId, Number(row.count) || 0);
+  try {
+    const rows = await db
+      .select({
+        clientId: financePaymentIntakes.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(financePaymentIntakes)
+      .where(
+        and(
+          eq(financePaymentIntakes.firmId, firmId),
+          inArray(financePaymentIntakes.clientId, clientIds),
+        ),
+      )
+      .groupBy(financePaymentIntakes.clientId);
+    for (const row of rows) {
+      map.set(row.clientId, Number(row.count) || 0);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/relation .* does not exist|undefined_table/i.test(msg)) {
+      // Migration 0045 not applied yet: treat as zero intakes.
+      return map;
+    }
+    throw err;
   }
   return map;
 }
@@ -377,8 +386,16 @@ export async function getClientAccountDetail(
         clientId,
         matterId,
         limit: 50,
+      }).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/relation .* does not exist|undefined_table/i.test(msg)) return [];
+        throw err;
       }),
-      listRecoverableRequisitions(firmId, { clientId, limit: 50 }),
+      listRecoverableRequisitions(firmId, { clientId, limit: 50 }).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/relation .* does not exist|undefined_table/i.test(msg)) return [];
+        throw err;
+      }),
     ]);
 
   const clientInvoices = allInvoices.filter(

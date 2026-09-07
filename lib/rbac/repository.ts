@@ -55,6 +55,34 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   set.add("clients.delete");
   set.add("clients.view_all");
   set.add("finance.view_all_client_accounts");
+  set.add("finance.payments.view");
+  set.add("finance.payments.create");
+  set.add("finance.requisitions.view");
+  set.add("finance.requisitions.request");
+  set.add("finance.requisitions.approve");
+  set.add("finance.requisitions.pay");
+  set.add("finance.commission.view");
+  set.add("finance.commission.configure");
+  return [...set];
+}
+
+/**
+ * Anyone with the Finance desk tick also gets Phase 11 money-desk codes so
+ * Payments / Requisitions / Commission tabs appear without a second migration
+ * wait for per-person access rows.
+ */
+function withFinanceDeskPhase11(codes: string[]): string[] {
+  const set = new Set(codes);
+  if (!set.has("finance.view") && !set.has("finance.payments.view")) {
+    return codes;
+  }
+  set.add("finance.payments.view");
+  set.add("finance.payments.create");
+  set.add("finance.requisitions.view");
+  set.add("finance.requisitions.request");
+  set.add("finance.requisitions.approve");
+  set.add("finance.requisitions.pay");
+  set.add("finance.commission.view");
   return [...set];
 }
 
@@ -102,12 +130,14 @@ export async function getEffectivePermissionCodes(input: {
     }
   }
 
+  base = withFinanceDeskPhase11(base);
+
   if (input.includeDelegations === false) return base;
 
   const { listActiveDelegationCapabilities } = await import("@/lib/rbac/delegation");
   const delegated = await listActiveDelegationCapabilities(input.firmId, input.userId);
   if (delegated.length === 0) return base;
-  return [...new Set([...base, ...delegated])];
+  return withFinanceDeskPhase11([...new Set([...base, ...delegated])]);
 }
 
 export async function replaceUserPermissionCodes(input: {

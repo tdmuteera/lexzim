@@ -180,8 +180,9 @@ export function PaymentsView() {
     if (!res.ok) {
       throw new Error(data?.error?.message || "Could not load payments.");
     }
-    setItems(data.items ?? []);
-    if (Array.isArray(data.feeCategories)) setFeeCategories(data.feeCategories);
+    const payload = data.data ?? data;
+    setItems(payload.items ?? []);
+    if (Array.isArray(payload.feeCategories)) setFeeCategories(payload.feeCategories);
   }, [filterClientId, filterDestination, filterFrom, filterTo]);
 
   const loadLookups = useCallback(async () => {
@@ -196,7 +197,8 @@ export function PaymentsView() {
 
     if (clientsRes.ok) {
       const data = await clientsRes.json();
-      const list = (data.items ?? data.clients ?? []) as Array<{
+      const payload = data.data ?? data;
+      const list = (payload.items ?? payload.clients ?? []) as Array<{
         id: string;
         displayName?: string;
         fullName?: string;
@@ -218,7 +220,8 @@ export function PaymentsView() {
 
     if (mattersRes.ok) {
       const data = await mattersRes.json();
-      const list = (data.items ?? data.matters ?? []) as Array<{
+      const payload = data.data ?? data;
+      const list = (payload.items ?? payload.matters ?? []) as Array<{
         id: string;
         title: string;
         matterNumber?: string | null;
@@ -236,7 +239,8 @@ export function PaymentsView() {
 
     if (accountsRes.ok) {
       const data = await accountsRes.json();
-      const list = (data.items ?? data.accounts ?? []) as Array<{
+      const payload = data.data ?? data;
+      const list = (payload.items ?? payload.accounts ?? []) as Array<{
         id: string;
         name: string;
         accountKind: string;
@@ -257,7 +261,8 @@ export function PaymentsView() {
 
     if (invoicesRes?.ok) {
       const data = await invoicesRes.json();
-      const list = (data.items ?? data.invoices ?? []) as Array<{
+      const payload = data.data ?? data;
+      const list = (payload.items ?? payload.invoices ?? []) as Array<{
         id: string;
         invoiceNumber: string;
         status: string;
@@ -350,7 +355,8 @@ export function PaymentsView() {
       if (!res.ok) {
         throw new Error(data?.error?.message || "Could not record payment.");
       }
-      const intakeId = data.intake?.id as string | undefined;
+      const payload = data.data ?? data;
+      const intakeId = payload.intake?.id as string | undefined;
       setFormOpen(false);
       await loadRegister();
       if (intakeId) {

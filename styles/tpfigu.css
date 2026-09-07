@@ -1092,27 +1092,30 @@ input.input:focus, select.input:focus, textarea.input:focus {
 .filter-select { width: auto; min-width: 130px; }
 .toolbar-spacer { flex: 1; }
 .tabs {
-  display: flex; gap: 0.25rem; flex-shrink: 0;
+  display: flex; gap: 0.15rem; flex-shrink: 0; flex-wrap: wrap;
   border-bottom: 1px solid var(--border); padding-bottom: 0;
+  align-items: stretch;
 }
 .tab {
-  padding: 0.55rem 0.95rem; font-size: 0.88rem; color: var(--text-3);
+  padding: 0.55rem 0.9rem; font-size: 0.86rem; color: var(--text-3);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color 0.25s, border-color 0.25s, background 0.25s, transform 0.25s var(--ease);
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
   border-radius: 6px 6px 0 0;
   position: relative;
+  white-space: nowrap;
+  line-height: 1.25;
+  text-decoration: none;
 }
-.tab:hover { color: var(--text-2); background: rgba(160,124,56,0.05); transform: translateY(-1px); }
+.tab:hover { color: var(--text-2); background: rgba(160,124,56,0.05); }
 .tab.active {
-  color: var(--gold-2); border-bottom-color: var(--gold);
-  background: rgba(160,124,56,0.08);
+  color: var(--gold-2);
+  border-bottom-color: var(--gold);
+  background: rgba(160,124,56,0.1);
+  font-weight: 600;
 }
+/* Single underline only (border-bottom). Do not add ::after — it doubled and drifted. */
 .tab.active::after {
-  content: "";
-  position: absolute; left: 18%; right: 18%; bottom: -1px; height: 2px;
-  background: var(--gold);
-  border-radius: 2px;
-  animation: motionInk 0.4s var(--ease) both;
+  content: none;
 }
 .module-with-tabs {
   display: flex;

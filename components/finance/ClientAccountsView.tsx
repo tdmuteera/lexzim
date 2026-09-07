@@ -137,12 +137,17 @@ export function ClientAccountsView() {
     const res = await fetch(`/api/finance/client-accounts?${params}`, {
       credentials: "include",
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data?.error?.message || "Could not load client accounts.");
+    const body = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      data?: { items?: IndexRow[]; visibility?: string };
+      error?: { message?: string };
+    };
+    if (!res.ok || body.ok === false) {
+      throw new Error(body.error?.message || "Could not load client accounts.");
     }
-    setItems(data.items ?? []);
-    setVisibility(data.visibility === "all" ? "all" : "assigned");
+    const payload = body.data ?? (body as unknown as { items?: IndexRow[]; visibility?: string });
+    setItems(payload.items ?? []);
+    setVisibility(payload.visibility === "all" ? "all" : "assigned");
   }, [debouncedQ]);
 
   useEffect(() => {
@@ -177,11 +182,17 @@ export function ClientAccountsView() {
         const res = await fetch(`/api/finance/client-accounts/${selectedId}`, {
           credentials: "include",
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error?.message || "Could not load client account.");
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          data?: { account?: AccountDetail };
+          error?: { message?: string };
+        };
+        if (!res.ok || body.ok === false) {
+          throw new Error(body.error?.message || "Could not load client account.");
         }
-        if (!cancelled) setDetail(data.account ?? null);
+        if (!cancelled) {
+          setDetail(body.data?.account ?? null);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load detail.");
