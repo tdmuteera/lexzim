@@ -12,8 +12,13 @@ export function FirmMoneyCallout() {
         deposits, trust disbursements, or fee invoices here.
       </p>
       <p className="finance-desk-callout-link">
-        <Link href="/finance/trust">Client trust money → Trust</Link>
-        <span className="muted"> · fee invoices → Invoicing</span>
+        <Link href="/finance/requisitions">Requisitions</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/trust">Trust</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/invoicing">Invoicing</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/payments">Payments</Link>
       </p>
     </div>
   );

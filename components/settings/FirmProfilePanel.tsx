@@ -28,6 +28,7 @@ type FirmProfile = {
   invoiceBanking: InvoiceBankingDetails;
   requireInvoiceApproval: boolean;
   requireClearConflict: boolean;
+  blockDisbursementIfTrustShort: boolean;
 };
 
 export function FirmProfilePanel() {
@@ -55,6 +56,8 @@ export function FirmProfilePanel() {
         ...body.data,
         requireInvoiceApproval: body.data.requireInvoiceApproval !== false,
         requireClearConflict: body.data.requireClearConflict !== false,
+        blockDisbursementIfTrustShort:
+          body.data.blockDisbursementIfTrustShort === true,
         invoiceBanking: {
           ...EMPTY_INVOICE_BANKING,
           ...(body.data.invoiceBanking ?? {}),
@@ -98,6 +101,7 @@ export function FirmProfilePanel() {
           invoiceBanking: form.invoiceBanking,
           requireInvoiceApproval: form.requireInvoiceApproval,
           requireClearConflict: form.requireClearConflict,
+          blockDisbursementIfTrustShort: form.blockDisbursementIfTrustShort,
           confirmProfile: true,
         }),
       });
@@ -114,6 +118,8 @@ export function FirmProfilePanel() {
         ...body.data,
         requireInvoiceApproval: body.data.requireInvoiceApproval !== false,
         requireClearConflict: body.data.requireClearConflict !== false,
+        blockDisbursementIfTrustShort:
+          body.data.blockDisbursementIfTrustShort === true,
         invoiceBanking: {
           ...EMPTY_INVOICE_BANKING,
           ...(body.data.invoiceBanking ?? {}),
@@ -245,6 +251,35 @@ export function FirmProfilePanel() {
                   <span className="muted" style={{ display: "block", fontSize: "0.85rem", marginTop: "0.2rem" }}>
                     When on, matter status Open needs a Clear conflict check on the client.
                     Prospective and draft remain allowed without Clear. Default on for pilot.
+                  </span>
+                </span>
+              </label>
+              <label
+                className="settings-field"
+                style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.75rem" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.blockDisbursementIfTrustShort}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      blockDisbursementIfTrustShort: e.target.checked,
+                    })
+                  }
+                  style={{ marginTop: "0.2rem" }}
+                />
+                <span>
+                  <strong style={{ fontWeight: 600 }}>
+                    Block disbursement pay when trust is short
+                  </strong>
+                  <span
+                    className="muted"
+                    style={{ display: "block", fontSize: "0.85rem", marginTop: "0.2rem" }}
+                  >
+                    When on, Finance cannot pay a disbursement requisition from firm float if
+                    client trust is insufficient. When off (default), warn and allow firm float
+                    as recoverable until the client tops up.
                   </span>
                 </span>
               </label>

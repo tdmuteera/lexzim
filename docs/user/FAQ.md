@@ -53,7 +53,11 @@ LexZim is hosted (typically Railway + Supabase).
 
 ## Trust vs fees
 
-Fee notes and fee payments live under **Billing**. Client money lives under **Trust**. They never auto-mix. See `Billing_Trust_Quickstart.md`.
+Fee notes and fee payments live under **Invoicing**. Client money lives under **Trust**. They never auto-mix. For one cash receipt split across trust and fees, use **Finance → Payments**. See `Billing_Trust_Quickstart.md` and `Finance_Phase11_Guide.md`.
+
+## I only see some clients
+
+That is normal. Without `clients.view_all` you only see clients (and matters) you are assigned to. Ask the Managing Partner if you need firm-wide access.
 
 ## Demo or sample data
 

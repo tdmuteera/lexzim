@@ -4,8 +4,8 @@ import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { ClientDetailView } from "@/components/clients/ClientDetailView";
 import { serializeClient } from "@/lib/clients/serialize";
 import { serializeMatter } from "@/lib/matters/serialize";
-import { getClientById } from "@/lib/repos/clients";
-import { canViewAllMatters } from "@/lib/rbac/guards";
+import { getClientById, userCanAccessClient } from "@/lib/repos/clients";
+import { canViewAllClients, canViewAllMatters } from "@/lib/rbac/guards";
 import { getMatterCountsForClient, listFirmLawyers, listMatters } from "@/lib/repos/matters";
 import { requireRouteAccess } from "@/lib/rbac/route-access";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -19,6 +19,14 @@ export default async function ClientDetailPage({ params }: PageProps) {
 
   const row = await getClientById(firmId, id);
   if (!row) notFound();
+
+  const allowed = await userCanAccessClient(
+    firmId,
+    id,
+    session.id,
+    canViewAllClients(session),
+  );
+  if (!allowed) notFound();
 
   const viewAll = canViewAllMatters(session);
   const matterCounts = await getMatterCountsForClient(firmId, id, {

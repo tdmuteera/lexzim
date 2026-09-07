@@ -211,6 +211,8 @@ export type FeePaymentInput = {
   method: string | null;
   reference: string | null;
   notes: string | null;
+  /** When set (e.g. Payments intake PAY-####), reuse that cash-event number instead of allocating RCP-####. */
+  receiptNumber?: string | null;
 };
 
 export function parseCreateInvoiceInput(body: unknown): CreateInvoiceInput {

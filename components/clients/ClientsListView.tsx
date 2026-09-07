@@ -26,6 +26,7 @@ type SerializedClient = {
 
 export function ClientsListView() {
   const [items, setItems] = useState<SerializedClient[]>([]);
+  const [visibility, setVisibility] = useState<"all" | "assigned" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -50,7 +51,7 @@ export function ClientsListView() {
       });
       const body = (await res.json()) as {
         ok?: boolean;
-        data?: { items?: SerializedClient[] };
+        data?: { items?: SerializedClient[]; visibility?: "all" | "assigned" };
         error?: { message: string };
       };
       if (!res.ok || !body.ok) {
@@ -59,6 +60,7 @@ export function ClientsListView() {
         return;
       }
       setItems(body.data?.items ?? []);
+      setVisibility(body.data?.visibility ?? null);
     } catch {
       setError("Could not load clients. Check your connection.");
       setItems([]);
@@ -86,6 +88,13 @@ export function ClientsListView() {
           </Can>
         </div>
         <div className="panel-body">
+          {visibility === "assigned" ? (
+            <p className="muted" style={{ marginTop: 0, fontSize: "0.85rem" }}>
+              Showing assigned clients only: you are the client responsible lawyer, or you are
+              linked through a matter (responsible lawyer or matter team). Managing Partner and
+              users with &quot;View all clients&quot; see the full list.
+            </p>
+          ) : null}
           <div className="toolbar">
             <input
               className="search-input"

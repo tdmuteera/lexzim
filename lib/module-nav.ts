@@ -29,6 +29,21 @@ export const FINANCE_TABS: ModuleTab[] = [
     aliases: ["/trust"],
   },
   {
+    href: "/finance/payments",
+    label: "Payments",
+    permission: "finance.payments.view",
+  },
+  {
+    href: "/finance/client-accounts",
+    label: "Client accounts",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/requisitions",
+    label: "Requisitions",
+    permission: "finance.requisitions.view",
+  },
+  {
     href: "/finance/reconciliations",
     label: "Reconciliations",
     permission: "finance.reconcile",
@@ -42,6 +57,11 @@ export const FINANCE_TABS: ModuleTab[] = [
     href: "/finance/reports",
     label: "Finance reports",
     permission: "finance.view",
+  },
+  {
+    href: "/finance/commission",
+    label: "Commission",
+    permission: "finance.commission.view",
   },
   {
     href: "/finance/quotations",
@@ -85,6 +105,10 @@ export const ROUTE_PERMISSION_RULES: { prefix: string; permission: string }[] = 
   { prefix: "/finance/debtors", permission: "billing.view" },
   { prefix: "/finance/trust", permission: "trust.view" },
   { prefix: "/trust", permission: "trust.view" },
+  { prefix: "/finance/payments", permission: "finance.payments.view" },
+  { prefix: "/finance/client-accounts", permission: "finance.view" },
+  { prefix: "/finance/requisitions", permission: "finance.requisitions.view" },
+  { prefix: "/finance/commission", permission: "finance.commission.view" },
   { prefix: "/finance/reconciliations", permission: "finance.reconcile" },
   { prefix: "/finance/expenses", permission: "finance.view" },
   { prefix: "/finance/reports", permission: "finance.view" },

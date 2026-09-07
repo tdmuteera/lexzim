@@ -1,10 +1,12 @@
-# Finance desk quickstart (Phase 6 + Phase 7 GL)
+# Finance desk quickstart (Phase 6 + Phase 7 GL + Phase 11 depth)
 
-LexZim **Finance** is the practice money desk: fee invoicing, debtors, client trust, reconciliations, firm expenses, business cashbook, quotations, petty cash, creditors, and a **double-entry general ledger**. **Trust and fees stay separate.**
+LexZim **Finance** is the practice money desk: fee invoicing, debtors, client trust, payment intakes, client accounts, requisitions, reconciliations, firm expenses, business cashbook, quotations, petty cash, creditors, lawyer commission, and a **double-entry general ledger**. **Trust and fees stay separate.**
 
-Payroll full statutory (PAYE/NSSA) is **not** in Phase 6 or Phase 7. Phase 10 adds payroll **MVP** and advances under HR. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
+Payroll full statutory (PAYE/NSSA) is **not** in Phase 6 or Phase 7. Phase 10 adds payroll **MVP** and advances under HR. Phase 11 commission is **not** payroll. See Phase 6B handoff (`docs/PHASE6B_PAYROLL_HANDOFF.md`).
 
 Phase 6 deferred a full GL. **Phase 7 supersedes that**: chart of accounts, journals, trial balance, P&L, and balance sheet are live. See `Finance_Phase7_Guide.md` and `docs/PHASE7_ADR.md`.
+
+Phase 11 desk guide: `Finance_Phase11_Guide.md` (Payments, Client accounts, Requisitions, Commission, client visibility).
 
 ## Finance menu map
 
@@ -14,10 +16,14 @@ Phase 6 deferred a full GL. **Phase 7 supersedes that**: chart of accounts, jour
 | Quotations | `/finance/quotations` | Service catalogue, quotes, convert to invoice |
 | Debtors | `/finance/debtors` | Outstanding fee invoices with **due-date ageing** |
 | Trust | `/finance/trust` (alias `/trust`) | Client trust ledgers, vault, statements, reference numbers |
+| Payments | `/finance/payments` | Money in + split across trust / fees / disbursement float (one receipt) |
+| Client accounts | `/finance/client-accounts` | Bookkeeper view: trust, fees, disbursements, intakes per client |
+| Requisitions | `/finance/requisitions` | Business (→ Expenses) or Disbursement (→ matter / trust) |
 | Reconciliations | `/finance/reconciliations` | Trust three-way and business bank recon |
 | Expenses & cashbook | `/finance/expenses` | Firm operating costs and business bank cashbook |
 | Petty cash | `/finance/petty-cash` | Float, vault transfers, spends |
 | Creditors | `/finance/creditors` | Supplier bills, payments, AP ageing |
+| Commission | `/finance/commission` | Fee collection target and % above target (not payroll) |
 | General ledger | `/finance/gl` | COA, journals, trial balance, P&L, balance sheet |
 | Finance reports | `/finance/reports` | Weekly pack, monthly close, cash P&L, KPIs |
 
@@ -95,6 +101,10 @@ CSV export on weekly and monthly packs. GL statements export as PDF, Word, and E
 | `finance.close_month` | Lock accounting period |
 | `finance.gl.view` / `finance.gl.post` | Chart of accounts, journals, financial statements |
 | `finance.quote.manage` | Quotations and service catalogue |
+| `finance.payments.view` / `create` | Payments register and intakes |
+| `finance.requisitions.*` | Requisitions view / request / approve / pay |
+| `finance.commission.view` / `configure` | Commission panel and target/% |
+| `clients.view_all` / `finance.view_all_client_accounts` | Firm-wide clients / client accounts |
 
 Accounts and Managing Partner usually hold finance permissions. Lawyers typically see matters and documents without full finance menus.
 
@@ -106,6 +116,7 @@ See `HR_Quickstart.md`.
 
 ## Related docs
 
+- `Finance_Phase11_Guide.md` (Payments, Client accounts, Requisitions, Commission)
 - `Billing_Trust_Quickstart.md`
 - `Finance_Trust_Quickstart.md`
 - `Finance_Trust_Recon_SOP.md`

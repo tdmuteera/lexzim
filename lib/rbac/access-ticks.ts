@@ -16,6 +16,7 @@ export type AccessTick = {
 export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "dashboard.view": ["dashboard.view"],
   "clients.view": ["clients.view", "clients.create", "clients.edit"],
+  "clients.view_all": ["clients.view_all"],
   "clients.kyc.manage": ["clients.kyc.manage"],
   "clients.delete": ["clients.delete"],
   "matters.view": ["matters.view", "matters.create", "matters.edit", "matters.view_all"],
@@ -31,6 +32,7 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "trust.view": ["trust.view"],
   "finance.reconcile": ["finance.reconcile"],
   "finance.view": ["finance.view", "finance.post", "finance.gl.view"],
+  "finance.view_all_client_accounts": ["finance.view_all_client_accounts"],
   "hr.view": ["hr.view", "hr.manage"],
   "users.manage": ["users.manage"],
   "reports.view": ["reports.view"],
@@ -40,6 +42,12 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
 };
 
 const EXTRA_ACCESS_TICKS: AccessTick[] = [
+  {
+    code: "clients.view_all",
+    section: "Practice",
+    label: "View all clients",
+    hint: "See every firm client. Without this tick, users only see clients they are responsible for or linked to via a matter team.",
+  },
   {
     code: "clients.delete",
     section: "Practice",
@@ -51,6 +59,12 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     section: "Practice",
     label: "Manage client KYC",
     hint: "View and edit KYC / AML fields. Finance can invoice without this.",
+  },
+  {
+    code: "finance.view_all_client_accounts",
+    section: "Finance",
+    label: "All client finance accounts",
+    hint: "Open trust and fee accounts for every client (bookkeeper / office manager).",
   },
 ];
 

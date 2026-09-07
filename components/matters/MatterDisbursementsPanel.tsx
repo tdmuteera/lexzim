@@ -351,7 +351,7 @@ export function MatterDisbursementsPanel({ matterId }: MatterDisbursementsPanelP
       {!loading && visible.length === 0 ? (
         <EmptyState
           title="No disbursements"
-          detail="Record filing fees, courier, and other recoverable costs here."
+          detail="Record filing fees, courier, and other recoverable costs here. Paid disbursement requisitions also appear on this matter."
         />
       ) : (
         <table className="data">

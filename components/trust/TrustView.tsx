@@ -424,16 +424,22 @@ export function TrustView() {
             <h3>Trust</h3>
             <p className="panel-subtitle muted">Client money · not fee revenue</p>
           </div>
-          <Can permission="trust.manage">
-            <div style={{ display: "flex", gap: "0.35rem" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+            <Link href="/finance/payments" className="btn btn-ghost btn-sm">
+              Payments
+            </Link>
+            <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
+              Client accounts
+            </Link>
+            <Can permission="trust.manage">
               <Button size="sm" variant="outline" onClick={() => setNewAccountOpen(true)}>
                 New account
               </Button>
               <Button size="sm" onClick={() => setPostOpen(true)}>
                 Post entry
               </Button>
-            </div>
-          </Can>
+            </Can>
+          </div>
         </div>
         <div className="panel-body">
           <TrustMoneyCallout />

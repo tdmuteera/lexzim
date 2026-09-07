@@ -40,6 +40,29 @@ export function canViewAllMatters(
 }
 
 /**
+ * Phase 11: whether user may see all firm clients (not only assigned).
+ * Managing Partner always can; others need clients.view_all.
+ */
+export function canViewAllClients(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.role.code === "managing_partner") return true;
+  return hasPermission(user, "clients.view_all");
+}
+
+/**
+ * Phase 11: finance override for client money / Client accounts views.
+ */
+export function canViewAllClientAccounts(
+  user: AuthSessionUser | ClientAuthSession | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.role.code === "managing_partner") return true;
+  return hasPermission(user, "finance.view_all_client_accounts");
+}
+
+/**
  * Client name lookup for invoicing / quotations without full KYC registry access.
  * Full Clients module still requires clients.view.
  */

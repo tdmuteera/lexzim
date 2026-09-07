@@ -316,6 +316,13 @@
       "when": 1788003000000,
       "tag": "0044_ai_web_lookup_default_on",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0045_phase11_finance_depth",
+      "breakpoints": true
     }
   ]
 }

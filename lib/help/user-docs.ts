@@ -9,6 +9,7 @@ export type UserDocSlug =
   | "crm"
   | "finance"
   | "finance-gl"
+  | "finance-depth"
   | "billing"
   | "email"
   | "security"
@@ -76,6 +77,14 @@ export const USER_DOCS: UserDocMeta[] = [
     summary: "Service quotes, trial balance, AP bills, and petty cash float.",
     fileName: "Finance_Phase7_Guide.md",
     appHref: "/finance/quotations",
+  },
+  {
+    slug: "finance-depth",
+    title: "Payments, client accounts, requisitions, commission",
+    summary:
+      "Split payment intakes, client finance accounts, business vs disbursement requisitions, and lawyer commission.",
+    fileName: "Finance_Phase11_Guide.md",
+    appHref: "/finance/payments",
   },
   {
     slug: "billing",

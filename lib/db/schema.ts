@@ -2434,6 +2434,172 @@ export const diagnosticRepairActions = pgTable(
   ],
 );
 
+/**
+ * Phase 11: payment intake (cash event). Orchestrates trust and fee postings; does not merge ledgers.
+ * destination: trust_bank | trust_vault | fee_bank
+ */
+export const financePaymentIntakes = pgTable(
+  "finance_payment_intakes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    /** trust_bank | trust_vault | fee_bank */
+    destination: text("destination").notNull(),
+    method: text("method"),
+    reference: text("reference"),
+    receiptNumber: text("receipt_number"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_payment_intakes_firm_id_idx").on(t.firmId),
+    index("finance_payment_intakes_client_id_idx").on(t.clientId),
+    index("finance_payment_intakes_matter_id_idx").on(t.matterId),
+    index("finance_payment_intakes_firm_received_idx").on(t.firmId, t.receivedAt),
+  ],
+);
+
+/**
+ * Split lines for a payment intake.
+ * lineType: trust_hold | fee_revenue | disbursement_float
+ * feeCategory used when lineType = fee_revenue
+ */
+export const financePaymentAllocationLines = pgTable(
+  "finance_payment_allocation_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    intakeId: uuid("intake_id")
+      .notNull()
+      .references(() => financePaymentIntakes.id, { onDelete: "cascade" }),
+    /** trust_hold | fee_revenue | disbursement_float */
+    lineType: text("line_type").notNull(),
+    /** consultation | drafting | due_diligence | notarial | appearances | communications | correspondence | conveyancing | administration | other_fee */
+    feeCategory: text("fee_category"),
+    amountCents: integer("amount_cents").notNull(),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_payment_alloc_firm_id_idx").on(t.firmId),
+    index("finance_payment_alloc_intake_id_idx").on(t.intakeId),
+  ],
+);
+
+/**
+ * Business or disbursement fund requests (Phase 11).
+ * type: business | disbursement
+ * status: draft | pending_approval | approved | rejected | paid | cancelled
+ * paidFrom: trust | firm_float | operating
+ */
+export const financeRequisitions = pgTable(
+  "finance_requisitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    /** business | disbursement */
+    type: text("type").notNull(),
+    /** draft | pending_approval | approved | rejected | paid | cancelled */
+    status: text("status").notNull().default("draft"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "restrict" }),
+    nature: text("nature"),
+    description: text("description").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    rejectedBy: uuid("rejected_by").references(() => users.id, { onDelete: "set null" }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectionNote: text("rejection_note"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidBy: uuid("paid_by").references(() => users.id, { onDelete: "set null" }),
+    paymentRef: text("payment_ref"),
+    /** trust | firm_float | operating */
+    paidFrom: text("paid_from"),
+    recoverable: boolean("recoverable").notNull().default(false),
+    expenseId: uuid("expense_id").references(() => firmExpenses.id, { onDelete: "set null" }),
+    disbursementId: uuid("disbursement_id").references(() => disbursements.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_requisitions_firm_id_idx").on(t.firmId),
+    index("finance_requisitions_firm_status_idx").on(t.firmId, t.status),
+    index("finance_requisitions_client_id_idx").on(t.clientId),
+    index("finance_requisitions_matter_id_idx").on(t.matterId),
+  ],
+);
+
+/** Staff outbound communication email (may differ from login email). */
+export const staffCommunicationEmails = pgTable(
+  "staff_communication_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("staff_comm_emails_firm_user_idx").on(t.firmId, t.userId),
+    unique("staff_comm_emails_firm_user_email_uidx").on(t.firmId, t.userId, t.email),
+  ],
+);
+
+/**
+ * Lawyer commission settings (not payroll).
+ * One current row per firm is enough for v1; changes are audited in app layer.
+ */
+export const financeCommissionSettings = pgTable(
+  "finance_commission_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    monthlyTargetCents: integer("monthly_target_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    /** Percent of collected fee revenue above target (e.g. 25). */
+    commissionPercentAboveTarget: real("commission_percent_above_target").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_commission_settings_firm_id_idx").on(t.firmId),
+    index("finance_commission_settings_firm_effective_idx").on(t.firmId, t.effectiveFrom),
+  ],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -2520,4 +2686,9 @@ export const schema = {
   diagnosticSpans,
   diagnosticDiagnoses,
   diagnosticRepairActions,
+  financePaymentIntakes,
+  financePaymentAllocationLines,
+  financeRequisitions,
+  staffCommunicationEmails,
+  financeCommissionSettings,
 };

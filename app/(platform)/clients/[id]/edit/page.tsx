@@ -5,8 +5,8 @@ import { ClientForm } from "@/components/clients/ClientForm";
 import { AuthError } from "@/lib/auth/types";
 import { toClientKycFormValues } from "@/lib/clients/kyc-form-values";
 import { serializeClient } from "@/lib/clients/serialize";
-import { getClientById } from "@/lib/repos/clients";
-import { requirePermission } from "@/lib/rbac/guards";
+import { getClientById, userCanAccessClient } from "@/lib/repos/clients";
+import { canViewAllClients, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -27,6 +27,14 @@ export default async function EditClientPage({ params }: PageProps) {
 
   const row = await getClientById(firmId, id);
   if (!row) notFound();
+
+  const allowed = await userCanAccessClient(
+    firmId,
+    id,
+    session.id,
+    canViewAllClients(session),
+  );
+  if (!allowed) notFound();
 
   const client = serializeClient(row);
 

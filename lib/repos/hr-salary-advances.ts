@@ -276,31 +276,21 @@ export async function notifyAdvanceApprovers(input: {
   const href = "/hr/advances";
   const title = `Salary advance from ${input.employeeName}`;
   const body = "Please review and decide. Approval of salary advances is discretionary.";
-  if (targets.length === 0) {
-    await createStaffNotification({
-      firmId: input.firmId,
-      userId: null,
+  const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
+  await notifyStaffEvent({
+    firmId: input.firmId,
+    userIds: targets,
+    subject: `LexZim: ${title}`,
+    body,
+    inApp: {
       type: "advance.approval_pending",
       title,
       body,
       href,
       metadata: { advanceId: input.advanceId },
-    });
-    return;
-  }
-  await Promise.all(
-    targets.map((userId) =>
-      createStaffNotification({
-        firmId: input.firmId,
-        userId,
-        type: "advance.approval_pending",
-        title,
-        body,
-        href,
-        metadata: { advanceId: input.advanceId },
-      }),
-    ),
-  );
+    },
+    broadcastInAppIfEmpty: true,
+  });
 }
 
 export async function notifyAdvanceCreator(input: {

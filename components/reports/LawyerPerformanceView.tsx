@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { AnimatedBarChart } from "@/components/dashboard/DashboardCharts";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,15 @@ type PerformanceRow = {
   lawyerName: string;
   openMatters: number;
   collectedCents: number;
+};
+
+type CommissionRow = {
+  lawyerId: string | null;
+  collectedCents: number;
+  monthlyTargetCents: number;
+  remainingToTargetCents: number;
+  aboveTargetCents: number;
+  commissionDueCents: number;
 };
 
 type GlCheck = {
@@ -44,10 +54,26 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** When from/to fall in the same calendar month, return YYYY-MM for commission overlay. */
+function sameCalendarMonth(fromDate: string, toDate: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    return null;
+  }
+  const fm = fromDate.slice(0, 7);
+  const tm = toDate.slice(0, 7);
+  return fm === tm ? fm : null;
+}
+
 export function LawyerPerformanceView() {
+  const { can } = useAuth();
+  const canViewCommission = can("finance.commission.view");
   const [from, setFrom] = useState(yearStart);
   const [to, setTo] = useState(today);
   const [report, setReport] = useState<Report | null>(null);
+  const [commissionByLawyer, setCommissionByLawyer] = useState<Map<string, CommissionRow> | null>(
+    null,
+  );
+  const [commissionMonth, setCommissionMonth] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,16 +95,47 @@ export function LawyerPerformanceView() {
       if (!res.ok || !body.ok || !body.data) {
         setError(body.error?.message ?? "Could not load lawyer performance.");
         setReport(null);
+        setCommissionByLawyer(null);
+        setCommissionMonth(null);
         return;
       }
       setReport(body.data.report);
+
+      const monthKey = canViewCommission ? sameCalendarMonth(from, to) : null;
+      setCommissionMonth(monthKey);
+      if (monthKey) {
+        const cRes = await fetch(`/api/finance/commission?month=${encodeURIComponent(monthKey)}`, {
+          credentials: "include",
+        });
+        const cBody = (await cRes.json()) as {
+          ok: boolean;
+          data?: {
+            report: {
+              configured: boolean;
+              rows: CommissionRow[];
+            };
+          };
+        };
+        if (cRes.ok && cBody.ok && cBody.data?.report.configured) {
+          const map = new Map<string, CommissionRow>();
+          for (const row of cBody.data.report.rows) {
+            map.set(row.lawyerId ?? "unassigned", row);
+          }
+          setCommissionByLawyer(map);
+        } else {
+          setCommissionByLawyer(null);
+        }
+      } else {
+        setCommissionByLawyer(null);
+      }
     } catch {
       setError("Could not load lawyer performance.");
       setReport(null);
+      setCommissionByLawyer(null);
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [canViewCommission, from, to]);
 
   useEffect(() => {
     void load();
@@ -121,6 +178,11 @@ export function LawyerPerformanceView() {
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {canViewCommission ? (
+              <Link href="/finance/commission" className="btn btn-ghost btn-sm">
+                Commission
+              </Link>
+            ) : null}
             <Link href="/reports" className="btn btn-ghost btn-sm">
               All reports
             </Link>
@@ -159,6 +221,19 @@ export function LawyerPerformanceView() {
               <p className="muted" style={{ fontSize: "0.8rem", maxWidth: "52rem" }}>
                 {report.attributionPolicy}{" "}
                 {report.viewAll ? "Showing the firm." : "Showing your matters only."}
+                {canViewCommission && commissionMonth && commissionByLawyer ? (
+                  <>
+                    {" "}
+                    Commission columns use the monthly target for {commissionMonth} (same formula as
+                    Finance → Commission).
+                  </>
+                ) : canViewCommission && !commissionMonth ? (
+                  <>
+                    {" "}
+                    Set From and To to the same calendar month to overlay commission due, or open{" "}
+                    <Link href="/finance/commission">Finance → Commission</Link>.
+                  </>
+                ) : null}
               </p>
 
               <div
@@ -238,16 +313,45 @@ export function LawyerPerformanceView() {
                       <th>Lawyer</th>
                       <th>Open matters</th>
                       <th>Fees collected</th>
+                      {commissionByLawyer ? (
+                        <>
+                          <th>Remaining to target</th>
+                          <th>Above target</th>
+                          <th>Commission due</th>
+                        </>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
-                    {report.rows.map((r) => (
-                      <tr key={r.lawyerId ?? "unassigned"}>
-                        <td>{r.lawyerName}</td>
-                        <td>{r.openMatters}</td>
-                        <td>{centsToDisplay(r.collectedCents, currency)}</td>
-                      </tr>
-                    ))}
+                    {report.rows.map((r) => {
+                      const c = commissionByLawyer?.get(r.lawyerId ?? "unassigned");
+                      return (
+                        <tr key={r.lawyerId ?? "unassigned"}>
+                          <td>{r.lawyerName}</td>
+                          <td>{r.openMatters}</td>
+                          <td>{centsToDisplay(r.collectedCents, currency)}</td>
+                          {commissionByLawyer ? (
+                            <>
+                              <td>
+                                {c
+                                  ? centsToDisplay(c.remainingToTargetCents, currency)
+                                  : centsToDisplay(0, currency)}
+                              </td>
+                              <td>
+                                {c
+                                  ? centsToDisplay(c.aboveTargetCents, currency)
+                                  : centsToDisplay(0, currency)}
+                              </td>
+                              <td>
+                                {c
+                                  ? centsToDisplay(c.commissionDueCents, currency)
+                                  : centsToDisplay(0, currency)}
+                              </td>
+                            </>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
                     <tr>
                       <td>
                         <strong>Total</strong>
@@ -258,6 +362,13 @@ export function LawyerPerformanceView() {
                       <td>
                         <strong>{centsToDisplay(report.totals.collectedCents, currency)}</strong>
                       </td>
+                      {commissionByLawyer ? (
+                        <>
+                          <td colSpan={3} className="muted" style={{ fontSize: "0.8rem" }}>
+                            Target and commission are per lawyer (see Finance → Commission).
+                          </td>
+                        </>
+                      ) : null}
                     </tr>
                   </tbody>
                 </table>

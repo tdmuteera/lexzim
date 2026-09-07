@@ -53,6 +53,8 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   set.add("users.manage");
   set.add("dashboard.view");
   set.add("clients.delete");
+  set.add("clients.view_all");
+  set.add("finance.view_all_client_accounts");
   return [...set];
 }
 
@@ -131,6 +133,12 @@ export async function replaceUserPermissionCodes(input: {
   }
   if (isProtectedMp && !unique.includes("clients.delete")) {
     unique.push("clients.delete");
+  }
+  if (isProtectedMp && !unique.includes("clients.view_all")) {
+    unique.push("clients.view_all");
+  }
+  if (isProtectedMp && !unique.includes("finance.view_all_client_accounts")) {
+    unique.push("finance.view_all_client_accounts");
   }
 
   const db = getDb();

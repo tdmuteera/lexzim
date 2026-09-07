@@ -8,6 +8,7 @@ type ProfileData = {
   fullName: string;
   email: string;
   jobTitle: string | null;
+  communicationEmail?: string | null;
 };
 
 export function UserProfilePanel() {
@@ -20,6 +21,7 @@ export function UserProfilePanel() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [communicationEmail, setCommunicationEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -43,6 +45,9 @@ export function UserProfilePanel() {
       setFullName(body.data.profile.fullName);
       setEmail(body.data.profile.email);
       setJobTitle(body.data.profile.jobTitle ?? "");
+      setCommunicationEmail(
+        body.data.profile.communicationEmail ?? body.data.profile.email ?? "",
+      );
     } catch {
       setError("Could not load your profile.");
     } finally {
@@ -67,6 +72,7 @@ export function UserProfilePanel() {
           fullName,
           email,
           jobTitle: jobTitle.trim() || null,
+          communicationEmail: communicationEmail.trim() || null,
         }),
       });
       const body = (await res.json()) as {
@@ -165,6 +171,20 @@ export function UserProfilePanel() {
             disabled={loading || saving}
           />
         </label>
+        <label>
+          <span className="muted">Communication email (tasks / approvals)</span>
+          <input
+            type="email"
+            value={communicationEmail}
+            onChange={(e) => setCommunicationEmail(e.target.value)}
+            placeholder="May differ from login email"
+            disabled={loading || saving}
+          />
+        </label>
+        <p className="settings-hint" style={{ marginTop: 0 }}>
+          LexZim emails task assignments and approval requests here when firm SMTP is configured.
+          If blank, your login email is used. Client emails are never sent automatically.
+        </p>
       </section>
 
       <div className="settings-actions">

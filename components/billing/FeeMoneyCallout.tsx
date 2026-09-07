@@ -17,7 +17,11 @@ export function FeeMoneyCallout({ variant = "list" }: FeeMoneyCalloutProps) {
           : "Payments on this fee note are fee receipts only. Client trust deposits and disbursements stay in Trust."}
       </p>
       <p className="finance-desk-callout-link">
-        <Link href="/finance/trust">Open Trust (client money)</Link>
+        <Link href="/finance/payments">Payments</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/client-accounts">Client accounts</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/trust">Trust (client money)</Link>
         <span className="muted"> · never mix fee receipts with trust ledger entries</span>
       </p>
     </div>

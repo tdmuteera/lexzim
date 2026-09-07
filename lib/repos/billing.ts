@@ -969,7 +969,8 @@ export async function createFeePayment(
     );
   }
 
-  const receiptNumber = await allocateReceiptNumber(firmId);
+  const receiptNumber =
+    input.receiptNumber?.trim() || (await allocateReceiptNumber(firmId));
   const db = getDb();
   const [payment] = await db
     .insert(feePayments)

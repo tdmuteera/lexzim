@@ -43,6 +43,11 @@ export type TrustLedgerInput = {
   adjustmentCredit: boolean;
   /** Allow posting that would make client balance negative (MP override). Default false. */
   allowNegative: boolean;
+  /**
+   * When true, skip standard trust bank GL for this ledger row.
+   * Used when Payments allocates fee_revenue out of trust (liability → fee/AR GL is posted separately).
+   */
+  skipGl?: boolean;
 };
 
 function trimOrNull(value: unknown): string | null {

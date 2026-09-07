@@ -13,6 +13,7 @@ import { trialBalanceToExportDocument } from "@/lib/export/reports/gl-trial-bala
 import { quotationToExportDocument } from "@/lib/export/reports/quotation-document";
 import { invoiceToExportDocument } from "@/lib/export/reports/invoice-document";
 import { receiptToExportDocument } from "@/lib/export/reports/receipt-document";
+import { paymentIntakeReceiptToExportDocument } from "@/lib/export/reports/payment-intake-receipt-document";
 import { debtorsToExportDocument } from "@/lib/export/reports/debtors-document";
 import { trustStatementToExportDocument } from "@/lib/export/reports/trust-statement-document";
 import { pettyCashSummaryToExportDocument } from "@/lib/export/reports/petty-cash-document";
@@ -61,6 +62,7 @@ export type ExportKind =
   | "quotation"
   | "invoice"
   | "receipt"
+  | "payment_intake"
   | "trust_statement"
   | "petty_cash_summary"
   | "creditor_ageing"
@@ -79,6 +81,7 @@ export const EXPORT_KINDS: ExportKind[] = [
   "quotation",
   "invoice",
   "receipt",
+  "payment_intake",
   "trust_statement",
   "petty_cash_summary",
   "creditor_ageing",
@@ -263,6 +266,16 @@ export const EXPORT_REGISTRY: Record<ExportKind, ExportKindDefinition> = {
       const id = ctx.searchParams.get("id")?.trim();
       if (!id) throw new AuthError("validation", "Payment id is required.");
       return receiptToExportDocument(ctx.firmId, id);
+    },
+  },
+  payment_intake: {
+    permission: "finance.payments.view",
+    auditAction: "export.payment_intake",
+    filenameBase: "lexzim-payment-intake-receipt",
+    buildDocument: async (ctx) => {
+      const id = ctx.searchParams.get("id")?.trim();
+      if (!id) throw new AuthError("validation", "Payment intake id is required.");
+      return paymentIntakeReceiptToExportDocument(ctx.firmId, id);
     },
   },
   trust_statement: {

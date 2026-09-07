@@ -75,12 +75,16 @@ export function EmailSettingsPanel() {
   const [testTo, setTestTo] = useState("");
   const [passwordReadable, setPasswordReadable] = useState(true);
   const [configured, setConfigured] = useState(false);
+  const [staffNotifyError, setStaffNotifyError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await diagnosticJson<{ config: EmailConfig }>("/api/settings/email");
+      const result = await diagnosticJson<{
+        config: EmailConfig;
+        staffNotify?: { lastError: string | null; lastOkAt: string | null };
+      }>("/api/settings/email");
       if (!result.ok || !result.data) {
         setError(
           errorMessageWithRef(
@@ -102,6 +106,7 @@ export function EmailSettingsPanel() {
       setPasswordReadable(c.passwordReadable);
       setConfigured(c.configured);
       setPassword("");
+      setStaffNotifyError(result.data.staffNotify?.lastError ?? null);
     } catch {
       setError("Could not load email settings.");
     } finally {
@@ -222,6 +227,11 @@ export function EmailSettingsPanel() {
           <code>docs/user/Email_Setup.md</code>. Your cPanel username and password can still be
           correct.
         </aside>
+        {staffNotifyError ? (
+          <StatusBanner tone="warn">
+            Last staff task/approval email failed (workflow was not rolled back): {staffNotifyError}
+          </StatusBanner>
+        ) : null}
         {error ? <StatusBanner tone="error">{error}</StatusBanner> : null}
         {success ? <StatusBanner tone="success">{success}</StatusBanner> : null}
         {passwordSet && !passwordReadable ? (

@@ -351,6 +351,12 @@ export function InvoiceDetailView({
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               Print
             </Button>
+            <Link href="/finance/payments" className="btn btn-ghost btn-sm">
+              Payments
+            </Link>
+            <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
+              Client accounts
+            </Link>
             <Link href={listPath} className="btn btn-outline btn-sm">
               Back to invoicing
             </Link>

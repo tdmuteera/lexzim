@@ -1,8 +1,10 @@
 # Phase 11 candidates
 
-Short list of ideas only. **Not a commitment**, not sequenced work, and not an ADR. Partners choose what (if anything) becomes Phase 11.
+Short list of **older brainstorm ideas**. Phase 11 **committed scope** is the finance-depth package in `docs/PHASE11_ADR.md` and `PHASE 11 - Finance Depth and Access Prompts.md` (Payments split, client visibility, requisitions, staff email notify, commission).
 
-## Strong candidates
+Ideas below are **not** automatically in Phase 11 unless partners re-open them.
+
+## Strong candidates (backlog)
 
 1. **Deeper statutory payroll (complete 6B)**  
    PAYE, NSSA, payslips, and filings beyond the Phase 10 payroll MVP and advance recovery.
@@ -19,13 +21,14 @@ Short list of ideas only. **Not a commitment**, not sequenced work, and not an A
 5. **Birthday / newsletter manual batch send**  
    Compose a batch, review recipients, then Send. Still **never** a silent cron unless a partner later insists.
 
-## Other sensible follow-ups (from Phase 10 deferred)
+## Other sensible follow-ups
 
 - Firm-configurable contested / pro forma invoice footer text (optional setting)
 - Bank feeds or payment gateways (still out of core LPMS unless partners demand)
 - Stronger AI research corpus / citation DB (still no zero-hallucination promise)
 - Mobile push notifications (browser-only reminders today)
 - Named custom roles beyond per-person ticks (rejected for v1; revisit only if needed)
+- Calendar / deadline reminder emails (deferred from Phase 11 email slice)
 
 ## Explicitly not assumed
 
@@ -33,4 +36,4 @@ Short list of ideas only. **Not a commitment**, not sequenced work, and not an A
 - Silent scheduled client email campaigns
 - Replacing Phase 8 diagnostics
 
-See also: `docs/ROADMAP_STATUS.md`, `docs/PHASE10_ADR.md`, `docs/PHASE6B_PAYROLL_HANDOFF.md`.
+See also: `docs/ROADMAP_STATUS.md`, `docs/PHASE11_ADR.md`, `docs/PHASE10_ADR.md`, `docs/PHASE6B_PAYROLL_HANDOFF.md`.

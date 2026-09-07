@@ -22,9 +22,13 @@ Sidebar and routes are gated by permissions from `lib/nav.ts` and `lib/module-na
 | `/finance/invoicing` | `billing.view` | Invoicing |
 | `/finance/debtors` | `billing.view` | Debtors |
 | `/finance/trust` | `trust.view` | Trust |
+| `/finance/payments` | `finance.payments.view` | Payments |
+| `/finance/client-accounts` | `finance.view` (data: all if `finance.view_all_client_accounts` / MP, else assigned) | Client accounts |
+| `/finance/requisitions` | `finance.requisitions.view` | Requisitions |
 | `/finance/reconciliations` | `finance.reconcile` | Reconciliations |
 | `/finance/expenses` | `finance.view` | Expenses & cashbook |
 | `/finance/reports` | `finance.view` | Finance reports |
+| `/finance/commission` | `finance.commission.view` | Commission |
 
 **Legacy aliases (bookmarks preserved, same permissions):**
 
@@ -125,11 +129,12 @@ Managing Partner receives every permission via `allCodes` in the matrix.
 2. Open `/finance/invoicing` → existing billing list loads with Finance tabs.
 3. Open `/billing` → same invoicing view (alias); Invoicing tab stays active.
 4. Open `/finance/reconciliations` → trust bank / vault reconciliation workspace.
-5. Open `/finance/reconciliations` → placeholder loads.
+5. Open `/finance/payments`, `/finance/client-accounts`, `/finance/requisitions`, `/finance/commission` → live panels (not placeholders).
 
 ## Manual test per role (after RBAC seed)
 
 1. Run `npx tsx scripts/seed-rbac.ts` if permissions were added.
-2. Log in as **Accounts** → Finance (all six) + HR (view) visible; no User access.
-3. Log in as **Senior Associate** → Invoicing, Debtors, Trust only; no Reconciliations or Expenses.
+2. Log in as **Accounts** → Finance tabs including Payments / Client accounts / Requisitions / Commission view; HR (view) visible; no User access.
+3. Log in as **Senior Associate** → Invoicing, Debtors, Trust, Payments as granted; no Reconciliations pay/configure where blocked.
 4. Try forbidden URL (e.g. Secretary → `/finance/reconciliations`) → Access denied.
+5. Partner checklist for Phase 11 money flows: `docs/PHASE11_MANUAL_TEST.md`.

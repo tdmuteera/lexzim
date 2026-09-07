@@ -1,6 +1,8 @@
 # Email setup
 
-LexZim sends quotations, invoices, receipts (PDF attached), and one-off client notes through **your firm SMTP**. Secrets never appear in the browser. Sending is always **manual**: review the recipient, subject, note, and attachment, then click Send. LexZim does not auto-email clients.
+LexZim sends quotations, invoices, receipts (PDF attached), and one-off client notes through **your firm SMTP**. Secrets never appear in the browser. Sending client documents is always **manual**: review the recipient, subject, note, and attachment, then click Send. LexZim does not auto-email clients.
+
+Staff **task assign** and **approval requested** notifications also attempt the same firm SMTP (plus in-app). Set a communication email on Account profile. If SMTP fails, the workflow still saves; Settings → Email may show the last staff-notify error.
 
 Path: **Settings → Email**. Permission: `settings.manage`.
 

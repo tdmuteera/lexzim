@@ -10,6 +10,7 @@ import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { firmTasks, users } from "@/lib/db/schema";
 import { createStaffNotification } from "@/lib/notifications/staff";
+import { notifyStaffEvent } from "@/lib/notifications/notify-staff-event";
 
 const assigneeUsers = alias(users, "firm_task_assignee");
 const assignerUsers = alias(users, "firm_task_assigner");
@@ -150,14 +151,18 @@ export async function createFirmTask(
   const task = rows[0]!;
 
   if (input.assigneeUserId !== assignerUserId) {
-    await createStaffNotification({
+    await notifyStaffEvent({
       firmId,
-      userId: input.assigneeUserId,
-      type: "task.assigned",
-      title: "New task assigned",
-      body: title,
-      href: "/workflow/tasks",
-      metadata: { taskId: task.id },
+      userIds: [input.assigneeUserId],
+      subject: `LexZim task: ${title}`,
+      body: `You were assigned a task: ${title}`,
+      inApp: {
+        type: "task.assigned",
+        title: "New task assigned",
+        body: title,
+        href: "/workflow/tasks",
+        metadata: { taskId: task.id },
+      },
     });
   }
 
@@ -285,14 +290,19 @@ export async function updateFirmTask(
     const previousAssignee = full.task.assigneeUserId;
     patch.assigneeUserId = input.assigneeUserId;
     if (input.assigneeUserId !== previousAssignee && input.assigneeUserId !== actorUserId) {
-      await createStaffNotification({
+      const taskTitle = (patch.title as string | undefined) ?? full.task.title;
+      await notifyStaffEvent({
         firmId,
-        userId: input.assigneeUserId,
-        type: "task.assigned",
-        title: "New task assigned",
-        body: (patch.title as string | undefined) ?? full.task.title,
-        href: "/workflow/tasks",
-        metadata: { taskId: id },
+        userIds: [input.assigneeUserId],
+        subject: `LexZim task: ${taskTitle}`,
+        body: `You were assigned a task: ${taskTitle}`,
+        inApp: {
+          type: "task.assigned",
+          title: "New task assigned",
+          body: taskTitle,
+          href: "/workflow/tasks",
+          metadata: { taskId: id },
+        },
       });
     }
   }

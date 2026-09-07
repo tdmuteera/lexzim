@@ -183,6 +183,7 @@ function sanitizeHref(href: string): string | null {
       "CRM_Guide.md": "/help/crm",
       "Finance_Desk_Quickstart.md": "/help/finance",
       "Finance_Phase7_Guide.md": "/help/finance-gl",
+      "Finance_Phase11_Guide.md": "/help/finance-depth",
       "Billing_Trust_Quickstart.md": "/help/billing",
       "Email_Setup.md": "/help/email",
       "Security_Password_Policy.md": "/help/security",

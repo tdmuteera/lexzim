@@ -6,16 +6,25 @@ import { AuthError } from "@/lib/auth/types";
 import { validateEmail } from "@/lib/auth/password";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import {
+  getPrimaryCommunicationEmail,
+  setPrimaryCommunicationEmail,
+} from "@/lib/repos/staff-communication-emails";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
   try {
     const session = await requireSession();
+    const communicationEmail = await getPrimaryCommunicationEmail(
+      session.firm.id,
+      session.id,
+    );
     return jsonOk({
       profile: {
         fullName: session.fullName,
         email: session.email,
         jobTitle: session.jobTitle ?? null,
+        communicationEmail: communicationEmail || session.email,
       },
     });
   } catch (err) {
@@ -31,6 +40,7 @@ export async function PATCH(request: Request) {
       fullName?: string;
       email?: string;
       jobTitle?: string | null;
+      communicationEmail?: string | null;
     };
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
@@ -71,6 +81,17 @@ export async function PATCH(request: Request) {
       })
       .where(eq(users.id, session.id));
 
+    let communicationEmail =
+      (await getPrimaryCommunicationEmail(session.firm.id, session.id)) || email;
+    if (typeof body.communicationEmail === "string" && body.communicationEmail.trim()) {
+      const row = await setPrimaryCommunicationEmail(
+        session.firm.id,
+        session.id,
+        body.communicationEmail,
+      );
+      communicationEmail = row.email;
+    }
+
     await writeAuditLog({
       action: "users.profile_update",
       firmId: session.firm.id,
@@ -81,12 +102,13 @@ export async function PATCH(request: Request) {
         fullName,
         email,
         jobTitle,
+        communicationEmail,
       },
       ipOrUserAgent: clientInfo(request),
     });
 
     return jsonOk({
-      profile: { fullName, email, jobTitle },
+      profile: { fullName, email, jobTitle, communicationEmail },
     });
   } catch (err) {
     return jsonError(err, request);

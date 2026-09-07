@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 type InboxItem = {
-  kind: "leave" | "salary_advance" | "invoice" | "password_reset";
+  kind: "leave" | "salary_advance" | "invoice" | "password_reset" | "requisition";
   id: string;
   title: string;
   subtitle: string;
@@ -21,11 +21,12 @@ function kindLabel(kind: InboxItem["kind"]) {
   if (kind === "leave") return "Leave";
   if (kind === "salary_advance") return "Advance";
   if (kind === "invoice") return "Invoice";
+  if (kind === "requisition") return "Requisition";
   return "Password";
 }
 
 function kindTone(kind: InboxItem["kind"]) {
-  if (kind === "invoice") return "pending" as const;
+  if (kind === "invoice" || kind === "requisition") return "pending" as const;
   if (kind === "password_reset") return "danger" as const;
   return "closed" as const;
 }

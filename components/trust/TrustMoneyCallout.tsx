@@ -48,7 +48,11 @@ export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) 
         </div>
       </div>
       <p className="finance-desk-callout-link">
-        <Link href="/finance/invoicing">Open Invoicing (fee money)</Link>
+        <Link href="/finance/payments">Payments</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/client-accounts">Client accounts</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/invoicing">Invoicing (fee money)</Link>
         <span className="muted"> · never record fee receipts in the trust ledger</span>
       </p>
     </div>

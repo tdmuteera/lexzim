@@ -180,16 +180,22 @@ export function BillingListView() {
             <h3>Invoicing</h3>
             <p className="panel-subtitle muted">Fee notes · firm revenue · not trust</p>
           </div>
-          <Can permission="billing.manage">
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <Link href="/finance/payments" className="btn btn-ghost btn-sm">
+              Payments
+            </Link>
+            <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
+              Client accounts
+            </Link>
+            <Can permission="billing.manage">
               <Link href="/finance/invoicing/new" className="btn btn-primary btn-sm">
                 New invoice
               </Link>
               <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
                 From unbilled
               </Button>
-            </div>
-          </Can>
+            </Can>
+          </div>
         </div>
         <div className="panel-body">
           <FeeMoneyCallout variant="list" />

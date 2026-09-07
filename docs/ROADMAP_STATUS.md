@@ -1,11 +1,11 @@
 # LexZim web phase roadmap status
 
-Status of the hosted LexZim SaaS roadmap (Phases 0 to 10). Desktop / Tauri / SQLite paths are cancelled and out of scope.
+Status of the hosted LexZim SaaS roadmap (Phases 0 to 11). Desktop / Tauri / SQLite paths are cancelled and out of scope.
 
 **App version:** see `package.json` / Settings → About  
-**Last roadmap closeout:** Phase 10 (P10-16)  
-**Current product track:** **Phase 10 COMPLETE / Phase 11 candidates**  
-**Note:** Phase 6B full statutory payroll remains deferred; Phase 10 shipped payroll **MVP** + salary advances only (see `docs/PHASE10_ADR.md`, `docs/PHASE11_CANDIDATES.md`).
+**Last roadmap closeout:** Phase 11 (P11-12) implementation complete; **awaiting partner browser verification before push**  
+**Current product track:** **Phase 11 COMPLETE (implementation)** · partner verify via `docs/PHASE11_MANUAL_TEST.md`  
+**Note:** Phase 6B full statutory payroll remains deferred; Phase 10 shipped payroll **MVP** + salary advances only. Phase 11 is finance depth and access (Payments split, requisitions, client visibility, staff email notify, commission). See `docs/PHASE11_ADR.md`.
 
 ## Phase summary
 
@@ -23,6 +23,7 @@ Status of the hosted LexZim SaaS roadmap (Phases 0 to 10). Desktop / Tauri / SQL
 | 8 | Diagnostics, observability, controlled self-healing | **COMPLETE** |
 | 9 | Practice polish, login, calendar modal, motion, per-person access | **COMPLETE** |
 | 10 | LPMS spine: mobile, idle logout, purge rules, HR/payroll MVP, invoice approval, calendar privacy, tasks, AI grounding | **COMPLETE** |
+| 11 | Finance depth: client visibility, Payments split, client accounts, requisitions, staff email notify, commission | **COMPLETE** (verify before push) |
 
 ## Phase 7 deliverables (shipped)
 
@@ -152,13 +153,49 @@ Source: `docs/PHASE10_ADR.md`. Partner-locked LPMS spine. Docs and smoke: `docs/
 
 ## What comes next
 
-Phase 10 is complete. See `docs/PHASE11_CANDIDATES.md` for short candidate ideas (not a commitment). Full statutory **Phase 6B payroll** remains deferred beyond the Phase 10 payroll MVP.
+Phase 10 is complete. **Phase 11 implementation is complete** (`docs/PHASE11_ADR.md`). Partner browser verification: `docs/PHASE11_MANUAL_TEST.md`. Do not push `master` until that checklist passes (or partners explicitly accept known limits). Older brainstorm ideas remain in `docs/PHASE11_CANDIDATES.md`. Full statutory **Phase 6B payroll** remains deferred beyond the Phase 10 payroll MVP.
+
+## Phase 11 progress
+
+| Prompt | Task | Status |
+|--------|------|--------|
+| P11-01 | ADR + gap map vs live Finance / Clients / Workflow | **DONE** |
+| P11-02 | Schema: payments, allocations, requisitions, staff emails, commission | **DONE** |
+| P11-03 | RBAC + client visibility by assignment | **DONE** |
+| P11-04 | Finance nav shells (Payments, Client accounts, Requisitions, Commission) | **DONE** |
+| P11-05 | Payments intake + split allocation + receipts | **DONE** |
+| P11-06 | Client accounts finance view | **DONE** |
+| P11-07 | Requisitions Business + Disbursement | **DONE** |
+| P11-08 | Trust shortfall / recoverable policy | **DONE** |
+| P11-09 | Staff communication emails + notify on task/approval | **DONE** |
+| P11-10 | Commission config + performance panel | **DONE** |
+| P11-11 | Consistency pass across Trust / Invoicing / Expenses | **DONE** |
+| P11-12 | Docs, smoke, closeout | **DONE** |
+
+### Phase 11 known limits
+
+- SMTP on Railway Hobby/Trial may block outbound staff notify and client email; workflows still save
+- Commission is not payroll (no salary / PAYE posting)
+- No bank feeds or payment gateways
+- Full statutory PAYE/NSSA remains Phase 6B
+
+### Phase 11 smoke (dev)
+
+```bash
+npx tsx scripts/check-client-visibility.ts
+npx tsx scripts/check-trust-shortfall-policy.ts
+npx tsx scripts/check-commission-formula.ts
+```
 
 ## Related
 
+- `docs/PHASE11_ADR.md` ← Phase 11 architecture
+- `docs/PHASE11_MANUAL_TEST.md` ← partner browser checklist
+- `docs/PHASE11_SCHEMA.md` ← Phase 11 tables
+- `docs/user/Finance_Phase11_Guide.md` ← end-user guide
 - `docs/PHASE10_ADR.md` ← Phase 10 architecture
 - `docs/PHASE10_SMOKE_TEST.md` ← Phase 10 closeout smoke
-- `docs/PHASE11_CANDIDATES.md` ← Phase 11 candidates (not committed)
+- `docs/PHASE11_CANDIDATES.md` ← older candidates (not Phase 11 commitment)
 - `docs/CONFLICT.md` ← conflict check + debtor timeline + knowledge reports (P10-13)
 - `docs/PHASE9_ADR.md` ← Phase 9 architecture and access model
 - `docs/PHASE9_SMOKE_TEST.md` ← closeout smoke
@@ -185,6 +222,7 @@ Phase 10 is complete. See `docs/PHASE11_CANDIDATES.md` for short candidate ideas
 - `PHASE 7 - Practice Suite Prompts.md` (PROMPTS repo)
 - `PHASE 8 - Diagnostics & Self-Healing Prompts.md` (PROMPTS repo)
 - `PHASE 10 - LPMS Spine and Operations Prompts.md` (PROMPTS repo)
+- `PHASE 11 - Finance Depth and Access Prompts.md` (PROMPTS repo)
 
 ## Final statements
 
@@ -197,3 +235,5 @@ Phase 10 is complete. See `docs/PHASE11_CANDIDATES.md` for short candidate ideas
 **PHASE 9 COMPLETE — practice polish and per-person access shipped; named custom roles rejected for v1**
 
 **PHASE 10 COMPLETE — LPMS spine and operations shipped (idle logout, archive vs platform purge, invoice approval, HR leave ledger and advances, payroll MVP, tasks, calendar privacy, conflict/debtor notes, firm email From, AI verify/citations); Phase 6B statutory payroll and silent email campaigns remain deferred**
+
+**PHASE 11 IMPLEMENTATION COMPLETE — finance depth and access shipped (client visibility, Payments split, client accounts, requisitions, staff email notify, commission); awaiting partner browser verification before push; bank feeds, payment gateways, and Phase 6B statutory payroll remain out of scope**

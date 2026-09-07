@@ -34,6 +34,10 @@ import {
   getRequireClearConflict,
   setRequireClearConflict,
 } from "@/lib/conflict/require-clear";
+import {
+  getBlockDisbursementIfTrustShort,
+  setBlockDisbursementIfTrustShort,
+} from "@/lib/finance/trust-shortfall-policy";
 
 export type FirmProfileDto = {
   id: string;
@@ -58,6 +62,11 @@ export type FirmProfileDto = {
   requireInvoiceApproval: boolean;
   /** Default true (pilot). When false, matter can open without clear conflict check. */
   requireClearConflict: boolean;
+  /**
+   * Phase 11: when true, block firm-float disbursement pay if trust is short.
+   * Default false (warn and allow recoverable).
+   */
+  blockDisbursementIfTrustShort: boolean;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -82,6 +91,7 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
     bankingRaw,
     requireInvoiceApproval,
     requireClearConflict,
+    blockDisbursementIfTrustShort,
   ] = await Promise.all([
       getFirmSetting(firmId, INVOICE_PREFIX_KEY),
       getInvoiceDueDays(firmId),
@@ -92,6 +102,7 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
       getFirmSetting(firmId, INVOICE_BANKING_KEY),
       getRequireInvoiceApproval(firmId),
       getRequireClearConflict(firmId),
+      getBlockDisbursementIfTrustShort(firmId),
     ]);
 
   return {
@@ -115,6 +126,7 @@ export async function getFirmProfile(firmId: string): Promise<FirmProfileDto | n
     invoiceBanking: parseInvoiceBanking(bankingRaw),
     requireInvoiceApproval,
     requireClearConflict,
+    blockDisbursementIfTrustShort,
   };
 }
 
@@ -136,6 +148,7 @@ export type UpdateFirmProfileInput = {
   invoiceBanking?: Partial<InvoiceBankingDetails> | null;
   requireInvoiceApproval?: boolean;
   requireClearConflict?: boolean;
+  blockDisbursementIfTrustShort?: boolean;
 };
 
 export async function updateFirmProfile(
@@ -216,6 +229,12 @@ export async function updateFirmProfile(
   }
   if (input.requireClearConflict !== undefined) {
     await setRequireClearConflict(firmId, Boolean(input.requireClearConflict));
+  }
+  if (input.blockDisbursementIfTrustShort !== undefined) {
+    await setBlockDisbursementIfTrustShort(
+      firmId,
+      Boolean(input.blockDisbursementIfTrustShort),
+    );
   }
 
   await db

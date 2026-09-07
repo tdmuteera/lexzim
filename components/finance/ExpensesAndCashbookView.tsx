@@ -323,6 +323,14 @@ export function ExpensesAndCashbookView() {
             <h3>Expenses & cashbook</h3>
             <p className="panel-subtitle muted">Firm operating money · not trust</p>
           </div>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+            <Link href="/finance/requisitions" className="btn btn-ghost btn-sm">
+              Requisitions
+            </Link>
+            <Link href="/finance/payments" className="btn btn-ghost btn-sm">
+              Payments
+            </Link>
+          </div>
         </div>
         <div className="panel-body">
           <FirmMoneyCallout />
@@ -431,7 +439,10 @@ export function ExpensesAndCashbookView() {
                 </form>
               ) : null}
               {!expenses.length ? (
-                <EmptyState title="No expenses" detail="Record firm operating costs here." />
+                <EmptyState
+                  title="No expenses"
+                  detail="Record firm operating costs here. Paid business requisitions also appear in this list."
+                />
               ) : (
                 <table className="data data-dense">
                   <thead>

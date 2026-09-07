@@ -6,6 +6,7 @@ import {
   saveFirmEmailConfig,
 } from "@/lib/email/config";
 import { normalizeEmailAddress } from "@/lib/email/mailer";
+import { getStaffNotifyEmailHealth } from "@/lib/notifications/notify-staff-event";
 import { requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -14,8 +15,11 @@ export async function GET(request: Request) {
   try {
     const session = await requirePermission("settings.manage");
     const firmId = tenantFirmId(session);
-    const config = await getFirmEmailConfigPublic(firmId);
-    return jsonOk({ config });
+    const [config, staffNotify] = await Promise.all([
+      getFirmEmailConfigPublic(firmId),
+      getStaffNotifyEmailHealth(firmId),
+    ]);
+    return jsonOk({ config, staffNotify });
   } catch (err) {
     return jsonError(err, request);
   }

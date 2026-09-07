@@ -4,7 +4,7 @@ import { serializeClient } from "@/lib/clients/serialize";
 import { parseClientInput } from "@/lib/clients/validation";
 import { createClient, listClients } from "@/lib/repos/clients";
 import { listFirmLawyers } from "@/lib/repos/matters";
-import { requirePermission } from "@/lib/rbac/guards";
+import { canViewAllClients, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 export async function GET(request: Request) {
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     const includeLawyers = url.searchParams.get("includeLawyers") === "1";
     const sort = url.searchParams.get("sort");
     const sortDir = url.searchParams.get("sortDir");
+    const viewAll = canViewAllClients(session);
 
     const rows = await listClients(firmId, {
       q,
@@ -35,10 +36,13 @@ export async function GET(request: Request) {
           : "active",
       sort: sort === "created" || sort === "updated" || sort === "name" || sort === "number" ? sort : "name",
       sortDir: sortDir === "desc" ? "desc" : "asc",
+      viewAll,
+      userId: session.id,
     });
 
     const payload: Record<string, unknown> = {
       items: rows.map(serializeClient),
+      visibility: viewAll ? "all" : "assigned",
     };
     if (includeLawyers) {
       payload.lawyers = await listFirmLawyers(firmId);

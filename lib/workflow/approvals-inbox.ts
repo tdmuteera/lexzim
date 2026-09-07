@@ -9,12 +9,13 @@ import { invoiceDetailPath } from "@/lib/billing/paths";
 import { listPendingApprovalInvoices } from "@/lib/repos/billing";
 import { listLeaveRequests } from "@/lib/repos/hr-leave";
 import { listSalaryAdvances } from "@/lib/repos/hr-salary-advances";
+import { listPendingApprovalRequisitions } from "@/lib/repos/requisitions";
 import { listResetRequests } from "@/lib/repos/security";
 import { hasAnyPermission, hasPermission } from "@/lib/rbac/permissions";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 export type ApprovalInboxItem = {
-  kind: "leave" | "salary_advance" | "invoice" | "password_reset";
+  kind: "leave" | "salary_advance" | "invoice" | "password_reset" | "requisition";
   id: string;
   title: string;
   subtitle: string;
@@ -53,6 +54,7 @@ export async function listApprovalsInbox(
   ]);
   const canInvoice = hasPermission(session, "invoice.approve");
   const canUsers = hasPermission(session, "users.manage");
+  const canRequisition = hasPermission(session, "finance.requisitions.approve");
 
   if (canLeave) {
     const leaveRows = await listLeaveRequests(firmId, { status: "requested" });
@@ -100,6 +102,23 @@ export async function listApprovalsInbox(
         href: invoiceDetailPath(inv.id),
         createdAt: (inv.submittedAt ?? inv.createdAt).toISOString(),
         permissionNeeded: "invoice.approve",
+      });
+    }
+  }
+
+  if (canRequisition) {
+    const requisitions = await listPendingApprovalRequisitions(firmId, INBOX_CAP);
+    for (const row of requisitions) {
+      const amount = (row.amountCents / 100).toFixed(2);
+      const kindLabel = row.type === "business" ? "Business" : "Disbursement";
+      items.push({
+        kind: "requisition",
+        id: row.id,
+        title: `${kindLabel} requisition`,
+        subtitle: `${row.currency} ${amount} · ${row.description.slice(0, 80)}`,
+        href: `/finance/requisitions?id=${row.id}`,
+        createdAt: row.createdAt.toISOString(),
+        permissionNeeded: "finance.requisitions.approve",
       });
     }
   }

@@ -13,6 +13,7 @@ export type GlSourceType =
   | "manual"
   | "invoice"
   | "payment"
+  | "payment_intake"
   | "trust"
   | "expense"
   | "quote"

@@ -27,6 +27,7 @@ export const FIRM_SETTING_KEYS = {
   invoiceDueDays: "invoice_due_days",
   requireInvoiceApproval: "require_invoice_approval",
   requireClearConflict: "require_clear_conflict",
+  blockDisbursementIfTrustShort: "block_disbursement_if_trust_short",
   browserNotificationsEnabled: "browser_notifications_enabled",
 } as const;
 

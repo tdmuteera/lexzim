@@ -93,6 +93,16 @@ export async function PATCH(
       });
       const expanded = expandAccessTicks(tickCodes);
       const merged = mergePreservedGrants(expanded, existing);
+      const watched = [
+        "clients.view_all",
+        "finance.view_all_client_accounts",
+      ] as const;
+      const beforeWatch = Object.fromEntries(
+        watched.map((code) => [code, existing.includes(code)]),
+      );
+      const afterWatch = Object.fromEntries(
+        watched.map((code) => [code, merged.includes(code)]),
+      );
       await replaceUserPermissionCodes({
         userId: target.id,
         firmId,
@@ -107,7 +117,11 @@ export async function PATCH(
         userId: session.id,
         entityType: "user",
         entityId: target.id,
-        metadata: { permissionCodes: tickCodes },
+        metadata: {
+          permissionCodes: tickCodes,
+          visibilityGrantsBefore: beforeWatch,
+          visibilityGrantsAfter: afterWatch,
+        },
         ipOrUserAgent: clientInfo(request),
       });
     }

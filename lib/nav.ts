@@ -198,7 +198,7 @@ export type RouteMeta = {
   title: string;
   subtitle: string;
   purpose: string;
-  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+" | "Phase 7+" | "Phase 10";
+  phaseBadge: "Phase 0 placeholder" | "Phase 1+" | "Phase 2+" | "Phase 3+" | "Phase 4+" | "Phase 6+" | "Phase 7+" | "Phase 10" | "Phase 11";
 };
 
 export const routeMeta: Record<string, RouteMeta> = {
@@ -274,6 +274,24 @@ export const routeMeta: Record<string, RouteMeta> = {
     purpose: "Client money held in trust, never mixed with fee payments.",
     phaseBadge: "Phase 3+",
   },
+  "/finance/payments": {
+    title: "Payments",
+    subtitle: "Money in · trust / fee / disbursement split",
+    purpose: "Record client payments and apportion trust hold, fee revenue, and disbursement float. Trust first; fees-only exception for direct fee bank receipts.",
+    phaseBadge: "Phase 11",
+  },
+  "/finance/client-accounts": {
+    title: "Client accounts",
+    subtitle: "Trust · fees · disbursements per client",
+    purpose: "Bookkeeper view of client money: trust balances, fee activity, disbursements, and payment intakes. Finance override sees all clients; others see assigned only.",
+    phaseBadge: "Phase 11",
+  },
+  "/finance/requisitions": {
+    title: "Requisitions",
+    subtitle: "Business · disbursement requests",
+    purpose: "Request firm operating funds or matter disbursements (Client then Matter), then approve and pay.",
+    phaseBadge: "Phase 11",
+  },
   "/finance/reconciliations": {
     title: "Reconciliations",
     subtitle: "Trust bank · vault · business bank",
@@ -291,6 +309,12 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "Weekly pack · monthly close · P&L",
     purpose: "Proposal-aligned finance reporting for partners and accounts staff.",
     phaseBadge: "Phase 6+",
+  },
+  "/finance/commission": {
+    title: "Commission",
+    subtitle: "Targets · collected fees · amounts due",
+    purpose: "Lawyer commission on collected fee revenue above a configurable monthly target. Not payroll.",
+    phaseBadge: "Phase 11",
   },
   "/hr/staff": {
     title: "Staff records",

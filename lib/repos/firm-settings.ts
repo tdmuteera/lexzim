@@ -13,6 +13,9 @@ export const NEXT_INVOICE_NUMBER_KEY = "next_invoice_number";
 export const INVOICE_DUE_DAYS_KEY = "invoice_due_days";
 export const RECEIPT_PREFIX_KEY = "receipt_prefix";
 export const NEXT_RECEIPT_NUMBER_KEY = "next_receipt_number";
+/** Phase 11: one cash-event number for Finance → Payments intakes (PAY-0001). */
+export const PAYMENT_INTAKE_PREFIX_KEY = "payment_intake_prefix";
+export const NEXT_PAYMENT_INTAKE_NUMBER_KEY = "next_payment_intake_number";
 export const TRUST_REF_PREFIX_KEY = "trust_ref_prefix";
 export const NEXT_TRUST_REF_NUMBER_KEY = "next_trust_ref_number";
 export const MATTER_PREFIX_KEY = "matter_prefix";
@@ -34,6 +37,9 @@ export const INVOICE_CLOSING_NOTE_KEY = "invoice_closing_note";
 export const INVOICE_BANKING_KEY = "invoice_banking";
 /** Phase 10: when not "false", draft invoices must be approved before Mark sent. Default ON. */
 export const REQUIRE_INVOICE_APPROVAL_KEY = "require_invoice_approval";
+/** Phase 11: when "true", block firm-float disbursement pay if trust is short. Default OFF. */
+export const BLOCK_DISBURSEMENT_IF_TRUST_SHORT_KEY =
+  "block_disbursement_if_trust_short";
 /** Phase 10: when not "false", matter status open requires latest client conflict = clear. Default ON. */
 export const REQUIRE_CLEAR_CONFLICT_KEY = "require_clear_conflict";
 
@@ -208,6 +214,56 @@ export async function allocateReceiptNumber(firmId: string): Promise<string> {
         and(
           eq(firmSettings.firmId, firmId),
           eq(firmSettings.key, NEXT_RECEIPT_NUMBER_KEY),
+        ),
+      );
+
+    return `${prefix}-${String(next).padStart(4, "0")}`;
+  });
+}
+
+/** Allocate next Payments intake cash-receipt number (PAY-0001). One number per cash event. */
+export async function allocatePaymentIntakeReceiptNumber(firmId: string): Promise<string> {
+  const db = getDb();
+  const prefixExisting = await getFirmSetting(firmId, PAYMENT_INTAKE_PREFIX_KEY);
+  const prefix = prefixExisting || "PAY";
+  if (!prefixExisting) {
+    await upsertFirmSetting(firmId, PAYMENT_INTAKE_PREFIX_KEY, prefix);
+  }
+
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(firmSettings)
+      .values({
+        firmId,
+        key: NEXT_PAYMENT_INTAKE_NUMBER_KEY,
+        value: "1",
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [firmSettings.firmId, firmSettings.key],
+      });
+
+    const locked = await tx.execute<{ value: string }>(sql`
+      select value
+      from firm_settings
+      where firm_id = ${firmId}
+        and key = ${NEXT_PAYMENT_INTAKE_NUMBER_KEY}
+      for update
+    `);
+
+    const lockedRows =
+      (locked as unknown as { rows?: Array<{ value: string }> }).rows ??
+      (Array.isArray(locked) ? (locked as Array<{ value: string }>) : []);
+    let next = Number(lockedRows[0]?.value ?? "1");
+    if (!Number.isInteger(next) || next < 1) next = 1;
+
+    await tx
+      .update(firmSettings)
+      .set({ value: String(next + 1), updatedAt: new Date() })
+      .where(
+        and(
+          eq(firmSettings.firmId, firmId),
+          eq(firmSettings.key, NEXT_PAYMENT_INTAKE_NUMBER_KEY),
         ),
       );
 

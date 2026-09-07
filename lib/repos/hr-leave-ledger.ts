@@ -166,35 +166,24 @@ export async function notifyLeaveApprovers(input: {
   excludeUserId?: string | null;
 }) {
   const { listUsersWithPermissionCode } = await import("@/lib/hr/approver-users");
-  const { createStaffNotification } = await import("@/lib/notifications/staff");
+  const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
   const ids = await listUsersWithPermissionCode(input.firmId, "leave.approve");
   const targets = ids.filter((id) => id !== input.excludeUserId);
   const href = "/hr/leave";
   const title = `Leave request from ${input.staffName}`;
   const body = "Please approve or reject. Approval is discretionary.";
-  if (targets.length === 0) {
-    await createStaffNotification({
-      firmId: input.firmId,
-      userId: null,
+  await notifyStaffEvent({
+    firmId: input.firmId,
+    userIds: targets,
+    subject: `LexZim: ${title}`,
+    body,
+    inApp: {
       type: "leave.approval_pending",
       title,
       body,
       href,
       metadata: { requestId: input.requestId },
-    });
-    return;
-  }
-  await Promise.all(
-    targets.map((userId) =>
-      createStaffNotification({
-        firmId: input.firmId,
-        userId,
-        type: "leave.approval_pending",
-        title,
-        body,
-        href,
-        metadata: { requestId: input.requestId },
-      }),
-    ),
-  );
+    },
+    broadcastInAppIfEmpty: true,
+  });
 }

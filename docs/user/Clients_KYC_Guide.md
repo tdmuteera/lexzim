@@ -47,13 +47,17 @@ Before (or when) opening a new client relationship, run the conflict check and r
 
 | Permission | Use |
 |------------|-----|
-| `clients.view` | List and profile |
+| `clients.view` | List and profile (**assigned clients only** by default) |
+| `clients.view_all` | See all firm clients, not only assigned |
 | `clients.create` | New client (compulsory fields enforced) |
 | `clients.edit` / `clients.kyc.manage` | KYC wizard |
 | `clients.delete` | Soft archive / restore (not platform purge) |
+
+Finance Client accounts follow the same assignment rule unless the user has `finance.view_all_client_accounts`. Details: `Finance_Phase11_Guide.md`.
 
 ## Related
 
 - `Daily_Lawyer_Guide.md`
 - `CRM_Guide.md`
+- `Finance_Phase11_Guide.md` (visibility + client accounts)
 - `docs/CLIENTS.md` (technical)

@@ -12,6 +12,8 @@ For the full **Finance desk** (debtors, recon, expenses, reports), see `Finance_
 
 Recording a **fee payment** does **not** post to trust. Posting a **trust receipt** does **not** mark a fee note paid.
 
+For split cash (part trust, part fees) in **one** receipt, use **Finance → Payments**. Details: `Finance_Phase11_Guide.md`.
+
 ## Firm setup (once)
 
 **Settings → Firm profile** (Managing Partner):
@@ -26,7 +28,7 @@ Recording a **fee payment** does **not** post to trust. Posting a **trust receip
 2. Open **Finance → Invoicing → New from unbilled** for that matter.
 3. Review the **draft** fee note. If the firm requires approval (default on), submit for approval, wait for **Approved**, then mark **sent**.
 4. Line **work dates** are optional (ongoing work need not invent a date).
-5. **Record payment** (Cash or Bank) against the fee note until it is paid. Each payment issues an **RCP** receipt you can download.
+5. **Record payment** (Cash or Bank) against the fee note until it is paid. Each payment issues an **RCP** receipt you can download. Or record a fees-only intake under **Finance → Payments** (fee bank destination).
 6. Fee payments update the invoice balance, debtors, and fee revenue. They do **not** post to trust.
 
 ### Invoice approval (short)

@@ -194,35 +194,27 @@ export async function notifyInvoiceApprovers(input: {
   invoiceNumber: string;
   excludeUserId?: string | null;
 }) {
-  const { createStaffNotification } = await import("@/lib/notifications/staff");
+  const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
   const ids = await listInvoiceApproverUserIds(input.firmId);
   const targets = ids.filter((id) => id !== input.excludeUserId);
   const href = `/finance/invoicing/invoices/${input.invoiceId}`;
-  if (targets.length === 0) {
-    await createStaffNotification({
-      firmId: input.firmId,
-      userId: null,
+  await notifyStaffEvent({
+    firmId: input.firmId,
+    userIds: targets,
+    subject: `LexZim: Invoice ${input.invoiceNumber} awaits approval`,
+    body: `Fee note ${input.invoiceNumber} was submitted for approval. Please approve or reject in LexZim.`,
+    inApp: {
       type: "invoice.approval_pending",
       title: `Invoice ${input.invoiceNumber} awaits approval`,
-      body: "Submit for approval is complete. An approver should review this fee note.",
+      body:
+        targets.length === 0
+          ? "Submit for approval is complete. An approver should review this fee note."
+          : "Please approve or reject this fee note.",
       href,
       metadata: { invoiceId: input.invoiceId },
-    });
-    return;
-  }
-  await Promise.all(
-    targets.map((userId) =>
-      createStaffNotification({
-        firmId: input.firmId,
-        userId,
-        type: "invoice.approval_pending",
-        title: `Invoice ${input.invoiceNumber} awaits approval`,
-        body: "Please approve or reject this fee note.",
-        href,
-        metadata: { invoiceId: input.invoiceId },
-      }),
-    ),
-  );
+    },
+    broadcastInAppIfEmpty: true,
+  });
 }
 
 export async function notifyInvoiceCreator(input: {

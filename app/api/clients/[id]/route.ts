@@ -3,10 +3,11 @@ import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { serializeClient, serializeClientLite } from "@/lib/clients/serialize";
 import { parseClientInput } from "@/lib/clients/validation";
-import { getClientById, updateClient } from "@/lib/repos/clients";
+import { getClientById, updateClient, userCanAccessClient } from "@/lib/repos/clients";
 import { getMatterCountsForClient } from "@/lib/repos/matters";
 import {
   canLookupClients,
+  canViewAllClients,
   canViewAllMatters,
   hasPermission,
   requireAny,
@@ -29,6 +30,18 @@ export async function GET(request: Request, context: RouteContext) {
     const row = await getClientById(firmId, id);
     if (!row) {
       throw new AuthError("not_found", "Client not found.");
+    }
+
+    if (fullAccess) {
+      const allowed = await userCanAccessClient(
+        firmId,
+        id,
+        session.id,
+        canViewAllClients(session),
+      );
+      if (!allowed) {
+        throw new AuthError("forbidden", "You do not have access to this client.");
+      }
     }
 
     if (!fullAccess) {
@@ -61,6 +74,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const existing = await getClientById(firmId, id);
     if (!existing) {
       throw new AuthError("not_found", "Client not found.");
+    }
+
+    const allowed = await userCanAccessClient(
+      firmId,
+      id,
+      session.id,
+      canViewAllClients(session),
+    );
+    if (!allowed) {
+      throw new AuthError("forbidden", "You do not have access to this client.");
     }
 
     const row = await updateClient(firmId, id, input);

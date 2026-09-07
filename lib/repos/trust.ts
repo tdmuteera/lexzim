@@ -422,7 +422,10 @@ export async function postTrustLedgerEntry(
     })
     .returning();
 
-  if (input.entryType === "receipt" || input.entryType === "disbursement") {
+  if (
+    (input.entryType === "receipt" || input.entryType === "disbursement") &&
+    !input.skipGl
+  ) {
     await postTrustLedgerGl(firmId, userId, rows[0]!.id);
   }
 

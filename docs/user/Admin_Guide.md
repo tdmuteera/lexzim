@@ -49,9 +49,9 @@ Staff web signs out after **30 minutes of inactivity** (mouse, keyboard, or touc
 
 ## Finance administration
 
-Full desk guide: `Finance_Desk_Quickstart.md`.
+Full desk guide: `Finance_Desk_Quickstart.md`. Phase 11 depth (Payments, Client accounts, Requisitions, Commission): `Finance_Phase11_Guide.md`.
 
-Typical Accounts / MP permissions: `billing.*`, `trust.*`, `finance.view`, `finance.post`, `finance.reconcile`, `finance.close_month`, `hr.view`, `hr.manage`.
+Typical Accounts / MP permissions: `billing.*`, `trust.*`, `finance.view`, `finance.post`, `finance.reconcile`, `finance.close_month`, `finance.payments.*`, `finance.requisitions.*`, `finance.commission.*`, `clients.view_all` / `finance.view_all_client_accounts` as needed, `hr.view`, `hr.manage`.
 
 Lawyers usually keep matters and documents without full finance menus.
 
@@ -66,12 +66,14 @@ Complete in order near calendar month-end:
 5. **Business bank recon** — business operating account vs statement (`/finance/expenses` or reconciliations).
 6. **AP ageing** — `/finance/creditors`: unpaid supplier bills; pay or note disputes.
 7. **Petty cash** — `/finance/petty-cash`: float still open; transfers and spends posted.
-8. **Expenses posted** — all firm costs for the month in `/finance/expenses`.
+8. **Expenses posted** — all firm costs for the month in `/finance/expenses` (includes paid business requisitions).
 9. **Cashbook** — business bank movements match bank statement where applicable.
-10. **GL trial balance** — `/finance/gl` (or trial balance report): debits equal credits as of month-end. Export PDF/Excel for the bookkeeper.
-11. **P&L and balance sheet** — same GL desk; review gross profit and equity. Compare to cash P&L on **Finance → Reports** if you still use that pack.
-12. **Lock period** — **Finance → Reports → Monthly close → Lock period** (`finance.close_month`). Locked months block new expenses and cashbook entries dated in that month.
-13. **HR** — leave approved; advances and payroll MVP reviewed if used; contracts current for key staff (optional but recommended). Full PAYE/NSSA remains Phase 6B.
+10. **Requisitions** — clear open recoverable / firm-float items; unpaid approved requests followed up.
+11. **GL trial balance** — `/finance/gl` (or trial balance report): debits equal credits as of month-end. Export PDF/Excel for the bookkeeper.
+12. **P&L and balance sheet** — same GL desk; review gross profit and equity. Compare to cash P&L on **Finance → Reports** if you still use that pack.
+13. **Commission** (optional) — `/finance/commission`: review collected vs target for the month.
+14. **Lock period** — **Finance → Reports → Monthly close → Lock period** (`finance.close_month`). Locked months block new expenses and cashbook entries dated in that month.
+15. **HR** — leave approved; advances and payroll MVP reviewed if used; contracts current for key staff (optional but recommended). Full PAYE/NSSA remains Phase 6B.
 
 Reopen a locked period is not in self-service UI v1; contact LexZim support if a correction is required (audited).
 
