@@ -1191,6 +1191,40 @@ input.input:focus, select.input:focus, textarea.input:focus {
   color: var(--gold-2);
   border-color: var(--gold-line);
 }
+.finance-status-banner-ok {
+  background: rgba(58, 115, 86, 0.1);
+  color: var(--success, #2d6a4f);
+  border-color: rgba(58, 115, 86, 0.28);
+}
+.finance-detail-card {
+  margin-top: 1.25rem;
+}
+.finance-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.finance-kpi-card {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(160, 124, 56, 0.04);
+}
+.finance-kpi-card .muted {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+.finance-kpi-card strong {
+  font-size: 1.1rem;
+  color: var(--gold-2);
+}
+table.data-table tbody tr.row-selected {
+  background: rgba(160, 124, 56, 0.1);
+}
 
 .finance-intake-form {
   margin: 0 0 1.25rem;

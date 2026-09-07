@@ -169,123 +169,129 @@ export function CommissionView() {
   const currencyCode = report?.currency ?? currency ?? "USD";
 
   return (
-    <section className="view active scrollable" aria-label="Commission">
+    <section className="view active scrollable finance-desk-view" aria-label="Commission">
       <div className="panel">
         <div className="panel-head">
           <div>
             <h3>Commission</h3>
-            <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-              Lawyer commission on collected fee revenue above a monthly target. Not payroll.
+            <p className="panel-subtitle muted">
+              Fee collection target · % above target · not payroll
             </p>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
             <Link href="/reports/lawyer-performance" className="btn btn-ghost btn-sm">
               Lawyer performance
             </Link>
-            <Button size="sm" disabled={loading} onClick={() => void loadAll()}>
+            <Button size="sm" variant="outline" disabled={loading} onClick={() => void loadAll()}>
               {loading ? "Loading…" : "Refresh"}
             </Button>
           </div>
         </div>
+
         <div className="panel-body">
-          <p className="muted" style={{ fontSize: "0.8rem", maxWidth: "48rem" }}>
-            {formulaHelp ||
-              "Commission due = (collected fee cash above monthly target) × %. Trust and disbursements excluded."}
-          </p>
+          <div className="finance-desk-callout" role="note">
+            <div className="finance-desk-callout-title">How commission is calculated</div>
+            <p>
+              {formulaHelp ||
+                "Commission due = (collected fee cash above the monthly target) × commission %. Trust deposits and disbursements do not count."}
+            </p>
+            <p className="finance-desk-callout-link">
+              <Link href="/reports/lawyer-performance">Lawyer performance</Link>
+              <span className="muted"> · same collected-fee basis · not a salary posting</span>
+            </p>
+          </div>
 
           {error ? (
-            <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+            <div className="finance-status-banner finance-status-banner-error" role="alert">
               {error}
-            </p>
+            </div>
           ) : null}
           {success ? (
-            <p style={{ color: "var(--success, #2d6a4f)", fontSize: "0.85rem" }}>{success}</p>
+            <div className="finance-status-banner finance-status-banner-ok" role="status">
+              {success}
+            </div>
           ) : null}
 
           <Can
             permission="finance.commission.configure"
             fallback={
-              settings ? (
-                <p className="muted" style={{ fontSize: "0.85rem" }}>
-                  Current target: {centsToDisplay(settings.monthlyTargetCents, settings.currency)} / month;
-                  commission {settings.commissionPercentAboveTarget}% above target (effective{" "}
-                  {settings.effectiveFrom.slice(0, 10)}). Ask a managing partner to change settings.
-                </p>
-              ) : (
-                <p className="muted" style={{ fontSize: "0.85rem" }}>
-                  Commission is not configured yet. Ask a managing partner to set the monthly target and
-                  percent.
-                </p>
-              )
+              <div className="finance-intake-form">
+                <div className="finance-intake-form-head">
+                  <h4>Current settings</h4>
+                  <p className="muted">
+                    {settings
+                      ? `Target ${centsToDisplay(settings.monthlyTargetCents, settings.currency)} / month · ${settings.commissionPercentAboveTarget}% above target · effective ${settings.effectiveFrom.slice(0, 10)}. Ask a managing partner to change settings.`
+                      : "Commission is not configured yet. Ask a managing partner to set the monthly target and percent."}
+                  </p>
+                </div>
+              </div>
             }
           >
-            <form
-              onSubmit={(e) => void onSaveSettings(e)}
-              className="toolbar"
-              style={{
-                flexWrap: "wrap",
-                gap: "0.65rem",
-                alignItems: "flex-end",
-                marginBottom: "1rem",
-                padding: "0.75rem",
-                border: "1px solid var(--border, #ddd)",
-                borderRadius: "6px",
-              }}
-            >
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.8rem" }}>
-                Monthly target ({currency})
-                <input
-                  className="filter-select"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={targetDollars}
-                  onChange={(e) => setTargetDollars(e.target.value)}
-                  required
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.8rem" }}>
-                % above target
-                <input
-                  className="filter-select"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.1"
-                  value={percent}
-                  onChange={(e) => setPercent(e.target.value)}
-                  required
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.8rem" }}>
-                Currency
-                <input
-                  className="filter-select"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                  maxLength={3}
-                  required
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.8rem" }}>
-                Effective from
-                <input
-                  className="filter-select"
-                  type="date"
-                  value={effectiveFrom}
-                  onChange={(e) => setEffectiveFrom(e.target.value)}
-                  required
-                />
-              </label>
-              <Button type="submit" size="sm" disabled={saving}>
-                {saving ? "Saving…" : "Save settings"}
-              </Button>
+            <form onSubmit={(e) => void onSaveSettings(e)} className="finance-intake-form">
+              <div className="finance-intake-form-head">
+                <h4>Configure target</h4>
+                <p className="muted">
+                  Example: target 3000, 25%, collected 4000 → commission due 250.
+                </p>
+              </div>
+              <div className="finance-form-grid">
+                <label>
+                  <span>Monthly target ({currency})</span>
+                  <input
+                    className="filter-select"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={targetDollars}
+                    onChange={(e) => setTargetDollars(e.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>% above target</span>
+                  <input
+                    className="filter-select"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    value={percent}
+                    onChange={(e) => setPercent(e.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Currency</span>
+                  <input
+                    className="filter-select"
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                    maxLength={3}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Effective from</span>
+                  <input
+                    className="filter-select"
+                    type="date"
+                    value={effectiveFrom}
+                    onChange={(e) => setEffectiveFrom(e.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+              <div className="finance-intake-form-foot">
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving ? "Saving…" : "Save settings"}
+                </Button>
+              </div>
             </form>
           </Can>
 
-          <div className="toolbar" style={{ flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem" }}>
-              Month
+          <div className="toolbar finance-filter-toolbar">
+            <label className="finance-filter-field">
+              <span>Month</span>
               <input
                 type="month"
                 className="filter-select"
@@ -305,7 +311,7 @@ export function CommissionView() {
 
           {report?.configured ? (
             <>
-              <p className="muted" style={{ fontSize: "0.8rem", maxWidth: "52rem" }}>
+              <p className="muted" style={{ fontSize: "0.8rem", maxWidth: "52rem", marginTop: 0 }}>
                 {report.attributionPolicy}
               </p>
               {report.rows.length === 0 ? (
@@ -314,49 +320,61 @@ export function CommissionView() {
                   detail="Fee receipts attributed to a responsible lawyer will appear here."
                 />
               ) : (
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Lawyer</th>
-                      <th>Collected</th>
-                      <th>Target</th>
-                      <th>Remaining to target</th>
-                      <th>Above target</th>
-                      <th>Commission due</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.rows.map((r) => (
-                      <tr key={r.lawyerId ?? "unassigned"}>
-                        <td>{r.lawyerName}</td>
-                        <td>{centsToDisplay(r.collectedCents, currencyCode)}</td>
-                        <td>{centsToDisplay(r.monthlyTargetCents, currencyCode)}</td>
-                        <td>{centsToDisplay(r.remainingToTargetCents, currencyCode)}</td>
-                        <td>{centsToDisplay(r.aboveTargetCents, currencyCode)}</td>
-                        <td>{centsToDisplay(r.commissionDueCents, currencyCode)}</td>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Lawyer</th>
+                        <th className="num">Collected</th>
+                        <th className="num">Target</th>
+                        <th className="num">Remaining to target</th>
+                        <th className="num">Above target</th>
+                        <th className="num">Commission due</th>
                       </tr>
-                    ))}
-                    <tr>
-                      <td>
-                        <strong>Firm total collected</strong>
-                      </td>
-                      <td>
-                        <strong>{centsToDisplay(report.totals.collectedCents, currencyCode)}</strong>
-                      </td>
-                      <td colSpan={4} className="muted" style={{ fontSize: "0.8rem" }}>
-                        Target and commission apply per lawyer, not to the firm total.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.rows.map((r) => (
+                        <tr key={r.lawyerId ?? "unassigned"}>
+                          <td>{r.lawyerName}</td>
+                          <td className="num">
+                            {centsToDisplay(r.collectedCents, currencyCode)}
+                          </td>
+                          <td className="num">
+                            {centsToDisplay(r.monthlyTargetCents, currencyCode)}
+                          </td>
+                          <td className="num">
+                            {centsToDisplay(r.remainingToTargetCents, currencyCode)}
+                          </td>
+                          <td className="num">
+                            {centsToDisplay(r.aboveTargetCents, currencyCode)}
+                          </td>
+                          <td className="num">
+                            {centsToDisplay(r.commissionDueCents, currencyCode)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td>
+                          <strong>Firm total collected</strong>
+                        </td>
+                        <td className="num">
+                          <strong>
+                            {centsToDisplay(report.totals.collectedCents, currencyCode)}
+                          </strong>
+                        </td>
+                        <td colSpan={4} className="muted">
+                          Target and commission apply per lawyer, not to the firm total.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           ) : null}
 
           {loading && !report ? (
-            <p className="muted" style={{ fontSize: "0.85rem" }}>
-              Loading commission…
-            </p>
+            <p className="muted">Loading commission…</p>
           ) : null}
         </div>
       </div>

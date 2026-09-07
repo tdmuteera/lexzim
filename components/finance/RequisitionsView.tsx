@@ -46,6 +46,26 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+function RequisitionCallout() {
+  return (
+    <div className="finance-desk-callout" role="note">
+      <div className="finance-desk-callout-title">Business vs disbursement</div>
+      <p>
+        <strong>Business</strong> requests are firm operating costs (pay from operating → Expenses).{" "}
+        <strong>Disbursement</strong> requests need Client then Matter (pay from trust or firm float).
+        Firm float shortfalls can be marked recoverable until the client tops up.
+      </p>
+      <p className="finance-desk-callout-link">
+        <Link href="/finance/expenses">Expenses</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/client-accounts">Client accounts</Link>
+        <span className="muted"> · </span>
+        <Link href="/finance/payments">Payments</Link>
+      </p>
+    </div>
+  );
+}
+
 export function RequisitionsView() {
   const { user } = useAuth();
   const currency = user?.firm?.defaultCurrency || "USD";
@@ -244,11 +264,12 @@ export function RequisitionsView() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error?.message || "Could not create requisition.");
+      const payload = data.data ?? data;
       setFormOpen(false);
       setDescription("");
       setAmountDollars("");
       await load();
-      if (data.requisition?.id) setSelectedId(data.requisition.id);
+      if (payload.requisition?.id) setSelectedId(payload.requisition.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed.");
     } finally {
@@ -256,10 +277,7 @@ export function RequisitionsView() {
     }
   }
 
-  async function runAction(
-    action: string,
-    extra: Record<string, unknown> = {},
-  ) {
+  async function runAction(action: string, extra: Record<string, unknown> = {}) {
     if (!selectedId) return;
     setSaving(true);
     setError(null);
@@ -272,8 +290,9 @@ export function RequisitionsView() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error?.message || `Could not ${action}.`);
-      if (data.trustShortfallWarning) {
-        setError(data.trustShortfallWarning);
+      const payload = data.data ?? data;
+      if (payload.trustShortfallWarning) {
+        setError(payload.trustShortfallWarning);
       }
       await load();
     } catch (err) {
@@ -284,152 +303,160 @@ export function RequisitionsView() {
   }
 
   return (
-    <section className="view active scrollable" aria-label="Requisitions">
+    <section className="view active scrollable finance-desk-view" aria-label="Requisitions">
       <div className="panel">
-        <div className="panel-head" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <h3 style={{ marginRight: "auto" }}>Requisitions</h3>
-          <Link href="/finance/expenses" className="btn btn-ghost btn-sm">
-            Expenses
-          </Link>
-          <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
-            Client accounts
-          </Link>
-          <Can permission="finance.requisitions.request">
-            <Button type="button" onClick={() => setFormOpen((v) => !v)}>
-              {formOpen ? "Close form" : "New requisition"}
-            </Button>
-          </Can>
+        <div className="panel-head">
+          <div>
+            <h3>Requisitions</h3>
+            <p className="panel-subtitle muted">Request · approve · pay · business or disbursement</p>
+          </div>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+            <Link href="/finance/expenses" className="btn btn-ghost btn-sm">
+              Expenses
+            </Link>
+            <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
+              Client accounts
+            </Link>
+            <Can permission="finance.requisitions.request">
+              <Button
+                type="button"
+                size="sm"
+                variant={formOpen ? "outline" : "primary"}
+                onClick={() => setFormOpen((v) => !v)}
+              >
+                {formOpen ? "Close form" : "New requisition"}
+              </Button>
+            </Can>
+          </div>
         </div>
+
         <div className="panel-body">
-          <p style={{ marginTop: 0 }}>
-            Request funds as <strong>Business</strong> (firm operating costs) or{" "}
-            <strong>Disbursement</strong> (Client then Matter). Submit for approval, then pay
-            from operating, client trust, or firm float (recoverable). Paid business items post to{" "}
-            <Link href="/finance/expenses">Expenses</Link>; paid disbursements post on the matter
-            Costs tab (and trust ledger when paid from trust).
-          </p>
+          <RequisitionCallout />
 
           {error ? (
-            <p className="error" role="alert">
+            <div className="finance-status-banner finance-status-banner-error" role="alert">
               {error}
-            </p>
+            </div>
           ) : null}
 
           {formOpen ? (
-            <form
-              onSubmit={onCreate}
-              style={{
-                marginBottom: "1.25rem",
-                padding: "1rem",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                display: "grid",
-                gap: "0.75rem",
-              }}
-            >
-              <label>
-                Type
-                <select
-                  value={reqType}
-                  onChange={(e) =>
-                    setReqType(e.target.value as "business" | "disbursement")
-                  }
-                >
-                  <option value="business">Business (firm operating)</option>
-                  <option value="disbursement">Disbursement (client cost)</option>
-                </select>
-              </label>
-              {reqType === "business" ? (
+            <form onSubmit={onCreate} className="finance-intake-form">
+              <div className="finance-intake-form-head">
+                <h4>New requisition</h4>
+                <p className="muted">Submitted requests go to the approvals inbox for review.</p>
+              </div>
+              <div className="finance-form-grid">
                 <label>
-                  Nature / category
+                  <span>Type</span>
+                  <select
+                    className="filter-select"
+                    value={reqType}
+                    onChange={(e) =>
+                      setReqType(e.target.value as "business" | "disbursement")
+                    }
+                  >
+                    <option value="business">Business (firm operating)</option>
+                    <option value="disbursement">Disbursement (client cost)</option>
+                  </select>
+                </label>
+                {reqType === "business" ? (
+                  <label>
+                    <span>Nature / category</span>
+                    <input
+                      className="filter-select"
+                      required
+                      value={nature}
+                      onChange={(e) => setNature(e.target.value)}
+                      placeholder="e.g. Electricity, stationery"
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <label>
+                      <span>Client</span>
+                      <select
+                        className="filter-select"
+                        required
+                        value={clientId}
+                        onChange={(e) => {
+                          setClientId(e.target.value);
+                          setMatterId("");
+                        }}
+                      >
+                        <option value="">Select client</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Matter</span>
+                      <select
+                        className="filter-select"
+                        required
+                        value={matterId}
+                        onChange={(e) => setMatterId(e.target.value)}
+                      >
+                        <option value="">Select matter</option>
+                        {clientMatters.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.matterNumber ? `${m.matterNumber} · ` : ""}
+                            {m.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+                <label className="finance-form-grid-span">
+                  <span>Description</span>
                   <input
+                    className="filter-select"
                     required
-                    value={nature}
-                    onChange={(e) => setNature(e.target.value)}
-                    placeholder="e.g. Electricity, stationery"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What is this for?"
                   />
                 </label>
-              ) : (
-                <>
-                  <label>
-                    Client
-                    <select
-                      required
-                      value={clientId}
-                      onChange={(e) => {
-                        setClientId(e.target.value);
-                        setMatterId("");
-                      }}
-                    >
-                      <option value="">Select client</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Matter
-                    <select
-                      required
-                      value={matterId}
-                      onChange={(e) => setMatterId(e.target.value)}
-                    >
-                      <option value="">Select matter</option>
-                      {clientMatters.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.matterNumber ? `${m.matterNumber} · ` : ""}
-                          {m.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
-              )}
-              <label>
-                Description
-                <input
-                  required
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </label>
-              <label>
-                Amount ({currency})
-                <input
-                  required
-                  inputMode="decimal"
-                  value={amountDollars}
-                  onChange={(e) => setAmountDollars(e.target.value)}
-                />
-              </label>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Submit for approval"}
-              </Button>
+                <label>
+                  <span>Amount ({currency})</span>
+                  <input
+                    className="filter-select"
+                    required
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={amountDollars}
+                    onChange={(e) => setAmountDollars(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="finance-intake-form-foot">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving…" : "Submit for approval"}
+                </Button>
+              </div>
             </form>
           ) : null}
 
-          <div
-            className="filters"
-            style={{
-              display: "grid",
-              gap: "0.5rem",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              marginBottom: "1rem",
-            }}
-          >
-            <label>
-              Type
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          <div className="toolbar finance-filter-toolbar">
+            <label className="finance-filter-field">
+              <span>Type</span>
+              <select
+                className="filter-select"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+              >
                 <option value="">All</option>
                 <option value="business">Business</option>
                 <option value="disbursement">Disbursement</option>
               </select>
             </label>
-            <label>
-              Status
+            <label className="finance-filter-field">
+              <span>Status</span>
               <select
+                className="filter-select"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
@@ -443,10 +470,20 @@ export function RequisitionsView() {
                 <option value="recoverable">Recoverable (open)</option>
               </select>
             </label>
+            <span className="toolbar-spacer" />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
           </div>
 
-          {loading ? (
-            <p className="muted">Loading…</p>
+          {loading && items.length === 0 ? (
+            <p className="muted">Loading requisitions…</p>
           ) : items.length === 0 ? (
             <EmptyState
               title="No requisitions"
@@ -460,7 +497,7 @@ export function RequisitionsView() {
                     <th>Type</th>
                     <th>Status</th>
                     <th>Description</th>
-                    <th>Amount</th>
+                    <th className="num">Amount</th>
                     <th>Client / matter</th>
                     <th />
                   </tr>
@@ -469,11 +506,7 @@ export function RequisitionsView() {
                   {items.map((row) => (
                     <tr
                       key={row.id}
-                      style={
-                        selectedId === row.id
-                          ? { background: "var(--surface-2, transparent)" }
-                          : undefined
-                      }
+                      className={selectedId === row.id ? "row-selected" : undefined}
                     >
                       <td>{row.type === "business" ? "Business" : "Disbursement"}</td>
                       <td>
@@ -485,7 +518,9 @@ export function RequisitionsView() {
                         ) : null}
                       </td>
                       <td>{row.description}</td>
-                      <td>{centsToDisplay(row.amountCents, row.currency)}</td>
+                      <td className="num">
+                        {centsToDisplay(row.amountCents, row.currency)}
+                      </td>
                       <td>
                         {row.type === "disbursement"
                           ? `${row.clientName ?? "—"} · ${row.matterNumber ?? row.matterTitle ?? ""}`
@@ -509,52 +544,121 @@ export function RequisitionsView() {
           )}
 
           {selected ? (
-            <div
-              style={{
-                marginTop: "1.25rem",
-                padding: "1rem",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-              }}
-            >
-              <h4 style={{ marginTop: 0 }}>
-                {selected.type === "business" ? "Business" : "Disbursement"} ·{" "}
-                {centsToDisplay(selected.amountCents, selected.currency)}
-              </h4>
-              <p style={{ marginTop: 0 }}>{selected.description}</p>
-              <p className="muted">
-                Status: {selected.status.replace(/_/g, " ")}
-                {selected.requesterName ? ` · Requested by ${selected.requesterName}` : ""}
-              </p>
+            <div className="finance-intake-form finance-detail-card">
+              <div className="finance-intake-form-head">
+                <h4>
+                  {selected.type === "business" ? "Business" : "Disbursement"} ·{" "}
+                  {centsToDisplay(selected.amountCents, selected.currency)}
+                </h4>
+                <p className="muted">
+                  Status: {selected.status.replace(/_/g, " ")}
+                  {selected.requesterName ? ` · Requested by ${selected.requesterName}` : ""}
+                </p>
+              </div>
+              <p style={{ margin: 0 }}>{selected.description}</p>
               {selected.rejectionNote ? (
-                <p className="error">Rejection note: {selected.rejectionNote}</p>
+                <div className="finance-status-banner finance-status-banner-error" role="status">
+                  Rejection note: {selected.rejectionNote}
+                </div>
               ) : null}
 
-              {selected.status === "approved" && selected.type === "disbursement" && trustPreview ? (
-                <p>
+              {selected.status === "approved" &&
+              selected.type === "disbursement" &&
+              trustPreview ? (
+                <div
+                  className={
+                    trustPreview.shortfallCents && trustPreview.shortfallCents > 0
+                      ? "finance-status-banner finance-status-banner-warn"
+                      : "finance-status-banner"
+                  }
+                >
                   Client trust:{" "}
                   {centsToDisplay(trustPreview.trustBalanceCents ?? 0, selected.currency)}
                   {" · Requested "}
                   {centsToDisplay(selected.amountCents, selected.currency)}
                   {trustPreview.message ? (
-                    <span
-                      className={
-                        trustPreview.shortfallCents && trustPreview.shortfallCents > 0
-                          ? "error"
-                          : "muted"
-                      }
-                      style={{ display: "block", marginTop: "0.35rem" }}
-                    >
+                    <div style={{ marginTop: "0.35rem" }}>
                       {trustPreview.message}
-                      {trustPreview.blockIfShort
-                        ? " (firm block setting is ON)"
-                        : null}
-                    </span>
+                      {trustPreview.blockIfShort ? " (firm block setting is ON)" : null}
+                    </div>
                   ) : null}
-                </p>
+                </div>
               ) : null}
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div className="finance-form-grid">
+                {selected.status === "pending_approval" ? (
+                  <Can permission="finance.requisitions.approve">
+                    <label className="finance-form-grid-span">
+                      <span>Rejection note (if rejecting)</span>
+                      <input
+                        className="filter-select"
+                        placeholder="Optional note for the requester"
+                        value={rejectNote}
+                        onChange={(e) => setRejectNote(e.target.value)}
+                      />
+                    </label>
+                  </Can>
+                ) : null}
+
+                {selected.status === "approved" ? (
+                  <Can permission="finance.requisitions.pay">
+                    {selected.type === "disbursement" ? (
+                      <>
+                        <label>
+                          <span>Pay from</span>
+                          <select
+                            className="filter-select"
+                            value={payFrom}
+                            onChange={(e) =>
+                              setPayFrom(e.target.value as "trust" | "firm_float")
+                            }
+                          >
+                            <option value="trust">Client trust</option>
+                            <option
+                              value="firm_float"
+                              disabled={Boolean(
+                                trustPreview?.shortfallCents &&
+                                  trustPreview.shortfallCents > 0 &&
+                                  !trustPreview.allowFirmFloat,
+                              )}
+                            >
+                              Firm float (recoverable)
+                            </option>
+                          </select>
+                        </label>
+                        {payFrom === "trust" ? (
+                          <label>
+                            <span>Trust account</span>
+                            <select
+                              className="filter-select"
+                              value={trustAccountId}
+                              onChange={(e) => setTrustAccountId(e.target.value)}
+                            >
+                              <option value="">Default trust account</option>
+                              {accounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} ({a.accountKind})
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <label>
+                      <span>Payment reference</span>
+                      <input
+                        className="filter-select"
+                        placeholder="Optional"
+                        value={paymentRef}
+                        onChange={(e) => setPaymentRef(e.target.value)}
+                      />
+                    </label>
+                  </Can>
+                ) : null}
+              </div>
+
+              <div className="finance-intake-form-foot">
                 {selected.status === "draft" || selected.status === "rejected" ? (
                   <Can permission="finance.requisitions.request">
                     <Button
@@ -576,12 +680,6 @@ export function RequisitionsView() {
                     >
                       Approve
                     </Button>
-                    <input
-                      placeholder="Rejection note"
-                      value={rejectNote}
-                      onChange={(e) => setRejectNote(e.target.value)}
-                      style={{ minWidth: 160 }}
-                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -611,60 +709,20 @@ export function RequisitionsView() {
                         Pay from operating
                       </Button>
                     ) : (
-                      <>
-                        <select
-                          value={payFrom}
-                          onChange={(e) =>
-                            setPayFrom(e.target.value as "trust" | "firm_float")
-                          }
-                        >
-                          <option value="trust">Pay from trust</option>
-                          <option
-                            value="firm_float"
-                            disabled={
-                              Boolean(
-                                trustPreview?.shortfallCents &&
-                                  trustPreview.shortfallCents > 0 &&
-                                  !trustPreview.allowFirmFloat,
-                              )
-                            }
-                          >
-                            Firm float (recoverable)
-                          </option>
-                        </select>
-                        {payFrom === "trust" ? (
-                          <select
-                            value={trustAccountId}
-                            onChange={(e) => setTrustAccountId(e.target.value)}
-                          >
-                            <option value="">Default trust account</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name} ({a.accountKind})
-                              </option>
-                            ))}
-                          </select>
-                        ) : null}
-                        <Button
-                          type="button"
-                          disabled={saving}
-                          onClick={() =>
-                            void runAction("pay", {
-                              paidFrom: payFrom,
-                              trustAccountId: trustAccountId || null,
-                              paymentRef: paymentRef || null,
-                            })
-                          }
-                        >
-                          Record payment
-                        </Button>
-                      </>
+                      <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void runAction("pay", {
+                            paidFrom: payFrom,
+                            trustAccountId: trustAccountId || null,
+                            paymentRef: paymentRef || null,
+                          })
+                        }
+                      >
+                        Record payment
+                      </Button>
                     )}
-                    <input
-                      placeholder="Payment reference"
-                      value={paymentRef}
-                      onChange={(e) => setPaymentRef(e.target.value)}
-                    />
                   </Can>
                 ) : null}
 
@@ -693,6 +751,15 @@ export function RequisitionsView() {
                     </Button>
                   </Can>
                 ) : null}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedId(null)}
+                >
+                  Close detail
+                </Button>
               </div>
             </div>
           ) : null}

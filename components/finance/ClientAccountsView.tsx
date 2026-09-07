@@ -348,33 +348,27 @@ export function ClientAccountsView() {
                     </p>
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "0.75rem",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                    }}
-                  >
-                    <div className="panel" style={{ padding: "0.75rem" }}>
-                      <div className="muted">{detail.labels.trust}</div>
-                      <strong style={{ fontSize: "1.15rem" }}>
+                  <div className="finance-kpi-strip">
+                    <div className="finance-kpi-card">
+                      <span className="muted">{detail.labels.trust}</span>
+                      <strong>
                         {centsToDisplay(detail.trust.balanceCents, detail.client.currency)}
                       </strong>
                     </div>
-                    <div className="panel" style={{ padding: "0.75rem" }}>
-                      <div className="muted">{detail.labels.fees}</div>
-                      <strong style={{ fontSize: "1.15rem" }}>
+                    <div className="finance-kpi-card">
+                      <span className="muted">{detail.labels.fees}</span>
+                      <strong>
                         {centsToDisplay(detail.fees.outstandingCents, detail.client.currency)}{" "}
                         outstanding
                       </strong>
-                      <div className="muted">
+                      <div className="muted" style={{ marginTop: "0.35rem", textTransform: "none", letterSpacing: 0 }}>
                         Billed {centsToDisplay(detail.fees.billedCents, detail.client.currency)} ·
                         Collected {centsToDisplay(detail.fees.paidCents, detail.client.currency)}
                       </div>
                     </div>
-                    <div className="panel" style={{ padding: "0.75rem" }}>
-                      <div className="muted">{detail.labels.disbursements}</div>
-                      <strong style={{ fontSize: "1.15rem" }}>
+                    <div className="finance-kpi-card">
+                      <span className="muted">{detail.labels.disbursements}</span>
+                      <strong>
                         {centsToDisplay(
                           detail.disbursements.unbilledCents,
                           detail.client.currency,
