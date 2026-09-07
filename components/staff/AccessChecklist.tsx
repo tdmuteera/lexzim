@@ -3,7 +3,7 @@
 import { accessTicksFromNav, type AccessTick } from "@/lib/rbac/access-ticks";
 
 const TICKS = accessTicksFromNav();
-const ALL_CODES = TICKS.map((t) => t.code);
+const ALL_CODES: string[] = TICKS.map((t) => t.code);
 
 function withLockedUsersManage(codes: string[], lockUsersManage?: boolean) {
   if (!lockUsersManage) return codes;
@@ -46,12 +46,12 @@ export function AccessChecklist({
   }
 
   function setSectionAll(ticks: AccessTick[], on: boolean) {
-    const sectionCodes = ticks.map((t) => t.code);
+    const sectionCodes: string[] = ticks.map((t) => t.code);
     if (on) {
       onChange(withLockedUsersManage([...new Set([...selected, ...sectionCodes])], lockUsersManage));
       return;
     }
-    const drop = new Set(sectionCodes);
+    const drop = new Set<string>(sectionCodes);
     if (lockUsersManage) drop.delete("users.manage");
     onChange(selected.filter((c) => !drop.has(c)));
   }
