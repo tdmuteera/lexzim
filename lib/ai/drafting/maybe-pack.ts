@@ -11,6 +11,7 @@ import {
   isSubstantialDocumentDraft,
 } from "@/lib/ai/drafting/draft-detect";
 import { splitDraftFromChat } from "@/lib/ai/drafting/split-draft";
+import { wantsExplicitWordFile } from "@/lib/ai/intent";
 
 export type PackedChatDocument = {
   id: string;

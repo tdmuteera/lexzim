@@ -38,6 +38,7 @@ import type {
   SourceTiers,
 } from "@/lib/ai/citations/tiers";
 import { formatFollowUpForChat, splitDraftFromChat } from "@/lib/ai/drafting/split-draft";
+import { formatLongDate } from "@/lib/format/dates";
 import {
   CHAT_SYSTEM_PROMPT,
   DOCUMENT_INTAKE_ADDENDUM,
