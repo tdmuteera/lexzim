@@ -23,14 +23,16 @@ Path: **Finance → Payments** (`/finance/payments`).
 
 Use this when cash or a bank credit arrives and you need to **split** it in one receipt:
 
-1. Choose destination: trust bank, trust vault, or fee bank (fees-only).
+1. Choose destination: trust bank, trust vault, fee bank (banked fees), or fee vault (cash fees on hand).
 2. Enter the total amount, client, and matter when required.
 3. Add allocation lines that sum to the total (trust hold, fee revenue categories, disbursement float).
 4. Save. LexZim issues **one** cash receipt number for that bank or vault event.
 
 **Trust first (default):** full amount posts as a trust receipt; fee lines leave trust and become fee revenue or retainer apply. Trust hold and disbursement float stay as client money.
 
-**Fees-only:** destination fee bank. No trust ledger movement. Fee receipt or direct fee cash posting only.
+**Fees-only:** destination fee bank or fee vault. No trust ledger movement.
+- Fee bank = fees already going into (or treated as) the firm operating bank (GL 1010).
+- Fee vault = firm fee cash still in the office safe / drawer (GL 1020 Business Vault). Never client trust.
 
 The same cash is **not** posted twice. Trust desk and Invoicing remain the ledgers of record; Payments orchestrates them.
 

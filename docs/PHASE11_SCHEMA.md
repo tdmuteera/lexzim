@@ -26,7 +26,7 @@ One cash event (money received).
 
 | Column | Notes |
 |--------|-------|
-| `destination` | `trust_bank` \| `trust_vault` \| `fee_bank` |
+| `destination` | `trust_bank` \| `trust_vault` \| `fee_bank` \| `fee_vault` |
 | `amount_cents` | Full cash received |
 | `receipt_number` | One cash-received receipt id |
 

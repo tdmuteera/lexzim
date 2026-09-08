@@ -2436,7 +2436,7 @@ export const diagnosticRepairActions = pgTable(
 
 /**
  * Phase 11: payment intake (cash event). Orchestrates trust and fee postings; does not merge ledgers.
- * destination: trust_bank | trust_vault | fee_bank
+ * destination: trust_bank | trust_vault | fee_bank | fee_vault
  */
 export const financePaymentIntakes = pgTable(
   "finance_payment_intakes",
@@ -2452,7 +2452,7 @@ export const financePaymentIntakes = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     amountCents: integer("amount_cents").notNull(),
     currency: text("currency").notNull().default("USD"),
-    /** trust_bank | trust_vault | fee_bank */
+    /** trust_bank | trust_vault | fee_bank | fee_vault */
     destination: text("destination").notNull(),
     method: text("method"),
     reference: text("reference"),

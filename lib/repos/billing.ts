@@ -988,7 +988,9 @@ export async function createFeePayment(
     })
     .returning();
 
-  await postFeePaymentGl(firmId, userId, payment!.id);
+  await postFeePaymentGl(firmId, userId, payment!.id, {
+    cashGlCode: input.cashGlCode,
+  });
 
   const paid = await sumFeePayments(firmId, invoiceId);
   const retainerApplied = full.invoice.retainerAppliedCents ?? 0;

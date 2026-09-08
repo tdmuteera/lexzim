@@ -12,6 +12,7 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_bank") return "Trust bank";
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank (fees only)";
+  if (destination === "fee_vault") return "Fee vault (cash fees on hand)";
   return destination;
 }
 

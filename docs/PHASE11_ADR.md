@@ -114,7 +114,7 @@ Phase 11 **extends** Finance, Clients, Workflow, email, and Lawyer Performance. 
 
 ### 4.1 PaymentIntake
 
-Cash event: firm, client, optional matter, receivedAt, amount, currency, destination (`trust_bank` \| `trust_vault` \| `fee_bank`), method, reference, receiptNumber, createdBy, notes.
+Cash event: firm, client, optional matter, receivedAt, amount, currency, destination (`trust_bank` \| `trust_vault` \| `fee_bank` \| `fee_vault`), method, reference, receiptNumber, createdBy, notes.
 
 ### 4.2 PaymentAllocationLine
 
@@ -310,9 +310,13 @@ Shipped empty tabs (purpose copy only; no posting yet):
    - without invoice → `postFeeEarnedFromTrustGl` (Dr 2100 / Cr fee revenue by category).
 4. `trust_hold` and `disbursement_float` remain trust liability.
 
-### Fees-only (`fee_bank`)
+### Fees-only (`fee_bank` / `fee_vault`)
 
-No trust posts. `fee_revenue` only. With invoice → `createFeePayment` reusing the intake `PAY-####` (no second cash number). Without invoice → direct Dr 1010 / Cr fee revenue.
+No trust posts. `fee_revenue` only.
+- **fee_bank**: banked firm fees → Dr **1010** Operating Bank (invoice path via `createFeePayment`, or direct fee revenue).
+- **fee_vault**: firm fee cash still on hand → Dr **1020** Business Vault (same invoice / direct paths with vault cash GL).
+
+With invoice → `createFeePayment` reusing the intake `PAY-####` (no second cash number). Without invoice → direct cash / Cr fee revenue.
 
 Trust and fee ledgers stay separate. Audit: `finance_payment_intakes.create`.
 

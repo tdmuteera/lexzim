@@ -8,8 +8,8 @@
  *    apply retainer (invoice) or fee-earned-from-trust GL (no invoice).
  * 3) trust_hold and disbursement_float remain as trust liability.
  *
- * Fees-only (fee_bank): no trust posts. Invoice → createFeePayment using intake
- * receipt number; no invoice → direct fee cash GL.
+ * Fees-only (fee_bank / fee_vault): no trust posts. Invoice → createFeePayment using intake
+ * receipt number; no invoice → direct fee cash GL (1010 bank or 1020 vault).
  */
 import "server-only";
 
@@ -25,7 +25,11 @@ import {
 } from "@/lib/db/schema";
 import type {
   FeeCategory,
+  PaymentDestination,
   PaymentIntakeInput,
+} from "@/lib/finance/payment-intake-validation";
+import {
+  feeDestinationCashGlCode,
 } from "@/lib/finance/payment-intake-validation";
 import {
   postDirectFeeCashGl,
@@ -171,6 +175,7 @@ async function applyFeeRevenueDirect(
     matterId: string | null;
     method: string | null;
     reference: string | null;
+    cashGlCode: "1010" | "1020";
   },
 ) {
   if (opts.invoiceId) {
@@ -187,6 +192,7 @@ async function applyFeeRevenueDirect(
       reference: opts.reference,
       notes: `Payments intake ${opts.receiptNumber} (${opts.feeCategory})`,
       receiptNumber: opts.receiptNumber,
+      cashGlCode: opts.cashGlCode,
     });
     return;
   }
@@ -200,6 +206,7 @@ async function applyFeeRevenueDirect(
     feeCategory: opts.feeCategory,
     clientId: opts.clientId,
     matterId: opts.matterId,
+    cashGlCode: opts.cashGlCode,
   });
 }
 
@@ -314,6 +321,7 @@ export async function createPaymentIntake(
       });
     }
   } else {
+    const cashGlCode = feeDestinationCashGlCode(input.destination as PaymentDestination);
     for (const line of lineRows) {
       if (line.lineType !== "fee_revenue" || !line.feeCategory) continue;
       await applyFeeRevenueDirect(firmId, userId, {
@@ -329,6 +337,7 @@ export async function createPaymentIntake(
         matterId: input.matterId,
         method: input.method,
         reference: input.reference,
+        cashGlCode,
       });
     }
   }

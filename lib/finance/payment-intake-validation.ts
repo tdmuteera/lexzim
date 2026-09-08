@@ -1,8 +1,23 @@
 import { AuthError } from "@/lib/auth/types";
 import { dollarsToCents } from "@/lib/billing/money";
 
-export const PAYMENT_DESTINATIONS = ["trust_bank", "trust_vault", "fee_bank"] as const;
+export const PAYMENT_DESTINATIONS = [
+  "trust_bank",
+  "trust_vault",
+  "fee_bank",
+  "fee_vault",
+] as const;
 export type PaymentDestination = (typeof PAYMENT_DESTINATIONS)[number];
+
+/** Firm fee destinations never touch the trust ledger. */
+export function isFeesOnlyDestination(destination: string): boolean {
+  return destination === "fee_bank" || destination === "fee_vault";
+}
+
+/** GL cash asset for fees-only intakes: banked vs cash on hand. */
+export function feeDestinationCashGlCode(destination: PaymentDestination): "1010" | "1020" {
+  return destination === "fee_vault" ? "1020" : "1010";
+}
 
 export const ALLOCATION_LINE_TYPES = [
   "trust_hold",
@@ -165,7 +180,7 @@ function parseLine(raw: unknown, index: number): PaymentAllocationLineInput {
 
 /**
  * Parse Payments intake payload.
- * Lines must sum to cash received. fee_bank intakes may only use fee_revenue lines.
+ * Lines must sum to cash received. fee_bank / fee_vault intakes may only use fee_revenue lines.
  */
 export function parsePaymentIntakeInput(
   body: unknown,
@@ -181,7 +196,7 @@ export function parsePaymentIntakeInput(
   if (!isDestination(raw.destination)) {
     throw new AuthError(
       "validation",
-      "destination must be trust_bank, trust_vault, or fee_bank.",
+      "destination must be trust_bank, trust_vault, fee_bank, or fee_vault.",
     );
   }
 
@@ -199,12 +214,12 @@ export function parsePaymentIntakeInput(
     );
   }
 
-  if (raw.destination === "fee_bank") {
+  if (isFeesOnlyDestination(raw.destination)) {
     const bad = lines.find((l) => l.lineType !== "fee_revenue");
     if (bad) {
       throw new AuthError(
         "validation",
-        "Fees-only (fee_bank) intakes may only include fee_revenue allocation lines.",
+        "Fees-only intakes (fee bank or fee vault) may only include fee_revenue allocation lines.",
       );
     }
   }

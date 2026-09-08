@@ -27,14 +27,14 @@ export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) 
         }}
       >
         <div>
-          <strong>Business vault</strong>
+          <strong>Fee / business vault</strong>
           <br />
-          Firm operating cash (1010)
+          Firm cash on hand (GL 1020)
         </div>
         <div>
-          <strong>Business bank</strong>
+          <strong>Fee / operating bank</strong>
           <br />
-          Firm operating account (1010/1020)
+          Firm bank account (GL 1010)
         </div>
         <div>
           <strong>Trust vault</strong>

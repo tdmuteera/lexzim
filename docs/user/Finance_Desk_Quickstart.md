@@ -16,7 +16,7 @@ Phase 11 desk guide: `Finance_Phase11_Guide.md` (Payments, Client accounts, Requ
 | Quotations | `/finance/quotations` | Service catalogue, quotes, convert to invoice |
 | Debtors | `/finance/debtors` | Outstanding fee invoices with **due-date ageing** |
 | Trust | `/finance/trust` (alias `/trust`) | Client trust ledgers, vault, statements, reference numbers |
-| Payments | `/finance/payments` | Money in + split across trust / fees / disbursement float (one receipt) |
+| Payments | `/finance/payments` | Money in + split: trust bank/vault, fee bank, **fee vault** (cash fees on hand) |
 | Client accounts | `/finance/client-accounts` | Bookkeeper view: trust, fees, disbursements, intakes per client |
 | Requisitions | `/finance/requisitions` | Business (→ Expenses) or Disbursement (→ matter / trust) |
 | Reconciliations | `/finance/reconciliations` | Trust three-way and business bank recon |
@@ -50,11 +50,13 @@ See also `Billing_Trust_Quickstart.md` and `Finance_Trust_Quickstart.md`.
 ## Trust, vault, and client ledgers
 
 - **Master trust bank**: normal trust account in the bank.
-- **Trust vault**: physical cash held before banking into the master trust bank.
+- **Trust vault**: physical **client** cash held before banking into the master trust bank.
+- **Fee bank**: firm fees in (or treated as) the operating bank.
+- **Fee vault**: firm fee cash still on hand (business vault). Not trust. Not petty cash.
 - Each client has a running balance on the trust ledger (receipts and payments).
 - Client statement CSV export is available from the trust desk.
 
-Details: `Finance_Trust_Quickstart.md`, `Finance_Trust_Recon_SOP.md`.
+Plain-English walkthrough: `Finance_Module_Plain_English.md`. Details: `Finance_Trust_Quickstart.md`, `Finance_Trust_Recon_SOP.md`, `Finance_Phase11_Guide.md`.
 
 ## Reconciliations
 

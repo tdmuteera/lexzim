@@ -195,6 +195,7 @@ export async function postFeePaymentGl(
   firmId: string,
   userId: string,
   paymentId: string,
+  opts?: { cashGlCode?: "1010" | "1020" },
 ) {
   const existing = await findPostedJournal(firmId, "payment", paymentId);
   if (existing) return existing;
@@ -213,7 +214,7 @@ export async function postFeePaymentGl(
   const row = payRows[0];
   if (!row) throw new AuthError("not_found", "Payment not found.");
 
-  const cash = await ensureGlAccountByCode(firmId, "1010");
+  const cash = await ensureGlAccountByCode(firmId, opts?.cashGlCode ?? "1010");
   const ar = await ensureGlAccountByCode(firmId, "1310");
 
   return postManualJournal(

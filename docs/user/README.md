@@ -10,6 +10,7 @@ Clear guides for Zimbabwe practitioners on the hosted LexZim web app.
 | Clients and KYC | `Clients_KYC_Guide.md` | `/help/clients-kyc` |
 | CRM (birthdays) | `CRM_Guide.md` | `/help/crm` |
 | Finance desk | `Finance_Desk_Quickstart.md` | `/help/finance` |
+| Finance in plain English | `Finance_Module_Plain_English.md` | |
 | Finance: quotes, GL, AP, petty cash | `Finance_Phase7_Guide.md` | `/help/finance-gl` |
 | Finance depth (Payments, accounts, requisitions, commission) | `Finance_Phase11_Guide.md` | `/help/finance-depth` |
 | Billing and trust | `Billing_Trust_Quickstart.md` | `/help/billing` |
@@ -23,7 +24,7 @@ Clear guides for Zimbabwe practitioners on the hosted LexZim web app.
 
 **Phase 10** added idle logout, archive vs platform purge, invoice approval, leave ledger, salary advances, payroll **MVP**, tasks/workflow, calendar privacy, conflict check, debtor notes, knowledge reports, and firmer AI verify/citations. See Workflow (`/workflow/tasks`) and Knowledge in the app when your ticks allow.
 
-**Phase 11** added client visibility by assignment, Finance → Payments (split intakes), Client accounts, Requisitions (Business vs Disbursement), staff communication email on tasks/approvals, and lawyer commission on collected fees. See `Finance_Phase11_Guide.md` and partner checklist `docs/PHASE11_MANUAL_TEST.md`.
+**Phase 11** added client visibility by assignment, Finance → Payments (split intakes including **fee vault** for cash fees on hand), Client accounts, Requisitions (Business vs Disbursement), staff communication email on tasks/approvals, and lawyer commission on collected fees. See `Finance_Module_Plain_English.md`, `Finance_Phase11_Guide.md`, and partner checklist `docs/PHASE11_MANUAL_TEST.md`.
 
 **Payroll:** Phase 10 ships an **MVP** (periods, lines, advance recovery). Full statutory PAYE/NSSA/payslips remain **Phase 6B**. Commission is not payroll. See `docs/PHASE6B_PAYROLL_HANDOFF.md` and `docs/PHASE11_CANDIDATES.md`.
 

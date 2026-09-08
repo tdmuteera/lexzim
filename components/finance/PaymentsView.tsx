@@ -78,7 +78,12 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_bank") return "Trust bank";
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank";
+  if (destination === "fee_vault") return "Fee vault";
   return destination;
+}
+
+function isFeesOnlyUi(destination: string): boolean {
+  return destination === "fee_bank" || destination === "fee_vault";
 }
 
 function newLine(lineType: AllocationLineType = "trust_hold"): DraftLine {
@@ -104,8 +109,9 @@ function PaymentMoneyCallout() {
       <div className="finance-desk-callout-title">Money in (one receipt)</div>
       <p>
         Record cash once and split it across trust hold, fee revenue, and disbursement float.
-        Trust destination is the default. Fee bank is for fees-only receipts. Trust and fee
-        ledgers stay separate; the same cash is never double-counted.
+        Trust destination is the default. Fee bank is for banked firm fees. Fee vault is for
+        firm fee cash still on hand (not trust money). Trust and fee ledgers stay separate;
+        the same cash is never double-counted.
       </p>
       <p className="finance-desk-callout-link">
         <Link href="/finance/trust">Trust</Link>
@@ -326,16 +332,17 @@ export function PaymentsView() {
   }, [loadRegister, loadLookups]);
 
   useEffect(() => {
-    if (destination === "fee_bank") {
+    if (isFeesOnlyUi(destination)) {
       setTrustAccountId("");
       setLines((prev) =>
         prev.map((line) => ({ ...line, lineType: "fee_revenue" as const })),
       );
+      if (destination === "fee_vault") setMethod("Cash");
     }
   }, [destination]);
 
   useEffect(() => {
-    if (destination === "fee_bank") return;
+    if (isFeesOnlyUi(destination)) return;
     if (trustAccountId) return;
     const first = trustAccountsForDestination[0];
     if (first) setTrustAccountId(first.id);
@@ -358,7 +365,7 @@ export function PaymentsView() {
           amountDollars,
           currency,
           destination,
-          trustAccountId: destination === "fee_bank" ? null : trustAccountId,
+          trustAccountId: isFeesOnlyUi(destination) ? null : trustAccountId,
           method: method || null,
           reference: reference || null,
           notes: notes || null,
@@ -513,9 +520,10 @@ export function PaymentsView() {
                     <option value="trust_bank">Trust bank (default)</option>
                     <option value="trust_vault">Trust vault</option>
                     <option value="fee_bank">Fee bank (fees only)</option>
+                    <option value="fee_vault">Fee vault (cash fees on hand)</option>
                   </select>
                 </label>
-                {destination !== "fee_bank" ? (
+                {!isFeesOnlyUi(destination) ? (
                   <label>
                     <span>Trust account</span>
                     <select
@@ -580,7 +588,7 @@ export function PaymentsView() {
                       onClick={() =>
                         setLines((prev) => [
                           ...prev,
-                          newLine(destination === "fee_bank" ? "fee_revenue" : "trust_hold"),
+                          newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold"),
                         ])
                       }
                     >
@@ -597,7 +605,7 @@ export function PaymentsView() {
                         <select
                           className="filter-select"
                           value={line.lineType}
-                          disabled={destination === "fee_bank"}
+                          disabled={isFeesOnlyUi(destination)}
                           onChange={(e) => {
                             const lineType = e.target.value as AllocationLineType;
                             setLines((prev) =>
@@ -757,6 +765,7 @@ export function PaymentsView() {
                 <option value="trust_bank">Trust bank</option>
                 <option value="trust_vault">Trust vault</option>
                 <option value="fee_bank">Fee bank</option>
+                <option value="fee_vault">Fee vault</option>
               </select>
             </label>
             <label className="finance-filter-field">
