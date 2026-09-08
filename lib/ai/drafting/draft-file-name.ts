@@ -10,10 +10,15 @@ const TYPE_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /\bnon[- ]disclosure\b|\bnda\b/i, label: "Non-Disclosure Agreement" },
   { re: /\bsale of goods\b|\bagreement for sale of goods\b/i, label: "Sale of Goods Agreement" },
   { re: /\bagreement of sale\b|\bsale agreement\b/i, label: "Agreement of Sale" },
+  { re: /\backnowledg(?:e)?ment of debt\b/i, label: "Acknowledgement of Debt" },
+  { re: /\bpower of attorney\b/i, label: "Power of Attorney" },
+  { re: /\bdeed of settlement\b|\bsettlement agreement\b/i, label: "Deed of Settlement" },
+  { re: /\bfounding affidavit\b/i, label: "Founding Affidavit" },
   { re: /\baffidavit\b/i, label: "Affidavit" },
+  { re: /\blegal opinion\b|\bopinion letter\b/i, label: "Legal Opinion" },
   { re: /\bheads of argument\b/i, label: "Heads of Argument" },
   { re: /\bsummons\b/i, label: "Summons" },
-  { re: /\blegal opinion\b|\bopinion letter\b/i, label: "Legal Opinion" },
+  { re: /\bdivorce\b/i, label: "Divorce summons" },
   { re: /\blease\b/i, label: "Lease" },
 ];
 
@@ -32,7 +37,31 @@ function firstTitleLine(body: string): string | null {
   return null;
 }
 
+function looksLikePaymentDemand(question: string): boolean {
+  return (
+    /\b(days to pay|hasn't paid|has not paid|letter of demand|demand letter)\b/i.test(question) &&
+    !/\b(summons|high court|magistrates court|divorce|issue (an )?action|court papers|acknowledg(?:e)?ment of debt)\b/i.test(
+      question,
+    )
+  );
+}
+
 function detectType(title: string, body: string, question: string): string {
+  const head = body.slice(0, 400);
+  if (/\bpower of attorney\b/i.test(question) || /^\s*POWER OF ATTORNEY\b/im.test(body)) {
+    return "Power of Attorney";
+  }
+  if (/\backnowledg(?:e)?ment of debt\b/i.test(question) || /^\s*ACKNOWLEDGEMENT OF DEBT\b/im.test(body)) {
+    return "Acknowledgement of Debt";
+  }
+  if (/\b(founding\s+)?affidavit\b/i.test(question) && !/\bsummons\b/i.test(question)) {
+    return /\bfounding\b/i.test(`${question}\n${head}`) ? "Founding Affidavit" : "Affidavit";
+  }
+  if (/\bsummons\b/i.test(question) || (/\bIN THE HIGH COURT\b/i.test(head) && /\bSUMMONS\b/i.test(body))) {
+    if (/\bdivorce\b/i.test(`${question}\n${body.slice(0, 800)}`)) return "Divorce summons";
+    return "Summons";
+  }
+  if (looksLikePaymentDemand(question)) return "Letter of Demand";
   const blob = `${title}\n${body.slice(0, 1200)}\n${question}`;
   for (const row of TYPE_PATTERNS) {
     if (row.re.test(blob)) return row.label;
@@ -45,8 +74,10 @@ function detectType(title: string, body: string, question: string): string {
 
 function tidyParty(raw: string): string {
   return raw
+    .replace(/\*/g, "")
     .replace(/\s+/g, " ")
     .replace(/[“”"']/g, "")
+    .replace(/\b(plaintiff|defendant|applicant|respondent)\b/gi, "")
     .replace(/\bof\b[\s\S]*/i, "")
     .replace(/\b(private\s+)?limited\b/gi, "Ltd")
     .replace(/\b\(pty\)\b/gi, "(Pvt)")
@@ -65,8 +96,8 @@ function prettyParty(name: string): string {
     .map((w) => {
       if (!w) return w;
       if (/^\(.*\)$/.test(w)) return w;
-      if (w.length <= 4 && w === w.toUpperCase() && /[A-Z]/.test(w)) return w;
-      if (w === w.toUpperCase() && /[A-Z]{5,}/.test(w)) {
+      if (w.length <= 3 && w === w.toUpperCase() && /[A-Z]/.test(w)) return w;
+      if (w === w.toUpperCase() && /[A-Z]{2,}/.test(w) && !/^(LTD|PVT|AND|THE)$/.test(w)) {
         return w.charAt(0) + w.slice(1).toLowerCase();
       }
       return w;
@@ -82,18 +113,41 @@ function addressNameAfterDate(text: string): string | undefined {
   return m?.[1];
 }
 
-function extractParties(body: string): { left?: string; right?: string; mode: "to" | "and" } {
+function extractParties(body: string): { left?: string; right?: string; mode: "to" | "and" | "v" } {
   const text = body.replace(/\r\n/g, "\n");
 
-  const toFrom = text.match(
-    /(?:^|\n)\s*(?:\*{0,2}TO:\*{0,2}|To:)\s*([^\n]+)\s*(?:\n[\s\S]{0,400}?)(?:^|\n)\s*(?:\*{0,2}FROM:\*{0,2}|From:)\s*([^\n]+)/im,
+  const toLine = text.match(/(?:^|\n)\s*(?:\*{0,2}TO:\*{0,2}|To:)\s*([^\n]+)/im);
+  const fromLine = text.match(/(?:^|\n)\s*(?:\*{0,2}FROM:\*{0,2}|From:)\s*([^\n]+)/im);
+  if (toLine && fromLine) {
+    return { left: companyHead(fromLine[1]), right: companyHead(toLine[1]), mode: "to" };
+  }
+
+  const plaintiff = text.match(
+    /^([A-Z][A-Za-z '-]{2,50}?)\s+(?:\.{3,}|\s{4,}).*\bPlaintiff\b/im,
   );
-  if (toFrom) {
-    return { left: companyHead(toFrom[2]), right: companyHead(toFrom[1]), mode: "to" };
+  const defendant = text.match(
+    /^([A-Z][A-Za-z '-]{2,50}?)\s+(?:\.{3,}|\s{4,}).*\bDefendant\b/im,
+  );
+  if (plaintiff && defendant) {
+    return { left: prettyParty(plaintiff[1].trim()), right: prettyParty(defendant[1].trim()), mode: "v" };
+  }
+
+  const aod = text.match(
+    /\bI,\s+([A-Z][A-Z '-]{2,50}),[\s\S]{0,280}?indebted to\s+([A-Z][A-Z '-]{2,50})/i,
+  );
+  if (aod) {
+    return { left: prettyParty(aod[1].trim()), right: prettyParty(aod[2].trim()), mode: "and" };
+  }
+
+  const poa = text.match(
+    /\bI,\s+([A-Z][A-Z '-]{2,50}),[\s\S]{0,220}?appoint\s+([A-Z][A-Z '-]{2,50})/i,
+  );
+  if (poa) {
+    return { left: prettyParty(poa[1].trim()), right: prettyParty(poa[2].trim()), mode: "to" };
   }
 
   const between = text.match(
-    /\bBETWEEN:\s*\n+([^\n]{3,220})\s*\n+AND:?\s*\n+([^\n]{3,220})/i,
+    /\bBETWEEN:?\s*\n+([^\n]{3,220})\s*\n+AND:?\s*\n+([^\n]{3,220})/i,
   );
   if (between) {
     return { left: companyHead(between[1]), right: companyHead(between[2]), mode: "and" };
@@ -105,13 +159,16 @@ function extractParties(body: string): { left?: string; right?: string; mode: "t
   const dear = text.match(
     /\bdear\s+(?:mr|mrs|ms|dr)\.?\s+([A-Z][A-Za-z'-]+(?:[ \t]+[A-Z][A-Za-z'-]+){0,2})/i,
   );
-  const addressee = dear?.[1] || addressNameAfterDate(text);
+  const addressee = dear?.[1] || addressNameAfterDate(text) || (toLine ? tidyParty(toLine[1]) : undefined);
   if (weAct) {
     return {
       left: companyHead(weAct[1]),
       right: addressee ? companyHead(addressee) : undefined,
       mode: "to",
     };
+  }
+  if (toLine && addressee) {
+    return { right: companyHead(addressee), mode: "to" };
   }
 
   return { mode: "and" };
@@ -161,7 +218,7 @@ export function draftFileName(input: {
   if (parties.left && parties.right) {
     const a = prettyParty(shortParty(parties.left));
     const b = prettyParty(shortParty(parties.right));
-    suffix = parties.mode === "to" ? ` - ${a} to ${b}` : ` - ${a} and ${b}`;
+    suffix = parties.mode === "to" ? ` - ${a} to ${b}` : parties.mode === "v" ? ` - ${a} v ${b}` : ` - ${a} and ${b}`;
   } else if (parties.right) {
     suffix = ` - ${shortParty(parties.right)}`;
   } else if (parties.left) {

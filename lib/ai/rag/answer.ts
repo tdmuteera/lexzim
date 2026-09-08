@@ -37,7 +37,7 @@ import type {
   ResearchStatus,
   SourceTiers,
 } from "@/lib/ai/citations/tiers";
-import { formatLongDate } from "@/lib/format/dates";
+import { formatFollowUpForChat, splitDraftFromChat } from "@/lib/ai/drafting/split-draft";
 import {
   CHAT_SYSTEM_PROMPT,
   DOCUMENT_INTAKE_ADDENDUM,
@@ -106,11 +106,13 @@ function estimateChatQuality(
 }
 
 function loadPriorDocumentDraft(
-  rows: Array<{ role: string; content: string }>,
+  rows: Array<{ role: string; content: string; retrievalMetaJson?: Record<string, unknown> | null }>,
 ): string | null {
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const m = rows[i];
     if (m.role !== "assistant") continue;
+    const stored = m.retrievalMetaJson?.draftBody;
+    if (typeof stored === "string" && isSubstantialDocumentDraft(stored)) return stored;
     const content = m.content.trim();
     if (isSubstantialDocumentDraft(content)) return m.content;
   }
@@ -138,19 +140,18 @@ function extractDocumentOutline(body: string): string[] {
 function summarizeDocumentForChat(
   body: string,
   doc: { fileName: string; font: string; lineSpacing: number } | null,
+  followUp?: string,
 ): string {
   const outline = extractDocumentOutline(body);
-  const wordCount = body.split(/\s+/).filter(Boolean).length;
-  const approxPages = Math.max(1, Math.round(wordCount / 500));
-  const lead = `I've drafted a ${approxPages}-page document for you.`;
+  const lead = `The Word file is ready: ${doc?.fileName || "draft.docx"}.`;
   const covers =
     outline.length > 0
-      ? `\n\nIt covers:\n${outline.map((t) => `- ${t}`).join("\n")}`
+      ? `\n\nIt contains:\n${outline.map((t) => `- ${t}`).join("\n")}`
       : "";
-  const style = doc
-    ? `\n\nFormatted in ${doc.font}, ${doc.lineSpacing} line spacing. Download it below.`
+  const q = followUp?.trim()
+    ? `\n\nThe notes below are for you in this chat. They are not inside the Word file.\n\n${formatFollowUpForChat(followUp)}`
     : "";
-  return `${lead}${covers}${style}`;
+  return `${lead}${covers}${q}`;
 }
 
 /**
@@ -412,20 +413,24 @@ export async function aiLegalAsk(input: {
   }
 
   answerText = repairRestartedNumberedLists(answerText);
+  const split = splitDraftFromChat(answerText);
+  const draftForPack = split.draft || answerText;
 
   const document = wantWordFile
     ? await maybePackChatDocument({
         firmId: input.firmId,
         userId: input.userId,
         question,
-        answerText,
+        answerText: draftForPack,
         attachmentContext,
         priorDraftText: priorDraft,
       })
     : null;
 
   const finalAnswer =
-    wantWordFile && document ? summarizeDocumentForChat(answerText, document) : answerText;
+    wantWordFile && document
+      ? summarizeDocumentForChat(draftForPack, document, split.followUp)
+      : answerText;
 
   let sourceTiers: SourceTiers = EMPTY_TIERS;
   let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;
@@ -495,6 +500,7 @@ export async function aiLegalAsk(input: {
       sourceTiers,
       researchStatus,
       document,
+      draftBody: document ? draftForPack : undefined,
       wantDoc,
       notFound,
       failoverNotice,

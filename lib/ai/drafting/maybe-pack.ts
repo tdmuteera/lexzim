@@ -10,7 +10,7 @@ import {
   isPromiseOnlyDraft,
   isSubstantialDocumentDraft,
 } from "@/lib/ai/drafting/draft-detect";
-import { wantsExplicitWordFile } from "@/lib/ai/intent";
+import { splitDraftFromChat } from "@/lib/ai/drafting/split-draft";
 
 export type PackedChatDocument = {
   id: string;
@@ -58,9 +58,8 @@ export async function maybePackChatDocument(input: {
     (attached && /\b(word|docx|document|letter|convert|times new roman|line spacing)\b/i.test(q));
   if (!asked) return null;
 
-  const body = repairRestartedNumberedLists(
-    pickBestDraftBody(input.answerText, input.priorDraftText),
-  );
+  const split = splitDraftFromChat(pickBestDraftBody(input.answerText, input.priorDraftText));
+  const body = repairRestartedNumberedLists(split.draft);
   if (!body.trim() || !isSubstantialDocumentDraft(body)) return null;
 
   try {

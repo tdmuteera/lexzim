@@ -13,6 +13,7 @@ import {
   houseRunOptions,
 } from "@/lib/ai/drafting/house-style";
 import { draftDisplayTitle, draftFileName } from "@/lib/ai/drafting/draft-file-name";
+import { isCourtPleading, splitDraftFromChat, tightenPlaceholders } from "@/lib/ai/drafting/split-draft";
 import { parseDocxStyle } from "@/lib/ai/intent";
 import type { DocxStyleOptions } from "@/lib/ai/drafting/house-style";
 
@@ -65,7 +66,8 @@ export function cleanDraftBodyForDocx(
   today = harareLongDate(),
   question = "",
 ): string {
-  let text = stripChatPreamble(stripFormatLine(body)).replace(/\r\n/g, "\n");
+  const split = splitDraftFromChat(stripChatPreamble(stripFormatLine(body)));
+  let text = tightenPlaceholders(split.draft).replace(/\r\n/g, "\n");
 
   text = text.replace(/\n{0,2}\s*\*{0,2}FILE NOTE\*{0,2}:[\s\S]*$/i, "\n");
   text = text.replace(/\n{2,}#{0,4}\s*(sources?|references?)\s*:?\s*\n[\s\S]*$/i, "\n");
@@ -81,20 +83,64 @@ export function cleanDraftBodyForDocx(
       "$1\n",
     );
   }
-  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replace(/\*\*/g, "");
+  text = text.replace(/\\_/g, "_");
+  text = injectNamedNoticeParties(question, text);
+  if (isCourtPleading(text)) {
+    text = text.replace(
+      /^CASE NO\.?\s*:?\s*HC(?:\s{2,}\/\s*\d{2}|\s*\/\s*\d{2}|)\s*$/gim,
+      "CASE NO. [TO BE ALLOCATED]",
+    );
+    text = text.replace(/CASE NO\.?\s*:?\s*HC\s*\[TO BE ALLOCATED\]/gi, "CASE NO. [TO BE ALLOCATED]");
+    text = text.replace(/^\(?\[?TO BE ALLOCATED\]?\)?\s*$/gim, "");
+    text = text.replace(/\n{3,}/g, "\n\n");
+  } else {
+    text = text.replace(/\n{3,}/g, "\n\n");
+  }
   return text.trim();
+}
+
+/** If the user named a tenant/landlord, the notice must say so. */
+export function injectNamedNoticeParties(question: string, text: string): string {
+  if (!/\bnotice of termination\b/i.test(`${question}\n${text}`)) return text;
+  const tenant = question.match(/\btenant\s+([^,]+)/i)?.[1]?.replace(/\s+/g, " ").trim();
+  if (!tenant) return text;
+  const key = tenant.replace(/\(pvt\)\s*ltd/i, "").replace(/\s+/g, " ").trim();
+  if (key.length >= 8 && text.toLowerCase().includes(key.slice(0, 16).toLowerCase())) return text;
+  if (/^TO:/im.test(text)) {
+    return text.replace(/^TO:\s*[^\n]*/im, `TO: ${tenant}`);
+  }
+  if (/^NOTICE OF[^\n]*\n+/i.test(text)) {
+    return text.replace(/^(NOTICE OF[^\n]*\n+)/i, `$1TO: ${tenant}\n\n`);
+  }
+  return `TO: ${tenant}\n\n${text}`;
 }
 
 type Line =
   | { kind: "heading"; text: string; level: 1 | 2 }
   | { kind: "bullet"; text: string }
   | { kind: "number"; text: string }
+  | { kind: "plead"; num: string; text: string }
   | { kind: "blank" }
   | { kind: "meta"; text: string }
+  | { kind: "caption"; text: string }
+  | { kind: "party"; text: string }
   | { kind: "body"; text: string };
 
 const STREET_OR_ENTITY =
   /\b(avenue|street|road|drive|close|crescent|shop|harare|bulawayo|mutare|gweru|pvt|pty|ltd|limited|cc)\b/i;
+
+const SECTION_HEAD =
+  /^(summons|prayer|particulars of claim|wherefore|declaration|notice of intention|founding affidavit|opposing affidavit)$/i;
+
+function formatPartyLine(line: string): string {
+  const m = line.match(/^(.*?)\s+(\.{3,}\s*)?(Plaintiff|Defendant|Applicant|Respondent)\s*$/i);
+  if (!m) return line;
+  const name = m[1].replace(/\.+$/, "").replace(/\s+/g, " ").trim();
+  const role = m[3][0].toUpperCase() + m[3].slice(1).toLowerCase();
+  const pad = Math.max(8, 62 - name.length - role.length);
+  return `${name} ${".".repeat(pad)} ${role}`;
+}
 
 function isLetterMeta(line: string): boolean {
   return /^(to|from|date|dear\b|re:|re\b|yours\b|kind regards|best regards|dated at|take notice|take further notice)\b/i.test(
@@ -102,13 +148,40 @@ function isLetterMeta(line: string): boolean {
   );
 }
 
-function classifyLine(raw: string): Line {
+function classifyLine(raw: string, court: boolean): Line {
   const line = raw.trim();
   if (!line) return { kind: "blank" };
 
   const md = line.match(/^(#{1,6})\s+(.*)$/);
   if (md) {
     return { kind: "heading", text: md[2].trim(), level: md[1].length <= 2 ? 1 : 2 };
+  }
+
+  if (court) {
+    if (/^in the (high|magistrates|labour) court/i.test(line) || /^at [A-Z]/i.test(line) && line.length < 40) {
+      return { kind: "caption", text: line.replace(/\*\*/g, "") };
+    }
+    if (/^in the matter between:?$/i.test(line) || /^case no/i.test(line)) {
+      return { kind: "caption", text: line.replace(/\*\*/g, "") };
+    }
+    if (
+      (/\.{5,}/.test(line) || /\s{4,}/.test(line)) &&
+      /\b(plaintiff|defendant|applicant|respondent)\s*$/i.test(line) &&
+      !/[.]$/.test(line)
+    ) {
+      return { kind: "party", text: formatPartyLine(line.replace(/\*\*/g, "")) };
+    }
+    if (/^and$/i.test(line)) return { kind: "caption", text: "and" };
+    if (/legal practitioners?$/i.test(line) || /^_{8,}/.test(line)) {
+      return { kind: "meta", text: line.replace(/\*\*/g, "") };
+    }
+    if (SECTION_HEAD.test(line.replace(/\*\*/g, ""))) {
+      return { kind: "heading", text: line.replace(/\*\*/g, ""), level: 1 };
+    }
+    const plead = line.match(/^(\d+)\.\s+(.*)$/);
+    if (plead) return { kind: "plead", num: plead[1], text: plead[2] };
+    const sub = line.match(/^([a-z])\)\s+(.*)$/i);
+    if (sub) return { kind: "body", text: `${sub[1]}) ${sub[2]}` };
   }
 
   const boldOnly = line.match(/^\*\*(.+?):?\*\*:?$/);
@@ -123,8 +196,10 @@ function classifyLine(raw: string): Line {
   const bullet = line.match(/^[-*•]\s+(.*)$/);
   if (bullet) return { kind: "bullet", text: bullet[1].trim() };
 
-  const numbered = line.match(/^\d+[.)]\s+(.*)$/);
-  if (numbered) return { kind: "number", text: numbered[1].trim() };
+  if (!court) {
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+    if (numbered) return { kind: "number", text: numbered[1].trim() };
+  }
 
   if (isLetterMeta(line)) return { kind: "meta", text: line };
 
@@ -179,26 +254,45 @@ function para(
     line: number;
     bullet?: boolean;
     numbering?: boolean;
+    indentLeft?: number;
+    hanging?: number;
   },
 ): Paragraph {
   return new Paragraph({
     alignment: opts.align,
     spacing: {
       before: opts.before ?? 0,
-      after: opts.after ?? 120,
+      after: opts.after ?? 60,
       line: opts.line,
       lineRule: LineRuleType.AUTO,
     },
     ...(opts.bullet ? { bullet: { level: 0 } } : {}),
     ...(opts.numbering ? { numbering: { reference: "lexzim-numbers", level: 0 } } : {}),
+    ...(opts.indentLeft || opts.hanging
+      ? { indent: { left: opts.indentLeft ?? 0, hanging: opts.hanging ?? 0 } }
+      : {}),
     children,
   });
 }
 
+function collapseCourtBlanks(lines: string[]): string[] {
+  const out: string[] = [];
+  let prevKind: Line["kind"] | "" = "";
+  for (const raw of lines) {
+    const kind = classifyLine(raw, true).kind;
+    if (kind === "blank") {
+      if (prevKind === "plead" || prevKind === "party" || prevKind === "caption") continue;
+      if (out.length && classifyLine(out[out.length - 1], true).kind === "blank") continue;
+    }
+    out.push(raw);
+    prevKind = kind;
+  }
+  return out;
+}
+
 /**
  * Build a Word file from AI draft text using LexZim house style
- * (Trebuchet MS, 12pt, 1.5, justified, plain black) unless the user
- * explicitly requested another font/size/spacing.
+ * unless the user explicitly requested another font/size/spacing.
  */
 export async function packInstructionDocx(input: {
   title: string;
@@ -213,6 +307,8 @@ export async function packInstructionDocx(input: {
 }> {
   const style = parseDocxStyle(input.question);
   const text = cleanDraftBodyForDocx(input.body, harareLongDate(), input.question);
+  const court = isCourtPleading(text);
+  const lineSpacing = court ? 1.15 : style.lineSpacing;
   const displayTitle = draftDisplayTitle({
     question: input.question,
     body: text,
@@ -223,13 +319,16 @@ export async function packInstructionDocx(input: {
     body: text,
     title: displayTitle,
   });
-  const rawLines = text.split("\n");
-  const line = houseLineSpacingTwips(style.lineSpacing);
+  let rawLines = text.split("\n");
+  if (court) rawLines = collapseCourtBlanks(rawLines);
+  const line = houseLineSpacingTwips(lineSpacing);
   const sizeHalfPoints = houseFontSizeHalfPoints(style.fontSizePt);
-  const bodyAlign = style.justified ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+  const bodyAlign = court ? AlignmentType.LEFT : style.justified ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+  const tightAfter = court ? 40 : 60;
 
   const firstMeaningful = rawLines.find((l) => l.trim())?.trim().replace(/\*\*/g, "").replace(/^#+\s+/, "") ?? "";
-  const skipTitle = firstMeaningful.toLowerCase() === displayTitle.trim().toLowerCase();
+  const skipTitle =
+    court || firstMeaningful.toLowerCase() === displayTitle.trim().toLowerCase();
 
   const children: Paragraph[] = [];
   if (!skipTitle) {
@@ -240,24 +339,40 @@ export async function packInstructionDocx(input: {
             text: displayTitle,
             ...houseRunOptions({
               font: style.font,
-              fontSizePt: style.fontSizePt + 3,
+              fontSizePt: style.fontSizePt + 2,
               color: style.color,
               bold: true,
             }),
           }),
         ],
-        { align: AlignmentType.CENTER, after: 240, line },
+        { align: AlignmentType.CENTER, after: 160, line },
       ),
     );
   }
 
   for (const raw of rawLines) {
-    const item = classifyLine(raw);
+    const item = classifyLine(raw, court);
     if (item.kind === "blank") {
+      continue;
+    }
+
+    if (item.kind === "caption") {
       children.push(
-        new Paragraph({
-          spacing: { after: 60, line, lineRule: LineRuleType.AUTO },
-          children: [],
+        para(inlineRuns(item.text, style, { bold: true }), {
+          align: AlignmentType.CENTER,
+          after: 20,
+          line,
+        }),
+      );
+      continue;
+    }
+
+    if (item.kind === "party") {
+      children.push(
+        para(inlineRuns(item.text, style), {
+          align: AlignmentType.LEFT,
+          after: 20,
+          line,
         }),
       );
       continue;
@@ -265,11 +380,24 @@ export async function packInstructionDocx(input: {
 
     if (item.kind === "heading") {
       children.push(
-        para(inlineRuns(item.text, style, { bold: true, fontSizePt: style.fontSizePt + (item.level === 1 ? 2 : 1) }), {
+        para(inlineRuns(item.text, style, { bold: true, fontSizePt: style.fontSizePt + (item.level === 1 ? 1 : 0) }), {
           align: AlignmentType.CENTER,
-          before: 200,
-          after: 80,
+          before: court ? 120 : 160,
+          after: court ? 40 : 80,
           line,
+        }),
+      );
+      continue;
+    }
+
+    if (item.kind === "plead") {
+      children.push(
+        para(inlineRuns(`${item.num}.  ${item.text}`, style), {
+          align: AlignmentType.JUSTIFIED,
+          after: tightAfter,
+          line,
+          indentLeft: 360,
+          hanging: 360,
         }),
       );
       continue;
@@ -287,16 +415,16 @@ export async function packInstructionDocx(input: {
     }
 
     if (item.kind === "bullet") {
-      children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: 60, line, bullet: true }));
+      children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: 40, line, bullet: true }));
       continue;
     }
 
     if (item.kind === "number") {
-      children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: 60, line, numbering: true }));
+      children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: 40, line, numbering: true }));
       continue;
     }
 
-    children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: 120, line }));
+    children.push(para(inlineRuns(item.text, style), { align: bodyAlign, after: tightAfter, line }));
   }
 
   const doc = new Document({
@@ -344,7 +472,7 @@ export async function packInstructionDocx(input: {
     bytes: Buffer.from(await Packer.toBuffer(doc)),
     fileName,
     font: style.font,
-    lineSpacing: style.lineSpacing,
+    lineSpacing,
     plainText: text,
   };
 }
