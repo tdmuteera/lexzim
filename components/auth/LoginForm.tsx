@@ -9,6 +9,7 @@ import {
   AuthScreen,
   AuthVisualPanel,
 } from "@/components/auth/AuthChrome";
+import { InstallHomeScreenTip } from "@/components/auth/InstallHomeScreenTip";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import {
@@ -223,6 +224,8 @@ export function LoginForm() {
             )}
           </div>
         ) : null}
+
+        <InstallHomeScreenTip />
       </AuthFormPanel>
     </AuthScreen>
   );
