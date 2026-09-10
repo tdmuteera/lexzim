@@ -77,7 +77,7 @@ function clientValuesFromInput(input: ClientInput) {
 }
 
 /**
- * Assigned = client.responsibleLawyerId OR matter.responsibleLawyerId OR matter_team.
+ * Assigned = client.responsibleLawyerId OR client.createdBy OR matter.responsibleLawyerId OR matter_team.
  */
 export async function listAccessibleClientIds(
   firmId: string,
@@ -88,6 +88,11 @@ export async function listAccessibleClientIds(
     .select({ id: clients.id })
     .from(clients)
     .where(and(eq(clients.firmId, firmId), eq(clients.responsibleLawyerId, userId)));
+
+  const asCreator = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), eq(clients.createdBy, userId)));
 
   const asMatterLawyer = await db
     .selectDistinct({ id: matters.clientId })
@@ -106,6 +111,7 @@ export async function listAccessibleClientIds(
     ...new Set(
       [
         ...asResponsible.map((r) => r.id),
+        ...asCreator.map((r) => r.id),
         ...asMatterLawyer.map((r) => r.id).filter(Boolean),
         ...asTeam.map((r) => r.id).filter(Boolean),
       ] as string[],
@@ -127,6 +133,7 @@ export async function userCanAccessClient(
   const row = await getClientById(firmId, clientId);
   if (!row) return false;
   if (row.responsibleLawyerId === userId) return true;
+  if (row.createdBy === userId) return true;
 
   const db = getDb();
   const matterHit = await db
@@ -239,13 +246,19 @@ export async function getClientById(firmId: string, clientId: string) {
 export async function createClient(firmId: string, userId: string, input: ClientInput) {
   const db = getDb();
   const clientNumber = await allocateClientNumber(firmId);
+  const values = clientValuesFromInput(input);
+  // If left unassigned, the creator stays responsible so save → open does not 404
+  // under assigned-only client visibility.
+  if (!values.responsibleLawyerId) {
+    values.responsibleLawyerId = userId;
+  }
   const rows = await db
     .insert(clients)
     .values({
       firmId,
       clientNumber,
       createdBy: userId,
-      ...clientValuesFromInput(input),
+      ...values,
     })
     .returning();
   return rows[0];

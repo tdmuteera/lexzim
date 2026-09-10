@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AccessDenied } from "@/components/shell/AccessDenied";
 import { ProtectedModulePage } from "@/components/shell/ProtectedModulePage";
 import { ClientDetailView } from "@/components/clients/ClientDetailView";
 import { serializeClient } from "@/lib/clients/serialize";
@@ -26,7 +27,16 @@ export default async function ClientDetailPage({ params }: PageProps) {
     session.id,
     canViewAllClients(session),
   );
-  if (!allowed) notFound();
+  if (!allowed) {
+    return (
+      <ProtectedModulePage path="/clients">
+        <AccessDenied
+          title="Client not assigned to you"
+          permission="clients.view_all"
+        />
+      </ProtectedModulePage>
+    );
+  }
 
   const viewAll = canViewAllMatters(session);
   const matterCounts = await getMatterCountsForClient(firmId, id, {

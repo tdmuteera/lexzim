@@ -34,7 +34,14 @@ export default async function EditClientPage({ params }: PageProps) {
     session.id,
     canViewAllClients(session),
   );
-  if (!allowed) notFound();
+  if (!allowed) {
+    return (
+      <AccessDenied
+        title="Client not assigned to you"
+        permission="clients.view_all"
+      />
+    );
+  }
 
   const client = serializeClient(row);
 
