@@ -103,17 +103,39 @@ export function wantsExplicitWordFile(question: string): boolean {
   if (!q) return false;
   if (DOCUMENT_EXPORT_RE.test(q) || DOC_FOLLOWUP_RE.test(q)) return true;
   if (FORMAT_RE.test(q) && /\b(word|docx|download|send|file|link)\b/i.test(q)) return true;
+  if (/\b(resend|re-send|send\s+(it|the\s+)?(again|back))\b/i.test(q) && /\b(word|docx|document|file)\b/i.test(q)) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * User uploaded (or is revising) a document and wants formatting / legal polish.
+ * These should produce a Word file once a substantial draft exists, not only chat text.
+ */
+export function wantsAttachedDocumentRevision(question: string): boolean {
+  const q = normalizeChatQuestion(question).trim();
+  if (!q) return false;
+  const revise =
+    /\b(correct|fix|edit|revise|improve|reformat|format|spacing|font|grammatical|grammar|proof.?read|clean\s*up|make it (a )?proper|optimum)\b/i.test(
+      q,
+    );
+  const docCue =
+    /\b(document|agreement|contract|letter|affidavit|notice|deed|docx|word|attached|attachment|file)\b/i.test(
+      q,
+    );
+  return revise && docCue;
 }
 
 /** User wants the prior chat draft exported, not a new document authored. */
 export function isWordExportFollowup(question: string): boolean {
   const q = normalizeChatQuestion(question).trim();
   if (!wantsExplicitWordFile(q)) return false;
-  if (/\b(draft|write|prepare|create|compose|generate)\b/i.test(q) && !/\b(this|that|it|above)\b/i.test(q)) {
+  if (/\b(draft|write|prepare|create|compose|generate)\b/i.test(q) && !/\b(this|that|it|above|again|resend)\b/i.test(q)) {
     return false;
   }
   if (/^(yes|yeah|yep|yup|please|ok|okay|sure)\b/i.test(q)) return true;
+  if (/\b(resend|re-send|again)\b/i.test(q)) return true;
   if (/\b(this|that|it|above|the\s+(draft|document|agreement|letter|same|summons|notice))\b/i.test(q)) {
     return true;
   }

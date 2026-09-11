@@ -9,6 +9,10 @@ import { assertAiSoftBudget } from "@/lib/ai/budget";
 import { AiProviderError } from "@/lib/ai/errors";
 import { loadChatHistory } from "@/lib/ai/chat-history";
 import { maybePackChatDocument } from "@/lib/ai/drafting/maybe-pack";
+import {
+  loadSessionAttachmentContext,
+  mergeAttachmentContext,
+} from "@/lib/ai/conversation-attachments";
 import { classifyChatIntent } from "@/lib/ai/intent";
 import { retrieveFirmContext } from "@/lib/ai/firm-memory/retrieve";
 import { retrieveLegalContext } from "@/lib/ai/rag/retrieve";
@@ -32,6 +36,7 @@ import {
   createConversation,
   createMessage,
   getConversation,
+  listMessages,
 } from "@/lib/repos/ai-conversations";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
@@ -183,7 +188,7 @@ export async function aiMatterAsk(input: {
   const started = Date.now();
   const question = input.question.trim();
   const matterId = input.matterId.trim();
-  const attachmentContext = input.attachmentContext?.trim() || "";
+  const freshAttachment = input.attachmentContext?.trim() || "";
   if (!question) throw new Error("question is required");
   if (!matterId) throw new Error("matter_id_required");
 
@@ -238,8 +243,8 @@ export async function aiMatterAsk(input: {
     conversationId = created.id;
   }
 
-  const storedUser = attachmentContext
-    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
+  const storedUser = freshAttachment
+    ? `${question}\n\n[Attached files]\n${freshAttachment.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
     : question;
 
   const userMessage = skipUser
@@ -252,6 +257,12 @@ export async function aiMatterAsk(input: {
         role: "user",
         content: storedUser,
       });
+
+  const threadMessages = await listMessages(input.firmId, conversationId);
+  const attachmentContext = mergeAttachmentContext(
+    freshAttachment,
+    loadSessionAttachmentContext(threadMessages),
+  );
 
   const firm =
     intent === "chat"

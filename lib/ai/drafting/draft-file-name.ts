@@ -86,6 +86,12 @@ function tidyParty(raw: string): string {
     .replace(/[.,;:]+$/, "");
 }
 
+function isPlaceholderParty(name: string | undefined): boolean {
+  if (!name) return true;
+  const t = name.replace(/[.\u2026…⋯・_\-\s]/g, "").trim();
+  return t.length < 2;
+}
+
 function companyHead(line: string): string {
   return prettyParty(tidyParty(line.split(",")[0] || line));
 }
@@ -215,15 +221,17 @@ export function draftFileName(input: {
 }): string {
   const type = detectType(input.title || "", input.body, input.question);
   const parties = extractParties(input.body);
+  const leftOk = !isPlaceholderParty(parties.left);
+  const rightOk = !isPlaceholderParty(parties.right);
   let suffix = "";
-  if (parties.left && parties.right) {
-    const a = prettyParty(shortParty(parties.left));
-    const b = prettyParty(shortParty(parties.right));
+  if (leftOk && rightOk) {
+    const a = prettyParty(shortParty(parties.left!));
+    const b = prettyParty(shortParty(parties.right!));
     suffix = parties.mode === "to" ? ` - ${a} to ${b}` : parties.mode === "v" ? ` - ${a} v ${b}` : ` - ${a} and ${b}`;
-  } else if (parties.right) {
-    suffix = ` - ${shortParty(parties.right)}`;
-  } else if (parties.left) {
-    suffix = ` - ${shortParty(parties.left)}`;
+  } else if (rightOk) {
+    suffix = ` - ${shortParty(parties.right!)}`;
+  } else if (leftOk) {
+    suffix = ` - ${shortParty(parties.left!)}`;
   }
   return windowsSafeFileName(`${type}${suffix}`);
 }

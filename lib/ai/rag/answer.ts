@@ -11,7 +11,11 @@ import {
   isSubstantialDocumentDraft,
   maybePackChatDocument,
 } from "@/lib/ai/drafting/maybe-pack";
-import { classifyChatIntent, wantsDocumentExport, wantsExplicitWordFile, isWordExportFollowup } from "@/lib/ai/intent";
+import { classifyChatIntent, wantsDocumentExport, wantsExplicitWordFile, isWordExportFollowup, wantsAttachedDocumentRevision } from "@/lib/ai/intent";
+import {
+  loadSessionAttachmentContext,
+  mergeAttachmentContext,
+} from "@/lib/ai/conversation-attachments";
 import {
   retrieveLegalContext,
   type RetrieveLegalContextResult,
@@ -176,9 +180,10 @@ export async function aiLegalAsk(input: {
 
   const intent = classifyChatIntent(question);
   const wantDoc = wantsDocumentExport(question) || intent === "document";
-  const wantWordFile = wantsExplicitWordFile(question);
+  const wantWordFileExplicit = wantsExplicitWordFile(question);
+  const revisionAsk = wantsAttachedDocumentRevision(question);
   const runResearch = intent === "legal";
-  const attachmentContext = input.attachmentContext?.trim() || "";
+  const freshAttachment = input.attachmentContext?.trim() || "";
   const skipUser = Boolean(input.skipCreateUserMessage);
 
   let conversationId = input.conversationId?.trim() || null;
@@ -202,8 +207,8 @@ export async function aiLegalAsk(input: {
     conversationId = created.id;
   }
 
-  const storedUser = attachmentContext
-    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
+  const storedUser = freshAttachment
+    ? `${question}\n\n[Attached files]\n${freshAttachment.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
     : question;
 
   const userMessage = skipUser
@@ -276,23 +281,31 @@ export async function aiLegalAsk(input: {
     limit: 16,
   });
   const threadMessages = await listMessages(input.firmId, conversationId);
+  const sessionAttachments = loadSessionAttachmentContext(threadMessages);
+  const attachmentContext = mergeAttachmentContext(freshAttachment, sessionAttachments);
+  const autoWordRevision = Boolean(attachmentContext) && revisionAsk;
+  /** Explicit Word ask, or attached-doc revision that may auto-pack if no questions. */
+  const aimingForWord = wantWordFileExplicit || autoWordRevision;
   const priorDraft = loadPriorDocumentDraft(threadMessages);
   const packablePrior = Boolean(priorDraft && isSubstantialDocumentDraft(priorDraft));
   const wordExportFollowup = Boolean(
-    wantWordFile && packablePrior && isWordExportFollowup(question),
+    wantWordFileExplicit && packablePrior && isWordExportFollowup(question),
   );
 
   let systemPrompt = CHAT_SYSTEM_PROMPT;
-  if (wantWordFile && !wordExportFollowup) {
-    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${WORD_EXPORT_ADDENDUM}\n\nToday's date is ${formatLongDate()}. Use it as the document date unless the user specified another date.`;
-  } else if (wantDoc && !wantWordFile) {
+  if (aimingForWord && !wordExportFollowup) {
+    const revisionNote = autoWordRevision
+      ? `\n\nThe user attached a source document in this session. Revise that instrument (spacing, font-ready plain text, grammar, structure). Keep placeholders the client must fill. If essential facts are missing and you must ask, put questions ONLY under a line that is exactly:\nFOLLOW-UP QUESTIONS\nOtherwise output the complete revised document with no chat preamble.`
+      : "";
+    systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${WORD_EXPORT_ADDENDUM}${revisionNote}\n\nToday's date is ${formatLongDate()}. Use it as the document date unless the user specified another date.`;
+  } else if (wantDoc && !aimingForWord) {
     systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${DOCUMENT_INTAKE_ADDENDUM}`;
   }
 
   const packContext = runResearch ? buildKbContext(retrieval) : "";
   const webContextBlock = runResearch ? formatWebLookupBlock(web.hits) : "";
   const attachmentBlock = attachmentContext
-    ? `\n\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_MODEL)}`
+    ? `\n\n[Session attached file text — keep using this source document until the user replaces it]\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_MODEL)}`
     : "";
 
   let answerText: string;
@@ -320,9 +333,9 @@ export async function aiLegalAsk(input: {
         },
       ],
       {
-        temperature: wantDoc ? 0.2 : 0.25,
+        temperature: aimingForWord || wantDoc ? 0.2 : 0.25,
         maxOutputTokens,
-        quality: estimateChatQuality(question, intent, wantDoc),
+        quality: estimateChatQuality(question, intent, aimingForWord || wantDoc),
       },
     );
     answerText = chat.result.text.trim();
@@ -332,7 +345,7 @@ export async function aiLegalAsk(input: {
     failoverNotice = chat.meta.failoverNotice;
     chatProvider = chat.provider;
 
-    if (wantWordFile && !packablePrior && !isSubstantialDocumentDraft(answerText)) {
+    if (aimingForWord && !packablePrior && !isSubstantialDocumentDraft(answerText)) {
       const forced = await chatWithProviderFailover(
         input.firmId,
         [
@@ -420,8 +433,13 @@ export async function aiLegalAsk(input: {
   answerText = repairRestartedNumberedLists(answerText);
   const split = splitDraftFromChat(answerText);
   const draftForPack = split.draft || answerText;
+  const hasFollowUpQuestions = Boolean(split.followUp?.trim());
+  // Explicit Word asks always pack. Attached-doc revision auto-packs only when there are no questions.
+  const shouldPackWord =
+    wantWordFileExplicit ||
+    (autoWordRevision && !hasFollowUpQuestions && isSubstantialDocumentDraft(draftForPack));
 
-  const document = wantWordFile
+  const document = shouldPackWord
     ? await maybePackChatDocument({
         firmId: input.firmId,
         userId: input.userId,
@@ -429,13 +447,13 @@ export async function aiLegalAsk(input: {
         answerText: draftForPack,
         attachmentContext,
         priorDraftText: priorDraft,
+        forcePack: shouldPackWord,
       })
     : null;
 
-  const finalAnswer =
-    wantWordFile && document
-      ? summarizeDocumentForChat(draftForPack, document, split.followUp)
-      : answerText;
+  const finalAnswer = document
+    ? summarizeDocumentForChat(draftForPack, document, split.followUp)
+    : answerText;
 
   let sourceTiers: SourceTiers = EMPTY_TIERS;
   let researchStatus: ResearchStatus = EMPTY_RESEARCH_STATUS;
@@ -505,8 +523,16 @@ export async function aiLegalAsk(input: {
       sourceTiers,
       researchStatus,
       document,
-      draftBody: document ? draftForPack : undefined,
+      draftBody: isSubstantialDocumentDraft(draftForPack)
+        ? draftForPack
+        : document
+          ? draftForPack
+          : undefined,
+      sessionHadAttachments: Boolean(attachmentContext),
       wantDoc,
+      wantWordFile: shouldPackWord,
+      autoWordRevision,
+      hasFollowUpQuestions,
       notFound,
       failoverNotice,
       usedProvider,

@@ -40,6 +40,7 @@ export function isMetaChatSummary(text: string): boolean {
   if (/formatted in trebuchet|download it below|download below|spacing\)\s*$/im.test(t)) {
     return true;
   }
+  if (/^the word file is ready\b/i.test(t) && t.length < 1200) return true;
   return false;
 }
 

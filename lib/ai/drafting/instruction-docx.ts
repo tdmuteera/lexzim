@@ -1,11 +1,16 @@
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   LevelFormat,
   LineRuleType,
   Packer,
   Paragraph,
+  Table,
+  TableCell,
+  TableRow,
   TextRun,
+  WidthType,
 } from "docx";
 import {
   houseFontSizeHalfPoints,
@@ -275,6 +280,72 @@ function para(
   });
 }
 
+function isMdTableSep(line: string): boolean {
+  return /^\s*\|?[\s:-]+\|[\s|:-]+\|?\s*$/.test(line);
+}
+
+function parseMdTableRow(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((c) => c.trim());
+}
+
+function looksLikeMdTableRow(line: string): boolean {
+  const t = line.trim();
+  if (!t.includes("|")) return false;
+  if (isMdTableSep(t)) return true;
+  return (t.match(/\|/g) || []).length >= 2;
+}
+
+function buildMdTable(
+  rows: string[][],
+  style: DocxStyleOptions,
+  line: number,
+): Table {
+  const colCount = Math.max(1, ...rows.map((r) => r.length));
+  const totalWidth = A4_WIDTH - MARGIN * 2;
+  const colW = Math.floor(totalWidth / colCount);
+  const border = {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: "999999",
+  };
+  const borders = { top: border, bottom: border, left: border, right: border };
+
+  return new Table({
+    width: { size: totalWidth, type: WidthType.DXA },
+    columnWidths: Array.from({ length: colCount }, () => colW),
+    rows: rows.map((cells, rowIdx) => {
+      const padded = [...cells];
+      while (padded.length < colCount) padded.push("");
+      return new TableRow({
+        children: padded.map(
+          (cell) =>
+            new TableCell({
+              borders,
+              width: { size: colW, type: WidthType.DXA },
+              children: [
+                new Paragraph({
+                  spacing: { after: 40, line, lineRule: LineRuleType.AUTO },
+                  children: [
+                    new TextRun({
+                      text: cell,
+                      ...houseRunOptions({
+                        font: style.font,
+                        fontSizePt: Math.max(9, style.fontSizePt - 1),
+                        color: style.color,
+                        bold: rowIdx === 0,
+                      }),
+                    }),
+                  ],
+                }),
+              ],
+            }),
+        ),
+      });
+    }),
+  });
+}
+
 function collapseCourtBlanks(lines: string[]): string[] {
   const out: string[] = [];
   let prevKind: Line["kind"] | "" = "";
@@ -330,7 +401,7 @@ export async function packInstructionDocx(input: {
   const skipTitle =
     court || firstMeaningful.toLowerCase() === displayTitle.trim().toLowerCase();
 
-  const children: Paragraph[] = [];
+  const children: Array<Paragraph | Table> = [];
   if (!skipTitle) {
     children.push(
       para(
@@ -350,7 +421,24 @@ export async function packInstructionDocx(input: {
     );
   }
 
-  for (const raw of rawLines) {
+  for (let i = 0; i < rawLines.length; i += 1) {
+    const raw = rawLines[i] ?? "";
+    if (looksLikeMdTableRow(raw)) {
+      const tableLines: string[] = [];
+      while (i < rawLines.length && looksLikeMdTableRow(rawLines[i] ?? "")) {
+        const row = rawLines[i] ?? "";
+        if (!isMdTableSep(row)) tableLines.push(row);
+        i += 1;
+      }
+      i -= 1;
+      const parsed = tableLines.map(parseMdTableRow).filter((r) => r.some((c) => c.length > 0));
+      if (parsed.length) {
+        children.push(buildMdTable(parsed, style, line));
+        children.push(para([], { align: AlignmentType.LEFT, after: 80, line }));
+      }
+      continue;
+    }
+
     const item = classifyLine(raw, court);
     if (item.kind === "blank") {
       continue;

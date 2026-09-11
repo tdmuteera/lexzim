@@ -30,6 +30,12 @@ export {
 function pickBestDraftBody(answerText: string, priorDraftText?: string | null): string {
   const current = answerText.trim();
   const prior = priorDraftText?.trim() || "";
+  // Prefer a real instrument already in the thread over a short "Word is ready" reply.
+  if (isMetaChatSummary(current) && isSubstantialDocumentDraft(prior)) return prior;
+  if (isSubstantialDocumentDraft(current) && isSubstantialDocumentDraft(prior)) {
+    // Prefer the longer polished draft when both look real (follow-up packs).
+    return current.length >= prior.length * 0.85 ? current : prior;
+  }
   if (isSubstantialDocumentDraft(current)) return current;
   if (isSubstantialDocumentDraft(prior)) return prior;
   if (current && !isPromiseOnlyDraft(current) && !isMetaChatSummary(current) && current.length >= 200) {
@@ -51,12 +57,18 @@ export async function maybePackChatDocument(input: {
   attachmentContext?: string | null;
   /** Prior assistant draft in the same thread (for “yes send the Word file”). */
   priorDraftText?: string | null;
+  /** Caller already decided packing is required (e.g. revision with no questions). */
+  forcePack?: boolean;
 }): Promise<PackedChatDocument | null> {
   const q = input.question;
   const attached = Boolean(input.attachmentContext?.trim());
   const asked =
+    input.forcePack ||
     wantsExplicitWordFile(q) ||
-    (attached && /\b(word|docx|document|letter|convert|times new roman|line spacing)\b/i.test(q));
+    (attached &&
+      /\b(word|docx|document|letter|convert|times new roman|line spacing|correct|fix|edit|revise|format|spacing|font|grammatical|proper legal)\b/i.test(
+        q,
+      ));
   if (!asked) return null;
 
   const split = splitDraftFromChat(pickBestDraftBody(input.answerText, input.priorDraftText));
@@ -80,7 +92,7 @@ export async function maybePackChatDocument(input: {
     });
     return {
       id: stored.id,
-      fileName: packed.fileName,
+      fileName: stored.fileName,
       font: packed.font || HOUSE_STYLE_FONT,
       lineSpacing: packed.lineSpacing || HOUSE_STYLE_LINE_SPACING,
     };
