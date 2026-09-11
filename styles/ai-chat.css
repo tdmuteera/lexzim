@@ -565,6 +565,26 @@
   font-size: 0.85rem;
 }
 
+.ai-doc-download-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ai-teal);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ai-doc-download-btn:hover:not(:disabled) {
+  color: var(--ai-teal-strong, #0f6e6e);
+}
+
+.ai-doc-download-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .ai-composer-main {
   flex: 1;
   display: flex;

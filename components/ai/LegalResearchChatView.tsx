@@ -214,6 +214,71 @@ function CopyAssistantButton({ message }: { message: ChatBubble }) {
   return <CopyTextButton text={buildCopyText(message)} />;
 }
 
+function DownloadDraftButton({
+  document,
+}: {
+  document: { id: string; fileName: string; font?: string; lineSpacing?: number };
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function onDownload() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/ai/drafts/${document.id}`, {
+        method: "GET",
+        credentials: "include",
+      });
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || contentType.includes("application/json")) {
+        let message = "Could not download that Word file.";
+        try {
+          const body = (await res.json()) as { error?: { message?: string } };
+          if (body.error?.message) message = body.error.message;
+        } catch {
+          /* keep default */
+        }
+        toast(message);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = document.fileName || "document.docx";
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast("Could not download that Word file. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <p className="ai-doc-link">
+      <button
+        type="button"
+        className="ai-doc-download-btn"
+        disabled={busy}
+        onClick={() => void onDownload()}
+      >
+        {busy ? "Preparing download…" : `Download ${document.fileName}`}
+      </button>
+      {document.font ? (
+        <span className="muted">
+          {" "}
+          ({document.font}
+          {document.lineSpacing ? `, ${document.lineSpacing} spacing` : ""})
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
 function pickRecorderMime(): { mimeType: string; fileName: string } {
   const candidates: Array<{ mimeType: string; fileName: string }> = [
     { mimeType: "audio/webm;codecs=opus", fileName: "recording.webm" },
@@ -1281,20 +1346,7 @@ export function LegalResearchChatView() {
                     m.content
                   )}
                 </div>
-                {m.document ? (
-                  <p className="ai-doc-link">
-                    <a href={`/api/ai/drafts/${m.document.id}`} download={m.document.fileName}>
-                      Download {m.document.fileName}
-                    </a>
-                    {m.document.font ? (
-                      <span className="muted">
-                        {" "}
-                        ({m.document.font}
-                        {m.document.lineSpacing ? `, ${m.document.lineSpacing} spacing` : ""})
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
+                {m.document ? <DownloadDraftButton document={m.document} /> : null}
                 {m.role === "assistant" && m.failoverNotice ? (
                   <div className="ai-banner warn" role="status" style={{ marginTop: "0.5rem" }}>
                     {m.failoverNotice}

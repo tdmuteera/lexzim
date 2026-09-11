@@ -23,7 +23,12 @@ export const ALLOWED_MIME_TYPES = new Set([
 let bucketReady: Promise<void> | null = null;
 
 export function sanitizeFileName(name: string): string {
-  const base = name.replace(/[/\\?%*:|"<>]/g, "_").trim() || "file";
+  const base =
+    name
+      .replace(/[.…⋯・]+/g, "")
+      .replace(/[/\\?%*:|"<>]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim() || "file";
   return base.slice(0, 180);
 }
 

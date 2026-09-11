@@ -72,7 +72,7 @@ export async function maybePackChatDocument(input: {
           ? q
           : `${q}\n\nUse Trebuchet MS 12pt 1.5 spacing.`,
     });
-    const stored = putAiDraft({
+    const stored = await putAiDraft({
       firmId: input.firmId,
       userId: input.userId,
       fileName: packed.fileName,
