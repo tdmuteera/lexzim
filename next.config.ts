@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["tesseract.js", "pdfkit", "exceljs"],
+  serverExternalPackages: ["tesseract.js", "pdfkit", "exceljs", "unpdf", "sharp"],
+
+  // Large AI attach payloads (many PDFs / scans) need room past the default ~10MB proxy buffer.
+  experimental: {
+    proxyClientMaxBodySize: "80mb",
+    serverActions: {
+      bodySizeLimit: "80mb",
+    },
+  },
 
   // Ensure pilot Help markdown ships with the server bundle (P4-11).
   outputFileTracingIncludes: {

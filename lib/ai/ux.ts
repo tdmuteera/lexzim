@@ -41,6 +41,9 @@ export function humanAiError(message: string | undefined, status?: number): stri
     return "You do not have permission for this AI action.";
   }
   if (status === 401) return "Your session expired. Sign in again.";
+  if (m.includes("unexpected server error")) {
+    return "Something went wrong while processing that request. If you attached files, try fewer or clearer PDFs, DOCX, or images, then send again.";
+  }
   return message?.trim() || "Could not complete that AI request. Please try again.";
 }
 

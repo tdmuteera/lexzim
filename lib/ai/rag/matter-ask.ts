@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  ATTACH_CONTEXT_FOR_MODEL,
+  ATTACH_CONTEXT_FOR_STORE,
+} from "@/lib/ai/attachments";
 import { getProvider } from "@/lib/ai/providers";
 import { assertAiSoftBudget } from "@/lib/ai/budget";
 import { AiProviderError } from "@/lib/ai/errors";
@@ -235,7 +239,7 @@ export async function aiMatterAsk(input: {
   }
 
   const storedUser = attachmentContext
-    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
+    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
     : question;
 
   const userMessage = skipUser
@@ -413,7 +417,7 @@ export async function aiMatterAsk(input: {
       limit: 12,
     });
     const attachmentBlock = attachmentContext
-      ? `\n\nUser attached file text (OCR or extracted):\n${attachmentContext.slice(0, 24_000)}`
+      ? `\n\nUser attached file text (OCR or extracted):\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_MODEL)}`
       : "";
     const webBlock = wantsLegalResearch ? formatWebLookupBlock(web.hits) : "";
     const noResearchHint =

@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  ATTACH_CONTEXT_FOR_MODEL,
+  ATTACH_CONTEXT_FOR_STORE,
+} from "@/lib/ai/attachments";
 import { chatWithProviderFailover } from "@/lib/ai/chat-router";
 import { loadChatHistory } from "@/lib/ai/chat-history";
 import { repairRestartedNumberedLists } from "@/lib/ai/chat-format";
@@ -199,7 +203,7 @@ export async function aiLegalAsk(input: {
   }
 
   const storedUser = attachmentContext
-    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, 20_000)}`
+    ? `${question}\n\n[Attached files]\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
     : question;
 
   const userMessage = skipUser
@@ -288,7 +292,7 @@ export async function aiLegalAsk(input: {
   const packContext = runResearch ? buildKbContext(retrieval) : "";
   const webContextBlock = runResearch ? formatWebLookupBlock(web.hits) : "";
   const attachmentBlock = attachmentContext
-    ? `\n\n${attachmentContext.slice(0, 24_000)}`
+    ? `\n\n${attachmentContext.slice(0, ATTACH_CONTEXT_FOR_MODEL)}`
     : "";
 
   let answerText: string;

@@ -14,6 +14,9 @@ import {
 } from "@/lib/ai/ux";
 import { formatDateTime } from "@/lib/format/dates";
 
+const ATTACH_MAX_FILES_UI = 30;
+const ATTACH_MAX_BYTES_UI = 25 * 1024 * 1024;
+
 type AssistantMode = "legal_research" | "matter_assist";
 
 type Citation = {
@@ -599,26 +602,51 @@ export function LegalResearchChatView() {
       let attachmentContext: string | null = null;
       if (pendingFiles.length) {
         setExtracting(true);
-        const form = new FormData();
-        for (const file of pendingFiles) form.append("files", file);
-        const extracted = await fetch("/api/ai/extract", {
-          method: "POST",
-          credentials: "include",
-          body: form,
-        });
-        const extractedBody = (await extracted.json()) as {
-          ok?: boolean;
-          data?: { files?: Array<{ fileName: string; method: string; text: string }> };
-          error?: { message?: string };
-        };
-        setExtracting(false);
-        if (!extracted.ok || !extractedBody.ok) {
-          throw new Error(extractedBody.error?.message || "Could not read attached files.");
+        try {
+          const oversized = pendingFiles.filter((f) => f.size > ATTACH_MAX_BYTES_UI);
+          if (oversized.length) {
+            throw new Error(
+              `${oversized[0]!.name} is larger than 25 MB. Compress it or split the pages.`,
+            );
+          }
+          if (pendingFiles.length > ATTACH_MAX_FILES_UI) {
+            throw new Error(`Attach at most ${ATTACH_MAX_FILES_UI} files at a time.`);
+          }
+          const form = new FormData();
+          for (const file of pendingFiles) form.append("files", file);
+          const extracted = await fetch("/api/ai/extract", {
+            method: "POST",
+            credentials: "include",
+            body: form,
+          });
+          let extractedBody: {
+            ok?: boolean;
+            data?: { files?: Array<{ fileName: string; method: string; text: string }> };
+            error?: { message?: string };
+          } = {};
+          try {
+            extractedBody = (await extracted.json()) as typeof extractedBody;
+          } catch {
+            throw new Error(
+              "Could not read attached files (upload may be too large). Try fewer or smaller files.",
+            );
+          }
+          if (!extracted.ok || !extractedBody.ok) {
+            throw new Error(
+              extractedBody.error?.message || "Could not read attached files.",
+            );
+          }
+          const files = extractedBody.data?.files ?? [];
+          if (!files.length) {
+            throw new Error("No text could be extracted from the attached files.");
+          }
+          attachmentContext = files
+            .map((f) => `--- ${f.fileName} (${f.method}) ---\n${f.text}`)
+            .join("\n\n");
+          setPendingFiles([]);
+        } finally {
+          setExtracting(false);
         }
-        attachmentContext = (extractedBody.data?.files ?? [])
-          .map((f) => `--- ${f.fileName} (${f.method}) ---\n${f.text}`)
-          .join("\n\n");
-        setPendingFiles([]);
       }
 
       const endpoint = mode === "matter_assist" ? "/api/ai/matter-ask" : "/api/ai/ask";
@@ -724,13 +752,18 @@ export function LegalResearchChatView() {
 
       void loadConversations(mode);
       void loadStatus(false);
-    } catch {
-      const msg = humanAiError("network error", 503);
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "";
+      const msg =
+        raw && !/network error/i.test(raw)
+          ? humanAiError(raw)
+          : humanAiError("network error", 503);
       setError(msg);
       toast(msg);
       void loadStatus(true);
     } finally {
       setLoading(false);
+      setExtracting(false);
     }
   }
 
@@ -1276,10 +1309,24 @@ export function LegalResearchChatView() {
                 type="file"
                 multiple
                 hidden
-                accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
+                accept=".pdf,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
                 onChange={(e) => {
                   const next = Array.from(e.target.files ?? []);
-                  setPendingFiles((prev) => [...prev, ...next].slice(0, 8));
+                  const tooBig = next.find((f) => f.size > ATTACH_MAX_BYTES_UI);
+                  if (tooBig) {
+                    const msg = `${tooBig.name} is larger than 25 MB. Compress it or split the pages.`;
+                    setError(msg);
+                    toast(msg);
+                  }
+                  setPendingFiles((prev) => {
+                    const merged = [...prev, ...next].slice(0, ATTACH_MAX_FILES_UI);
+                    if (prev.length + next.length > ATTACH_MAX_FILES_UI) {
+                      const msg = `You can attach up to ${ATTACH_MAX_FILES_UI} files at once.`;
+                      setError(msg);
+                      toast(msg);
+                    }
+                    return merged;
+                  });
                   e.target.value = "";
                 }}
               />
