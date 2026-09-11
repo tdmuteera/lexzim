@@ -281,6 +281,17 @@
   margin-left: auto;
 }
 
+.ai-bubble-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ai-bubble-actions .ai-copy-btn {
+  margin-left: 0;
+}
+
 .ai-copy-btn:hover,
 .ai-edit-btn:hover,
 .ai-sources-toggle:hover {
@@ -288,14 +299,16 @@
   color: var(--ai-teal);
 }
 
-.ai-bubble.user .ai-edit-btn {
-  margin-left: auto;
+.ai-bubble.user .ai-edit-btn,
+.ai-bubble.user .ai-copy-btn {
+  margin-left: 0;
   border-color: rgba(255, 255, 255, 0.35);
   background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.92);
 }
 
-.ai-bubble.user .ai-edit-btn:hover:not(:disabled) {
+.ai-bubble.user .ai-edit-btn:hover:not(:disabled),
+.ai-bubble.user .ai-copy-btn:hover {
   border-color: rgba(255, 255, 255, 0.55);
   color: #fff;
 }

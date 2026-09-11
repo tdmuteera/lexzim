@@ -163,30 +163,76 @@ function buildCopyText(message: ChatBubble): string {
   return text;
 }
 
-function CopyAssistantButton({ message }: { message: ChatBubble }) {
+function CopyTextButton({
+  text,
+  className = "ai-copy-btn",
+}: {
+  text: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function onCopy() {
-    const payload = buildCopyText(message);
+    const payload = text.trim();
+    if (!payload) return;
     try {
       await navigator.clipboard.writeText(payload);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
-      /* ignore clipboard failures */
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = payload;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      } catch {
+        /* ignore clipboard failures */
+      }
     }
   }
 
   return (
     <button
       type="button"
-      className="ai-copy-btn"
+      className={className}
       onClick={() => void onCopy()}
       aria-label="Copy message"
     >
       {copied ? "Copied" : "Copy"}
     </button>
   );
+}
+
+function CopyAssistantButton({ message }: { message: ChatBubble }) {
+  return <CopyTextButton text={buildCopyText(message)} />;
+}
+
+function pickRecorderMime(): { mimeType: string; fileName: string } {
+  const candidates: Array<{ mimeType: string; fileName: string }> = [
+    { mimeType: "audio/webm;codecs=opus", fileName: "recording.webm" },
+    { mimeType: "audio/webm", fileName: "recording.webm" },
+    { mimeType: "audio/mp4", fileName: "recording.mp4" },
+    { mimeType: "audio/aac", fileName: "recording.m4a" },
+    { mimeType: "audio/ogg;codecs=opus", fileName: "recording.ogg" },
+  ];
+  if (typeof MediaRecorder === "undefined") {
+    return { mimeType: "", fileName: "recording.webm" };
+  }
+  for (const c of candidates) {
+    try {
+      if (MediaRecorder.isTypeSupported(c.mimeType)) return c;
+    } catch {
+      /* ignore */
+    }
+  }
+  return { mimeType: "", fileName: "recording.webm" };
 }
 
 function CitationsList({
@@ -849,20 +895,31 @@ export function LegalResearchChatView() {
       setError("This browser does not support microphone recording.");
       return;
     }
+    if (!window.isSecureContext) {
+      setError("Microphone needs a secure (HTTPS) connection. Open LexZim over https and try again.");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      setError("This browser cannot record audio. Try Chrome, Edge, or Safari on a recent phone.");
+      return;
+    }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       mediaStreamRef.current = stream;
       mediaChunksRef.current = [];
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "";
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
+      const picked = pickRecorderMime();
+      const recorder = picked.mimeType
+        ? new MediaRecorder(stream, { mimeType: picked.mimeType })
         : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
+      const uploadName = picked.fileName;
 
       recorder.ondataavailable = (ev) => {
         if (ev.data.size > 0) mediaChunksRef.current.push(ev.data);
@@ -872,24 +929,37 @@ export function LegalResearchChatView() {
         void (async () => {
           setMicState("transcribing");
           stopMediaTracks();
-          const blob = new Blob(mediaChunksRef.current, {
-            type: recorder.mimeType || "audio/webm",
-          });
+          const blobType = recorder.mimeType || picked.mimeType || "audio/webm";
+          const blob = new Blob(mediaChunksRef.current, { type: blobType });
           mediaChunksRef.current = [];
           mediaRecorderRef.current = null;
           try {
+            if (blob.size < 256) {
+              const msg = "Recording was too short. Hold Mic a moment, then tap again to stop.";
+              setError(msg);
+              toast(msg);
+              return;
+            }
             const form = new FormData();
-            form.append("file", blob, "recording.webm");
+            form.append("file", blob, uploadName);
             const res = await fetch("/api/ai/transcribe", {
               method: "POST",
               credentials: "include",
               body: form,
             });
-            const body = (await res.json()) as {
+            let body: {
               ok: boolean;
               data?: { text?: string };
               error?: { message?: string };
-            };
+            } = { ok: false };
+            try {
+              body = (await res.json()) as typeof body;
+            } catch {
+              const msg = "Transcription service returned an unexpected response.";
+              setError(msg);
+              toast(msg);
+              return;
+            }
             if (!res.ok || !body.ok || !body.data?.text) {
               const msg =
                 body.error?.message ||
@@ -903,6 +973,7 @@ export function LegalResearchChatView() {
               if (!prev.trim()) return next;
               return `${prev.trim()} ${next}`;
             });
+            setError(null);
           } catch {
             const msg = "Could not reach the transcription service.";
             setError(msg);
@@ -913,7 +984,8 @@ export function LegalResearchChatView() {
         })();
       };
 
-      recorder.start();
+      // timeslice helps mobile browsers flush audio chunks before stop
+      recorder.start(1000);
       setMicState("recording");
       setError(null);
     } catch (err) {
@@ -922,10 +994,12 @@ export function LegalResearchChatView() {
       const name = err && typeof err === "object" && "name" in err ? String(err.name) : "";
       const msg =
         name === "NotAllowedError" || name === "PermissionDeniedError"
-          ? "Microphone permission denied. Allow mic access in the browser, then try again."
+          ? "Microphone was blocked. Allow mic for this LexZim site in browser/app settings, reload, then try again."
           : name === "NotFoundError"
             ? "No microphone found on this device."
-            : "Could not start recording.";
+            : name === "NotReadableError" || name === "AbortError"
+              ? "Microphone is busy or unavailable. Close other apps using the mic, then try again."
+              : "Could not start recording.";
       setError(msg);
       toast(msg);
     }
@@ -1157,14 +1231,17 @@ export function LegalResearchChatView() {
                   {m.role === "assistant" ? (
                     <CopyAssistantButton message={m} />
                   ) : editingId !== m.id ? (
-                    <button
-                      type="button"
-                      className="ai-edit-btn"
-                      disabled={loading || m.id.startsWith("local-")}
-                      onClick={() => startEdit(m)}
-                    >
-                      Edit
-                    </button>
+                    <div className="ai-bubble-actions">
+                      <CopyTextButton text={m.content} />
+                      <button
+                        type="button"
+                        className="ai-edit-btn"
+                        disabled={loading || m.id.startsWith("local-")}
+                        onClick={() => startEdit(m)}
+                      >
+                        Edit
+                      </button>
+                    </div>
                   ) : null}
                 </div>
                 <div className="ai-bubble-body">

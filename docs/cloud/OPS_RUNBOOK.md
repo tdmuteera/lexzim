@@ -71,7 +71,7 @@ Set in `next.config.ts` for all routes:
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `X-Frame-Options: SAMEORIGIN`
-- `Permissions-Policy` (camera/microphone/geolocation off)
+- `Permissions-Policy` (camera/geolocation off; microphone allowed for same-origin AI dictate)
 - `Strict-Transport-Security` (assume HTTPS in production)
 
 CSP is deferred (tighten later with report-only if needed).
