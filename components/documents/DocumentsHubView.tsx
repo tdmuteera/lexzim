@@ -31,15 +31,24 @@ export function DocumentsHubView() {
   const [browseClientLabel, setBrowseClientLabel] = useState("");
   const [items, setItems] = useState<ClientDocItem[]>([]);
   const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  const loadFirmDocs = useCallback(async () => {
+  const loadFirmDocs = useCallback(async (search: string) => {
+    const trimmed = search.trim();
+    if (!trimmed) {
+      setItems([]);
+      setHasSearched(false);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
+    setHasSearched(true);
     try {
-      const params = new URLSearchParams({ scope: "client" });
-      if (q.trim()) params.set("q", q.trim());
+      const params = new URLSearchParams({ scope: "client", q: trimmed });
       const res = await fetch(`/api/documents?${params.toString()}`, {
         credentials: "include",
       });
@@ -60,13 +69,13 @@ export function DocumentsHubView() {
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, []);
 
   useEffect(() => {
     if (tab !== "client-docs") return;
-    const timer = window.setTimeout(() => void loadFirmDocs(), 200);
+    const timer = window.setTimeout(() => void loadFirmDocs(q), 250);
     return () => window.clearTimeout(timer);
-  }, [tab, loadFirmDocs]);
+  }, [tab, q, loadFirmDocs]);
 
   async function onView(id: string) {
     setError(null);
@@ -118,9 +127,9 @@ export function DocumentsHubView() {
           ) : (
             <div>
               <p className="muted" style={{ marginTop: 0 }}>
-                Client and matter files linked to a client. Search by client name, number, or matter.
-                from this hub; open a matter to view or upload those. Templates are on the Templates
-                tab.
+                Select a client to work with that client&apos;s files, or search below by client
+                name, number, or matter. You only see clients you are assigned to (or all clients if
+                the Managing Partner granted that right).
               </p>
 
               <div
@@ -155,7 +164,7 @@ export function DocumentsHubView() {
               <div className="toolbar" style={{ marginBottom: "0.75rem" }}>
                 <input
                   className="search-input"
-                  placeholder="Search all client documents…"
+                  placeholder="Search documents by client, matter, or file name…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   aria-label="Search client documents"
@@ -164,10 +173,10 @@ export function DocumentsHubView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void loadFirmDocs()}
-                  disabled={loading}
+                  onClick={() => void loadFirmDocs(q)}
+                  disabled={loading || !q.trim()}
                 >
-                  Refresh
+                  Search
                 </Button>
               </div>
 
@@ -175,10 +184,14 @@ export function DocumentsHubView() {
                 <p style={{ color: "var(--danger)", marginBottom: "0.75rem" }}>{error}</p>
               ) : null}
 
-              {loading ? (
-                <p className="muted">Loading client documents…</p>
+              {!hasSearched ? (
+                <p className="muted">
+                  Type a search to find documents. Results are not listed until you search.
+                </p>
+              ) : loading ? (
+                <p className="muted">Searching…</p>
               ) : items.length === 0 ? (
-                <p className="muted">No client documents yet.</p>
+                <p className="muted">No documents matched your search (within your access).</p>
               ) : (
                 <div className="table-wrap">
                   <table className="data">

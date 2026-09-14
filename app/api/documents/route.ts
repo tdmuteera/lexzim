@@ -1,10 +1,16 @@
 import { jsonError, jsonOk } from "@/lib/auth/http";
 import { serializeDocument } from "@/lib/documents/serialize";
+import {
+  listAccessibleClientIds,
+} from "@/lib/repos/clients";
 import { listClientDocumentsForFirm } from "@/lib/repos/documents";
-import { requirePermission } from "@/lib/rbac/guards";
+import {
+  canViewAllClients,
+  requirePermission,
+} from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-/** Firm-wide client documents (matter files excluded). */
+/** Firm-wide document search. Empty until a search query is provided. Custody filtered. */
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("documents.view");
@@ -17,7 +23,19 @@ export async function GET(request: Request) {
       return jsonOk({ items: [] });
     }
 
-    const rows = await listClientDocumentsForFirm(firmId, { q });
+    if (!q?.trim()) {
+      return jsonOk({ items: [], requiresSearch: true });
+    }
+
+    const viewAll = canViewAllClients(session);
+    const accessibleClientIds = viewAll
+      ? null
+      : await listAccessibleClientIds(firmId, session.id);
+
+    const rows = await listClientDocumentsForFirm(firmId, {
+      q,
+      accessibleClientIds,
+    });
     return jsonOk({
       items: rows.map((row) => ({
         ...serializeDocument(row, { createdByName: row.createdByName }),
@@ -26,6 +44,7 @@ export async function GET(request: Request) {
         matterNumber: row.matterNumber ?? null,
         matterTitle: row.matterTitle ?? null,
       })),
+      requiresSearch: false,
     });
   } catch (err) {
     return jsonError(err, request);

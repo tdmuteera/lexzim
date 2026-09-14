@@ -1,7 +1,7 @@
 /**
  * Matter documents repository (P1-07).
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, documents, matters, users } from "@/lib/db/schema";
 import { clientDisplayLabel } from "@/lib/clients/display";
@@ -41,9 +41,26 @@ export async function listDocumentsForClient(firmId: string, clientId: string) {
   }));
 }
 
-/** Firm-wide client documents hub list (matterNumber/title joined when linked). */
-export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: string }) {
+/** Firm documents searchable by client (includes matter uploads). Requires a search query. */
+export async function listClientDocumentsForFirm(
+  firmId: string,
+  opts?: {
+    q?: string;
+    /** When set, only documents for these client ids (custody / assignment). */
+    accessibleClientIds?: string[] | null;
+  },
+) {
+  const q = opts?.q?.trim().toLowerCase();
+  if (!q) return [];
+
+  const accessible = opts?.accessibleClientIds;
+  if (accessible && accessible.length === 0) return [];
+
   const db = getDb();
+  const conditions = [eq(documents.firmId, firmId)];
+  if (accessible) {
+    conditions.push(inArray(documents.clientId, accessible));
+  }
 
   const rows = await db
     .select({
@@ -64,10 +81,9 @@ export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: st
     .leftJoin(users, eq(users.id, documents.createdBy))
     .leftJoin(clients, eq(clients.id, documents.clientId))
     .leftJoin(matters, eq(matters.id, documents.matterId))
-    .where(eq(documents.firmId, firmId))
+    .where(and(...conditions))
     .orderBy(desc(documents.createdAt));
 
-  const q = opts?.q?.trim().toLowerCase();
   const mapped: ClientDocumentListRow[] = rows.map((row) => {
     const clientDisplayName = row.clientType
       ? clientDisplayLabel({
@@ -91,7 +107,6 @@ export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: st
     };
   });
 
-  if (!q) return mapped;
   return mapped.filter((row) => {
     const hay = [
       row.title,

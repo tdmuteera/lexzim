@@ -10,10 +10,21 @@ import {
   getDocumentById,
   renameDocument,
 } from "@/lib/repos/documents";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import {
+  canViewAllClients,
+  canViewAllMatters,
+  requirePermission,
+} from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+function accessOpts(session: Parameters<typeof canViewAllMatters>[0]) {
+  return {
+    viewAllMatters: canViewAllMatters(session),
+    viewAllClients: canViewAllClients(session),
+  };
+}
 
 export async function GET(request: Request, context: RouteContext) {
   try {
@@ -24,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
       firmId,
       id,
       session.id,
-      canViewAllMatters(session),
+      accessOpts(session),
     );
     return jsonOk({
       document: serializeDocument(row, { createdByName: row.createdByName }),
@@ -39,7 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const session = await requirePermission("documents.manage");
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
-    await loadAccessibleDocument(firmId, id, session.id, canViewAllMatters(session));
+    await loadAccessibleDocument(firmId, id, session.id, accessOpts(session));
 
     const body = (await request.json()) as { title?: unknown };
     const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -80,7 +91,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       firmId,
       id,
       session.id,
-      canViewAllMatters(session),
+      accessOpts(session),
     );
 
     await deleteFirmFile(existing.storagePath, firmId);

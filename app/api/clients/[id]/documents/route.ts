@@ -3,13 +3,19 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { serializeDocument } from "@/lib/documents/serialize";
-import { getClientById } from "@/lib/repos/clients";
+import {
+  getClientById,
+  userCanAccessClient,
+} from "@/lib/repos/clients";
 import {
   createDocumentRecord,
   getDocumentById,
   listDocumentsForClient,
 } from "@/lib/repos/documents";
-import { requirePermission } from "@/lib/rbac/guards";
+import {
+  canViewAllClients,
+  requirePermission,
+} from "@/lib/rbac/guards";
 import {
   clientDocumentStoragePath,
   sanitizeFileName,
@@ -20,10 +26,19 @@ import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function assertClient(firmId: string, clientId: string) {
+async function assertClientAccess(
+  firmId: string,
+  clientId: string,
+  userId: string,
+  viewAll: boolean,
+) {
   const client = await getClientById(firmId, clientId);
   if (!client) {
     throw new AuthError("not_found", "Client not found.");
+  }
+  const allowed = await userCanAccessClient(firmId, clientId, userId, viewAll);
+  if (!allowed) {
+    throw new AuthError("forbidden", "You do not have access to this client.");
   }
   return client;
 }
@@ -33,7 +48,12 @@ export async function GET(request: Request, context: RouteContext) {
     const session = await requirePermission("documents.view");
     const firmId = tenantFirmId(session);
     const { id: clientId } = await context.params;
-    await assertClient(firmId, clientId);
+    await assertClientAccess(
+      firmId,
+      clientId,
+      session.id,
+      canViewAllClients(session),
+    );
 
     const rows = await listDocumentsForClient(firmId, clientId);
     return jsonOk({
@@ -53,7 +73,12 @@ export async function POST(request: Request, context: RouteContext) {
     const session = await requirePermission("documents.manage");
     const firmId = tenantFirmId(session);
     const { id: clientId } = await context.params;
-    await assertClient(firmId, clientId);
+    await assertClientAccess(
+      firmId,
+      clientId,
+      session.id,
+      canViewAllClients(session),
+    );
 
     const form = await request.formData();
     const file = form.get("file");

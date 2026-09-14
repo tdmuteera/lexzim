@@ -2,7 +2,11 @@ import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { loadAccessibleDocument } from "@/lib/documents/access";
 import { createSignedDownloadUrl } from "@/lib/storage/firm-files";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import {
+  canViewAllClients,
+  canViewAllMatters,
+  requirePermission,
+} from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,12 +17,10 @@ export async function GET(request: Request, context: RouteContext) {
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
 
-    const row = await loadAccessibleDocument(
-      firmId,
-      id,
-      session.id,
-      canViewAllMatters(session),
-    );
+    const row = await loadAccessibleDocument(firmId, id, session.id, {
+      viewAllMatters: canViewAllMatters(session),
+      viewAllClients: canViewAllClients(session),
+    });
 
     const url = new URL(request.url);
     const expiresIn = Math.min(
