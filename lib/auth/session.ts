@@ -43,10 +43,24 @@ async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | nu
     .limit(1);
 
   const row = rows[0];
-  if (!row || !row.isActive) return null;
-  if (!row.isSystemUser) return null;
+  if (!row) return null;
+  if (!row.isActive) {
+    throw new AuthError(
+      "unauthorized",
+      "This account is deactivated. Sign out and use an active login, or ask the Managing Partner to reactivate you.",
+    );
+  }
+  if (!row.isSystemUser) {
+    throw new AuthError(
+      "unauthorized",
+      "This person has no LexZim login. Create a system user from their staff record first.",
+    );
+  }
   if (row.firmStatus === "suspended" || row.firmStatus === "archived") {
-    return null;
+    throw new AuthError(
+      "unauthorized",
+      "This firm is not currently active. Contact LexZim support.",
+    );
   }
 
   const permissions = await getEffectivePermissionCodes({
@@ -111,6 +125,9 @@ export const authCurrentUser = cache(async (): Promise<AuthSessionUser | null> =
     noteDbConnectivitySuccess();
     return profile;
   } catch (err) {
+    if (err instanceof AuthError) {
+      throw err;
+    }
     const unavailable = asDatabaseUnavailable(err);
     if (unavailable) {
       noteDbConnectivityFailure();
