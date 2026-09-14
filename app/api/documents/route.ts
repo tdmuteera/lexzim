@@ -23,6 +23,8 @@ export async function GET(request: Request) {
         ...serializeDocument(row, { createdByName: row.createdByName }),
         clientDisplayName: row.clientDisplayName,
         clientNumber: row.clientNumber,
+        matterNumber: row.matterNumber ?? null,
+        matterTitle: row.matterTitle ?? null,
       })),
     });
   } catch (err) {

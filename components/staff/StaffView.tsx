@@ -579,7 +579,15 @@ export function StaffView() {
                   className="filter-input"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
-                  placeholder={tab === "lawyers" ? "e.g. Advocate, Associate" : "e.g. Associate, Accounts"}
+                  readOnly={tab === "logins" && !isTestUser}
+                  disabled={tab === "logins" && !isTestUser}
+                  placeholder={
+                    tab === "lawyers"
+                      ? "e.g. Advocate, Associate"
+                      : tab === "logins" && !isTestUser
+                        ? "From staff record"
+                        : "e.g. Associate, Accounts"
+                  }
                 />
               </label>
               {tab === "logins" ? (

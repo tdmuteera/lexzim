@@ -16,6 +16,8 @@ export async function POST(request: Request) {
       conversationId?: string | null;
       includeLegal?: boolean;
       attachmentContext?: string | null;
+      documentIds?: string[] | null;
+      selectedDocumentIds?: string[] | null;
     };
 
     const question = typeof body.question === "string" ? body.question.trim() : "";
@@ -24,6 +26,11 @@ export async function POST(request: Request) {
       typeof body.attachmentContext === "string" ? body.attachmentContext.trim() : "";
     if (!question) throw new AuthError("validation", "question is required.");
     if (!matterId) throw new AuthError("validation", "matterId is required.");
+
+    const rawDocIds = body.documentIds ?? body.selectedDocumentIds;
+    const documentIds = Array.isArray(rawDocIds)
+      ? rawDocIds.filter((id): id is string => typeof id === "string" && Boolean(id.trim()))
+      : [];
 
     let result;
     try {
@@ -36,6 +43,7 @@ export async function POST(request: Request) {
         conversationId: body.conversationId ?? null,
         includeLegal: body.includeLegal !== false,
         attachmentContext: attachment || null,
+        documentIds,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "ask_failed";

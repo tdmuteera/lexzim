@@ -112,11 +112,42 @@ export function ClientDetailView({
   const highlightConflict = searchParams.get("conflict") === "1";
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(false);
+  const [kycPdfLoading, setKycPdfLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isArchived = Boolean(client.archivedAt);
   const type = normalizeClientType(client.clientType);
   const canSeeKyc = can("clients.kyc.manage") || can("clients.edit");
   const visibleTabs = TABS.filter((t) => t.id !== "kyc" || canSeeKyc);
+
+  async function onDownloadKycPdf() {
+    setKycPdfLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${client.id}/kyc-pdf`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        setError(body?.error?.message ?? "Could not download KYC PDF.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `KYC-${client.clientNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not download KYC PDF.");
+    } finally {
+      setKycPdfLoading(false);
+    }
+  }
 
   async function onArchiveOrRestore() {
     const action = isArchived ? "restore" : "archive";
@@ -262,6 +293,22 @@ export function ClientDetailView({
 
           {tab === "kyc" && canSeeKyc ? (
             <div className="kyc-readonly">
+              <div
+                className="panel-head inline-head"
+                style={{ marginBottom: "0.75rem" }}
+              >
+                <h4 style={{ margin: 0 }}>KYC record</h4>
+                <Can permission="clients.view">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void onDownloadKycPdf()}
+                    disabled={kycPdfLoading}
+                  >
+                    {kycPdfLoading ? "Preparing…" : "Download KYC PDF"}
+                  </Button>
+                </Can>
+              </div>
               <h4>Individual / entity</h4>
               {type === "individual" ? (
                 <div className="grid-2">

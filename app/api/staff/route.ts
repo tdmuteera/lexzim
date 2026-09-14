@@ -261,7 +261,7 @@ export async function POST(request: Request) {
         );
       }
       fullName = staff.profile.fullName;
-      jobTitle = staff.profile.jobTitle ?? jobTitle;
+      jobTitle = staff.profile.jobTitle ?? null;
       if (body.isLawyer === undefined) {
         isLawyer =
           Boolean(staff.userIsLawyer) ||

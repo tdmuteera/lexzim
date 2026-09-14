@@ -486,6 +486,34 @@ export function LegalResearchChatView() {
   const [matters, setMatters] = useState<MatterOption[]>([]);
   const [matterId, setMatterId] = useState("");
   const [matterHeader, setMatterHeader] = useState<MatterHeader | null>(null);
+  const [matterDocs, setMatterDocs] = useState<Array<{ id: string; title: string; fileName: string }>>(
+    [],
+  );
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [queuedQuestion, setQueuedQuestion] = useState<string | null>(null);
+  const queuedRef = useRef<string | null>(null);
+  const loadingRef = useRef(false);
+  const conversationIdRef = useRef<string | null>(null);
+  const matterIdRef = useRef("");
+  const modeRef = useRef<AssistantMode>(mode);
+  const selectedDocumentIdsRef = useRef<string[]>([]);
+  const pendingFilesRef = useRef<File[]>([]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+  useEffect(() => {
+    matterIdRef.current = matterId;
+  }, [matterId]);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    selectedDocumentIdsRef.current = selectedDocumentIds;
+  }, [selectedDocumentIds]);
+  useEffect(() => {
+    pendingFilesRef.current = pendingFiles;
+  }, [pendingFiles]);
 
   const loadStatus = useCallback(async (probe = true) => {
     try {
@@ -531,6 +559,34 @@ export function LegalResearchChatView() {
     }
   }, []);
 
+  const loadMatterDocuments = useCallback(async (id: string) => {
+    if (!id) {
+      setMatterDocs([]);
+      setSelectedDocumentIds([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/matters/${id}/documents`, { credentials: "include" });
+      const body = (await res.json()) as {
+        ok: boolean;
+        data?: { items?: Array<{ id: string; title: string; fileName: string }> };
+      };
+      if (!res.ok || !body.ok || !body.data?.items) {
+        setMatterDocs([]);
+        return;
+      }
+      setMatterDocs(
+        body.data.items.map((d) => ({
+          id: d.id,
+          title: d.title,
+          fileName: d.fileName,
+        })),
+      );
+    } catch {
+      setMatterDocs([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadStatus(true);
   }, [loadStatus]);
@@ -539,6 +595,20 @@ export function LegalResearchChatView() {
     void loadConversations(mode);
     if (mode === "matter_assist") void loadMatters();
   }, [mode, loadConversations, loadMatters]);
+
+  useEffect(() => {
+    if (mode !== "matter_assist") {
+      setMatterDocs([]);
+      setSelectedDocumentIds([]);
+      return;
+    }
+    setSelectedDocumentIds([]);
+    void loadMatterDocuments(matterId);
+  }, [mode, matterId, loadMatterDocuments]);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
 
   useEffect(() => {
     if (mode !== "matter_assist") return;
@@ -686,24 +756,16 @@ export function LegalResearchChatView() {
         ? status.sendBlockedReason
         : null;
 
-  async function onAsk(e: React.FormEvent) {
-    e.preventDefault();
-    const q = question.trim();
-    if (!q || loading) return;
-    if (mode === "matter_assist" && !matterId) {
-      setError("Select a matter first.");
-      return;
-    }
-    if (sendBlocked) {
-      const msg = sendBlockedReason || humanAiError("AI unavailable");
-      setError(msg);
-      toast(msg);
-      return;
-    }
+  async function runAsk(q: string) {
+    const activeMode = modeRef.current;
+    const activeMatterId = matterIdRef.current;
+    const activeConversationId = conversationIdRef.current;
+    const activeDocIds = selectedDocumentIdsRef.current;
+    const filesToExtract = pendingFilesRef.current;
 
     setLoading(true);
+    loadingRef.current = true;
     setError(null);
-    setQuestion("");
     setMessages((prev) => [
       ...prev,
       { id: `local-user-${Date.now()}`, role: "user", content: q },
@@ -711,20 +773,20 @@ export function LegalResearchChatView() {
 
     try {
       let attachmentContext: string | null = null;
-      if (pendingFiles.length) {
+      if (filesToExtract.length) {
         setExtracting(true);
         try {
-          const oversized = pendingFiles.filter((f) => f.size > ATTACH_MAX_BYTES_UI);
+          const oversized = filesToExtract.filter((f) => f.size > ATTACH_MAX_BYTES_UI);
           if (oversized.length) {
             throw new Error(
               `${oversized[0]!.name} is larger than 25 MB. Compress it or split the pages.`,
             );
           }
-          if (pendingFiles.length > ATTACH_MAX_FILES_UI) {
+          if (filesToExtract.length > ATTACH_MAX_FILES_UI) {
             throw new Error(`Attach at most ${ATTACH_MAX_FILES_UI} files at a time.`);
           }
           const form = new FormData();
-          for (const file of pendingFiles) form.append("files", file);
+          for (const file of filesToExtract) form.append("files", file);
           const extracted = await fetch("/api/ai/extract", {
             method: "POST",
             credentials: "include",
@@ -755,16 +817,23 @@ export function LegalResearchChatView() {
             .map((f) => `--- ${f.fileName} (${f.method}) ---\n${f.text}`)
             .join("\n\n");
           setPendingFiles([]);
+          pendingFilesRef.current = [];
         } finally {
           setExtracting(false);
         }
       }
 
-      const endpoint = mode === "matter_assist" ? "/api/ai/matter-ask" : "/api/ai/ask";
+      const endpoint = activeMode === "matter_assist" ? "/api/ai/matter-ask" : "/api/ai/ask";
       const payload =
-        mode === "matter_assist"
-          ? { question: q, conversationId, matterId, attachmentContext }
-          : { question: q, conversationId, attachmentContext };
+        activeMode === "matter_assist"
+          ? {
+              question: q,
+              conversationId: activeConversationId,
+              matterId: activeMatterId,
+              attachmentContext,
+              selectedDocumentIds: activeDocIds,
+            }
+          : { question: q, conversationId: activeConversationId, attachmentContext };
 
       const res = await fetchAiJsonWithRetry(endpoint, {
         method: "POST",
@@ -813,6 +882,7 @@ export function LegalResearchChatView() {
       }
 
       setConversationId(body.data.conversationId);
+      conversationIdRef.current = body.data.conversationId;
       if (body.data.matterHeader) setMatterHeader(body.data.matterHeader);
       const grounding =
         body.data.grounding ??
@@ -836,7 +906,7 @@ export function LegalResearchChatView() {
           body.data.retrievalMeta?.exploreSources ??
           [];
       const failoverNotice = body.data.retrievalMeta?.failoverNotice ?? null;
-      const showDisclaimer = mode === "matter_assist" &&
+      const showDisclaimer = activeMode === "matter_assist" &&
         (citations.length > 0 ||
           grounding === "weak" ||
           grounding === "unsupported");
@@ -861,7 +931,7 @@ export function LegalResearchChatView() {
         },
       ]);
 
-      void loadConversations(mode);
+      void loadConversations(activeMode);
       void loadStatus(false);
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
@@ -874,8 +944,43 @@ export function LegalResearchChatView() {
       void loadStatus(true);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
       setExtracting(false);
+      const next = queuedRef.current;
+      if (next) {
+        queuedRef.current = null;
+        setQueuedQuestion(null);
+        window.setTimeout(() => {
+          void runAsk(next);
+        }, 0);
+      }
     }
+  }
+
+  async function onAsk(e: React.FormEvent) {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q) return;
+    if (mode === "matter_assist" && !matterId) {
+      setError("Select a matter first.");
+      return;
+    }
+    if (sendBlocked) {
+      const msg = sendBlockedReason || humanAiError("AI unavailable");
+      setError(msg);
+      toast(msg);
+      return;
+    }
+
+    if (loadingRef.current) {
+      queuedRef.current = q;
+      setQueuedQuestion(q);
+      setQuestion("");
+      return;
+    }
+
+    setQuestion("");
+    await runAsk(q);
   }
 
   function startEdit(message: ChatBubble) {
@@ -1230,6 +1335,55 @@ export function LegalResearchChatView() {
                   </div>
                 </div>
               ) : null}
+              {matterId ? (
+                <div className="ai-matter-docs" style={{ marginTop: "0.75rem" }}>
+                  <div className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.35rem" }}>
+                    Include matter documents in this question
+                  </div>
+                  {!matterDocs.length ? (
+                    <p className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+                      No documents on this matter yet.
+                    </p>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.25rem",
+                        maxHeight: "8rem",
+                        overflow: "auto",
+                      }}
+                    >
+                      {matterDocs.map((doc) => {
+                        const checked = selectedDocumentIds.includes(doc.id);
+                        return (
+                          <label
+                            key={doc.id}
+                            className="checkbox-row"
+                            style={{ fontSize: "0.85rem" }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setSelectedDocumentIds((prev) =>
+                                  checked
+                                    ? prev.filter((id) => id !== doc.id)
+                                    : [...prev, doc.id],
+                                );
+                              }}
+                            />
+                            <span>
+                              {doc.title}
+                              <span className="muted"> · {doc.fileName}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </>
           ) : null}
 
@@ -1407,6 +1561,21 @@ export function LegalResearchChatView() {
                   </button>
                 </div>
               ) : null}
+              {queuedQuestion ? (
+                <div className="ai-attach-chips">
+                  <span className="ai-chip">Queued next message</span>
+                  <button
+                    type="button"
+                    className="ai-attach-clear"
+                    onClick={() => {
+                      queuedRef.current = null;
+                      setQueuedQuestion(null);
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : null}
               <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -1419,7 +1588,6 @@ export function LegalResearchChatView() {
               }
               rows={2}
               disabled={
-                loading ||
                 extracting ||
                 sendBlocked ||
                 micState !== "idle" ||
@@ -1484,7 +1652,6 @@ export function LegalResearchChatView() {
               type="submit"
               variant="gold"
               disabled={
-                loading ||
                 extracting ||
                 sendBlocked ||
                 !question.trim() ||
@@ -1493,7 +1660,15 @@ export function LegalResearchChatView() {
               }
               title={sendBlocked ? sendBlockedReason ?? "AI send disabled" : undefined}
             >
-              {loading || extracting ? "Thinking…" : sendBlocked ? "Unavailable" : "Send"}
+              {extracting
+                ? "Reading…"
+                : loading
+                  ? question.trim()
+                    ? "Queue"
+                    : "Thinking…"
+                  : sendBlocked
+                    ? "Unavailable"
+                    : "Send"}
             </Button>
           </form>
         </section>

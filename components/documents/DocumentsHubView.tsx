@@ -21,6 +21,8 @@ type ClientDocItem = {
   clientId: string | null;
   clientDisplayName: string | null;
   clientNumber: string | null;
+  matterNumber?: string | null;
+  matterTitle?: string | null;
 };
 
 export function DocumentsHubView() {
@@ -85,6 +87,8 @@ export function DocumentsHubView() {
     }
   }
 
+  const showMatterColumn = items.some((item) => Boolean(item.matterNumber));
+
   return (
     <section className="view active scrollable" aria-label="Documents">
       <div className="panel" style={{ marginBottom: "1rem" }}>
@@ -114,8 +118,9 @@ export function DocumentsHubView() {
           ) : (
             <div>
               <p className="muted" style={{ marginTop: 0 }}>
-                Client-specific files (identity, KYC, correspondence). Matter files stay on each
-                matter. Templates are on the Templates tab.
+                Client and matter files linked to a client. Search by client name, number, or matter.
+                from this hub; open a matter to view or upload those. Templates are on the Templates
+                tab.
               </p>
 
               <div
@@ -180,6 +185,7 @@ export function DocumentsHubView() {
                     <thead>
                       <tr>
                         <th>Client</th>
+                        {showMatterColumn ? <th>Matter</th> : null}
                         <th>Title</th>
                         <th>File</th>
                         <th>Size</th>
@@ -199,6 +205,15 @@ export function DocumentsHubView() {
                               "—"
                             )}
                           </td>
+                          {showMatterColumn ? (
+                            <td className="muted" style={{ fontSize: "0.85rem" }}>
+                              {item.matterNumber
+                                ? item.matterTitle
+                                  ? `${item.matterNumber} · ${item.matterTitle}`
+                                  : item.matterNumber
+                                : "—"}
+                            </td>
+                          ) : null}
                           <td>{item.title}</td>
                           <td>{item.fileName}</td>
                           <td>{formatBytes(item.sizeBytes)}</td>

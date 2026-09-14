@@ -997,7 +997,7 @@ export function CalendarView() {
                   />
                 </div>
               ) : null}
-              {form.eventType === "appointment" ? (
+              {form.eventType ? (
                 <div className="form-group">
                   <ClientSearchPicker
                     value={form.clientId}
@@ -1013,7 +1013,13 @@ export function CalendarView() {
                       }))
                     }
                     label="Client (optional)"
-                    placeholder="Search client for this meeting…"
+                    placeholder={
+                      form.eventType === "hearing"
+                        ? "Search client for this hearing…"
+                        : form.eventType === "appointment"
+                          ? "Search client for this meeting…"
+                          : "Search client for this event…"
+                    }
                   />
                 </div>
               ) : null}

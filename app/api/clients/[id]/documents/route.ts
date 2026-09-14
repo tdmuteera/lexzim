@@ -37,9 +37,11 @@ export async function GET(request: Request, context: RouteContext) {
 
     const rows = await listDocumentsForClient(firmId, clientId);
     return jsonOk({
-      items: rows.map((row) =>
-        serializeDocument(row, { createdByName: row.createdByName }),
-      ),
+      items: rows.map((row) => ({
+        ...serializeDocument(row, { createdByName: row.createdByName }),
+        matterNumber: row.matterNumber ?? null,
+        matterTitle: row.matterTitle ?? null,
+      })),
     });
   } catch (err) {
     return jsonError(err, request);
@@ -65,6 +67,12 @@ export async function POST(request: Request, context: RouteContext) {
       typeof titleRaw === "string" && titleRaw.trim()
         ? titleRaw.trim()
         : file.name.replace(/\.[^.]+$/, "") || file.name;
+
+    const docTypeRaw = form.get("docType");
+    const docType =
+      typeof docTypeRaw === "string" && docTypeRaw.trim()
+        ? docTypeRaw.trim()
+        : "uploaded";
 
     const documentId = randomUUID();
     const fileName = sanitizeFileName(file.name);
@@ -93,7 +101,7 @@ export async function POST(request: Request, context: RouteContext) {
       mimeType,
       storagePath,
       sizeBytes: file.size,
-      docType: "uploaded",
+      docType,
       createdBy: session.id,
     });
 
@@ -103,7 +111,7 @@ export async function POST(request: Request, context: RouteContext) {
       userId: session.id,
       entityType: "document",
       entityId: row.id,
-      metadata: { clientId, fileName: row.fileName },
+      metadata: { clientId, fileName: row.fileName, docType },
       ipOrUserAgent: clientInfo(request),
     });
 

@@ -3,6 +3,7 @@ import "server-only";
 import {
   ATTACH_CONTEXT_FOR_MODEL,
   ATTACH_CONTEXT_FOR_STORE,
+  extractAttachment,
 } from "@/lib/ai/attachments";
 import { getProvider } from "@/lib/ai/providers";
 import { assertAiSoftBudget } from "@/lib/ai/budget";
@@ -43,7 +44,11 @@ import {
   getAiSettings,
 } from "@/lib/repos/ai-settings";
 import { recordAiUsageEvent } from "@/lib/repos/ai-usage";
+import { getDocumentById } from "@/lib/repos/documents";
 import { userCanAccessMatter } from "@/lib/repos/matters";
+import { downloadFirmFile } from "@/lib/storage/firm-files";
+
+const MATTER_DOC_CONTEXT_CAP = 80_000;
 
 export const MATTER_ASSIST_DISCLAIMER =
   "Disclaimer: LexZim Matter Assist is a read-only research aid for this matter file. It is not final legal advice and does not change the matter record. Verify facts and authorities before relying on this answer in practice or court.";
@@ -168,6 +173,48 @@ function deterministicAnswer(
   return body;
 }
 
+async function loadMatterDocumentAttachmentContext(
+  firmId: string,
+  matterId: string,
+  documentIds: string[],
+): Promise<string> {
+  const uniqueIds = [...new Set(documentIds.map((id) => id.trim()).filter(Boolean))];
+  if (!uniqueIds.length) return "";
+
+  const blocks: string[] = [];
+  let total = 0;
+
+  for (const documentId of uniqueIds) {
+    if (total >= MATTER_DOC_CONTEXT_CAP) break;
+    const doc = await getDocumentById(firmId, documentId);
+    if (!doc || doc.matterId !== matterId) continue;
+    try {
+      const bytes = await downloadFirmFile(doc.storagePath, firmId);
+      const extracted = await extractAttachment({
+        fileName: doc.fileName,
+        mimeType: doc.mimeType,
+        bytes,
+      });
+      const title = doc.title?.trim() || doc.fileName;
+      const block = `--- Matter document: ${title} (${doc.fileName}, ${extracted.method}) ---\n${extracted.text}`;
+      const remaining = MATTER_DOC_CONTEXT_CAP - total;
+      const clipped =
+        block.length > remaining
+          ? `${block.slice(0, Math.max(0, remaining - 40))}\n\n[…truncated…]`
+          : block;
+      if (!clipped.trim()) continue;
+      blocks.push(clipped);
+      total += clipped.length;
+    } catch {
+      blocks.push(
+        `--- Matter document: ${doc.title || doc.fileName} ---\n(Could not read this file.)`,
+      );
+    }
+  }
+
+  return blocks.join("\n\n");
+}
+
 /**
  * Matter Assist: RBAC matter access → live snapshot + firm memory (+ optional legal RAG) → answer.
  * Never invents authorities or other matters' content.
@@ -181,6 +228,7 @@ export async function aiMatterAsk(input: {
   conversationId?: string | null;
   includeLegal?: boolean;
   attachmentContext?: string | null;
+  documentIds?: string[] | null;
   /** When true, do not insert a user row (edit/regenerate already persisted it). */
   skipCreateUserMessage?: boolean;
   existingUserMessageId?: string;
@@ -217,6 +265,15 @@ export async function aiMatterAsk(input: {
   const snapshot = await buildMatterAssistSnapshot(input.firmId, matterId);
   if (!snapshot) throw new Error("matter_not_found");
 
+  const matterDocContext = await loadMatterDocumentAttachmentContext(
+    input.firmId,
+    matterId,
+    Array.isArray(input.documentIds) ? input.documentIds : [],
+  );
+  const combinedFreshAttachment = [freshAttachment, matterDocContext]
+    .filter((s) => s.trim())
+    .join("\n\n");
+
   let conversationId = input.conversationId?.trim() || null;
   if (skipUser && !conversationId) {
     throw new Error("conversation_required");
@@ -243,8 +300,8 @@ export async function aiMatterAsk(input: {
     conversationId = created.id;
   }
 
-  const storedUser = freshAttachment
-    ? `${question}\n\n[Attached files]\n${freshAttachment.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
+  const storedUser = combinedFreshAttachment
+    ? `${question}\n\n[Attached files]\n${combinedFreshAttachment.slice(0, ATTACH_CONTEXT_FOR_STORE)}`
     : question;
 
   const userMessage = skipUser
@@ -260,7 +317,7 @@ export async function aiMatterAsk(input: {
 
   const threadMessages = await listMessages(input.firmId, conversationId);
   const attachmentContext = mergeAttachmentContext(
-    freshAttachment,
+    combinedFreshAttachment,
     loadSessionAttachmentContext(threadMessages),
   );
 

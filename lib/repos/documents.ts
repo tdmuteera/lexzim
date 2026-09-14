@@ -1,9 +1,9 @@
 /**
  * Matter documents repository (P1-07).
  */
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clients, documents, users } from "@/lib/db/schema";
+import { clients, documents, matters, users } from "@/lib/db/schema";
 import { clientDisplayLabel } from "@/lib/clients/display";
 
 export type DocumentListRow = typeof documents.$inferSelect & {
@@ -13,40 +13,37 @@ export type DocumentListRow = typeof documents.$inferSelect & {
 export type ClientDocumentListRow = DocumentListRow & {
   clientDisplayName: string | null;
   clientNumber: string | null;
+  matterNumber?: string | null;
+  matterTitle?: string | null;
 };
 
-/** Client-file documents only (not matter uploads). */
+/** All documents linked to a client (client-file and matter uploads). */
 export async function listDocumentsForClient(firmId: string, clientId: string) {
   const db = getDb();
   const rows = await db
     .select({
       document: documents,
       createdByName: users.fullName,
+      matterNumber: matters.matterNumber,
+      matterTitle: matters.title,
     })
     .from(documents)
     .leftJoin(users, eq(users.id, documents.createdBy))
-    .where(
-      and(
-        eq(documents.firmId, firmId),
-        eq(documents.clientId, clientId),
-        isNull(documents.matterId),
-      ),
-    )
+    .leftJoin(matters, eq(matters.id, documents.matterId))
+    .where(and(eq(documents.firmId, firmId), eq(documents.clientId, clientId)))
     .orderBy(desc(documents.createdAt));
 
   return rows.map((row) => ({
     ...row.document,
     createdByName: row.createdByName ?? null,
+    matterNumber: row.matterNumber ?? null,
+    matterTitle: row.matterTitle ?? null,
   }));
 }
 
-/** All client-file documents for the firm (matter files excluded). */
+/** Firm-wide client documents hub list (matterNumber/title joined when linked). */
 export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: string }) {
   const db = getDb();
-  const conditions = [
-    eq(documents.firmId, firmId),
-    isNull(documents.matterId),
-  ];
 
   const rows = await db
     .select({
@@ -60,11 +57,14 @@ export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: st
       clientLegalName: clients.legalName,
       clientRegisteredName: clients.registeredName,
       clientTradingName: clients.tradingName,
+      matterNumber: matters.matterNumber,
+      matterTitle: matters.title,
     })
     .from(documents)
     .leftJoin(users, eq(users.id, documents.createdBy))
     .leftJoin(clients, eq(clients.id, documents.clientId))
-    .where(and(...conditions))
+    .leftJoin(matters, eq(matters.id, documents.matterId))
+    .where(eq(documents.firmId, firmId))
     .orderBy(desc(documents.createdAt));
 
   const q = opts?.q?.trim().toLowerCase();
@@ -86,6 +86,8 @@ export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: st
       createdByName: row.createdByName ?? null,
       clientDisplayName,
       clientNumber: row.clientNumber ?? null,
+      matterNumber: row.matterNumber ?? null,
+      matterTitle: row.matterTitle ?? null,
     };
   });
 
@@ -96,6 +98,9 @@ export async function listClientDocumentsForFirm(firmId: string, opts?: { q?: st
       row.fileName,
       row.clientDisplayName,
       row.clientNumber,
+      row.matterNumber,
+      row.matterTitle,
+      row.docType,
     ]
       .filter(Boolean)
       .join(" ")

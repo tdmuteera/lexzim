@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
+import {
+  CLIENT_DOC_CATEGORIES,
+  clientDocCategoryLabel,
+  isClientDocCategory,
+} from "@/lib/clients/doc-categories";
 import { formatBytes } from "@/lib/documents/serialize";
 
 type DocumentItem = {
@@ -11,16 +16,24 @@ type DocumentItem = {
   fileName: string;
   mimeType: string;
   sizeBytes: number | null;
+  docType: string;
+  matterId: string | null;
+  matterNumber?: string | null;
+  matterTitle?: string | null;
   createdByName: string | null;
   createdAt: string;
 };
+
+type PendingOther = { file: File; title: string };
 
 export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
   const [items, setItems] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState("kyc_id_document");
   const [title, setTitle] = useState("");
+  const [pendingOthers, setPendingOthers] = useState<PendingOther[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -53,34 +66,57 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
     void load();
   }, [load]);
 
+  async function uploadOne(file: File, docTitle: string, docType: string) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", docTitle);
+    form.append("docType", docType);
+    const res = await fetch(`/api/clients/${clientId}/documents`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    const body = (await res.json()) as { ok: boolean; error?: { message: string } };
+    if (!res.ok || !body.ok) {
+      throw new Error(body.error?.message ?? "Upload failed.");
+    }
+  }
+
   async function onUpload(e: React.FormEvent) {
     e.preventDefault();
-    const file = fileRef.current?.files?.[0];
-    if (!file) {
-      setError("Choose a file to upload.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      if (title.trim()) form.append("title", title.trim());
-      const res = await fetch(`/api/clients/${clientId}/documents`, {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
-      const body = (await res.json()) as { ok: boolean; error?: { message: string } };
-      if (!res.ok || !body.ok) {
-        setError(body.error?.message ?? "Upload failed.");
-        return;
+      if (category === "other") {
+        if (!pendingOthers.length) {
+          setError("Choose one or more files, then name each before uploading.");
+          return;
+        }
+        for (let i = 0; i < pendingOthers.length; i += 1) {
+          const row = pendingOthers[i]!;
+          const name =
+            row.title.trim() ||
+            row.file.name.replace(/\.[^.]+$/, "") ||
+            `Other document ${i + 1}`;
+          await uploadOne(row.file, name, "other");
+        }
+        setPendingOthers([]);
+      } else {
+        const file = fileRef.current?.files?.[0];
+        if (!file) {
+          setError("Choose a file to upload.");
+          return;
+        }
+        const label =
+          CLIENT_DOC_CATEGORIES.find((c) => c.value === category)?.label ?? "Document";
+        const docTitle = title.trim() || label;
+        await uploadOne(file, docTitle, category);
+        setTitle("");
+        if (fileRef.current) fileRef.current.value = "";
       }
-      setTitle("");
-      if (fileRef.current) fileRef.current.value = "";
       await load();
-    } catch {
-      setError("Upload failed. Check your connection.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setSaving(false);
     }
@@ -108,20 +144,75 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        Files on this client (identity, KYC scans, correspondence). Matter files still live on
-        each matter.
+        Link uploads to KYC document types (ID, proof of address, and so on), or choose Other to
+        upload several files and name each one. Matter uploads for this client also appear here.
       </p>
       <Can permission="documents.manage">
-        <form onSubmit={onUpload} className="toolbar" style={{ marginBottom: "1rem", flexWrap: "wrap" }}>
-          <input
-            className="search-input"
-            placeholder="Title (optional)"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <input ref={fileRef} type="file" aria-label="Client document file" />
+        <form
+          onSubmit={(e) => void onUpload(e)}
+          className="toolbar"
+          style={{ marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}
+        >
+          <select
+            className="filter-select"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPendingOthers([]);
+              if (fileRef.current) fileRef.current.value = "";
+            }}
+          >
+            {CLIENT_DOC_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          {category === "other" ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                aria-label="Other documents"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPendingOthers(
+                    files.map((file, i) => ({
+                      file,
+                      title: file.name.replace(/\.[^.]+$/, "") || `Document ${i + 1}`,
+                    })),
+                  );
+                }}
+              />
+              {pendingOthers.map((row, idx) => (
+                <input
+                  key={`${row.file.name}-${idx}`}
+                  className="search-input"
+                  value={row.title}
+                  onChange={(e) => {
+                    const next = [...pendingOthers];
+                    next[idx] = { ...row, title: e.target.value };
+                    setPendingOthers(next);
+                  }}
+                  placeholder={`Name for file ${idx + 1}`}
+                  style={{ minWidth: "12rem" }}
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              <input
+                className="search-input"
+                placeholder="Title (optional)"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <input ref={fileRef} type="file" aria-label="Client document file" />
+            </>
+          )}
           <Button type="submit" size="sm" disabled={saving}>
-            {saving ? "Uploading…" : "Add document"}
+            {saving ? "Uploading…" : category === "other" ? "Upload files" : "Add document"}
           </Button>
         </form>
       </Can>
@@ -135,8 +226,10 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
           <table className="data">
             <thead>
               <tr>
+                <th>Type</th>
                 <th>Title</th>
                 <th>File</th>
+                <th>Matter</th>
                 <th>Size</th>
                 <th>Added</th>
                 <th></th>
@@ -145,8 +238,20 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
+                  <td>
+                    {isClientDocCategory(item.docType) || item.docType === "other"
+                      ? clientDocCategoryLabel(item.docType)
+                      : item.matterId
+                        ? "Matter file"
+                        : clientDocCategoryLabel(item.docType)}
+                  </td>
                   <td>{item.title}</td>
                   <td>{item.fileName}</td>
+                  <td>
+                    {item.matterNumber
+                      ? `${item.matterNumber}${item.matterTitle ? ` · ${item.matterTitle}` : ""}`
+                      : "—"}
+                  </td>
                   <td>{formatBytes(item.sizeBytes)}</td>
                   <td>
                     {new Date(item.createdAt).toLocaleString()}

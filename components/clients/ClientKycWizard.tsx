@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
+import { useSessionDraft } from "@/lib/client/session-draft";
 import {
   EMPTY_CLIENT_KYC_FORM_VALUES,
   type ClientKycFormValues,
@@ -51,16 +53,35 @@ function Field({
 
 export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
   const [values, setValues] = useState<ClientKycFormValues>({
     ...emptyValues,
     ...initialValues,
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [kycPdfLoading, setKycPdfLoading] = useState(false);
   const [lawyers, setLawyers] = useState<LawyerOption[]>([]);
+  const draftApplied = useRef(false);
+
+  const draftId =
+    mode === "create" || !clientId ? "client-kyc-new" : `client-kyc-${clientId}`;
+  const { draftHint, clearDraft, applyRestored } = useSessionDraft<ClientKycFormValues>({
+    userId: user?.id,
+    draftId,
+    values,
+  });
 
   const isIndividual = values.clientType === "individual";
   const isEntity = !isIndividual;
+
+  useEffect(() => {
+    if (!user?.id || draftApplied.current) return;
+    draftApplied.current = true;
+    applyRestored((draft) => {
+      setValues((prev) => ({ ...prev, ...draft }));
+    });
+  }, [user?.id, applyRestored]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +162,37 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
     };
   }
 
+  async function onDownloadKycPdf() {
+    if (!clientId) return;
+    setKycPdfLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/kyc-pdf`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        setError(body?.error?.message ?? "Could not download KYC PDF.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `KYC-${clientId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not download KYC PDF.");
+    } finally {
+      setKycPdfLoading(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -163,6 +215,7 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
         setError(body.error?.message ?? "Could not save client.");
         return;
       }
+      clearDraft();
       const id = body.data?.client?.id ?? clientId;
       if (mode === "create" && id) {
         router.push(`/clients/${id}?conflict=1`);
@@ -180,6 +233,11 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
   return (
     <form className="client-kyc-wizard" onSubmit={onSubmit}>
       {error ? <p className="error-text">{error}</p> : null}
+      {draftHint ? (
+        <p className="muted" style={{ marginTop: 0, fontSize: "0.85rem" }}>
+          {draftHint}
+        </p>
+      ) : null}
 
       <section className="kyc-section">
         <h4>1. Client classification</h4>
@@ -561,6 +619,16 @@ export function ClientKycWizard({ mode, clientId, initialValues }: Props) {
         <Button type="submit" disabled={loading}>
           {loading ? "Saving…" : mode === "create" ? "Create client" : "Save KYC"}
         </Button>
+        {mode === "edit" && clientId ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void onDownloadKycPdf()}
+            disabled={loading || kycPdfLoading}
+          >
+            {kycPdfLoading ? "Preparing…" : "Download KYC PDF"}
+          </Button>
+        ) : null}
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
           Cancel
         </Button>

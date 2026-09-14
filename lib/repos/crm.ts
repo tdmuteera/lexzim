@@ -165,26 +165,35 @@ export async function buildCrmOverview(
 
 export async function ensureFirmHolidaysSeeded(firmId: string, userId?: string) {
   const db = getDb();
-  const existing = await db
-    .select({ id: firmHolidays.id })
-    .from(firmHolidays)
-    .where(eq(firmHolidays.firmId, firmId))
-    .limit(1);
-  if (existing[0]) return;
-
   const year = new Date().getFullYear();
-  const seeds = [...zwHolidayDatesForYear(year), ...zwHolidayDatesForYear(year + 1)];
-
-  await db.insert(firmHolidays).values(
-    seeds.map((s) => ({
-      firmId,
-      holidayDate: s.date,
-      name: s.name,
-      country: "ZW",
-      createdBy: userId ?? null,
-      updatedAt: new Date(),
-    })),
-  );
+  // Keep fixed ZW holidays present for this year and the next two years.
+  for (const y of [year, year + 1, year + 2]) {
+    const seeds = zwHolidayDatesForYear(y);
+    for (const seed of seeds) {
+      const existing = await db
+        .select({ id: firmHolidays.id })
+        .from(firmHolidays)
+        .where(
+          and(
+            eq(firmHolidays.firmId, firmId),
+            eq(firmHolidays.name, seed.name),
+            sql`extract(year from ${firmHolidays.holidayDate}) = ${y}`,
+            sql`extract(month from ${firmHolidays.holidayDate}) = ${seed.date.getUTCMonth() + 1}`,
+            sql`extract(day from ${firmHolidays.holidayDate}) = ${seed.date.getUTCDate()}`,
+          ),
+        )
+        .limit(1);
+      if (existing[0]) continue;
+      await db.insert(firmHolidays).values({
+        firmId,
+        holidayDate: seed.date,
+        name: seed.name,
+        country: "ZW",
+        createdBy: userId ?? null,
+        updatedAt: new Date(),
+      });
+    }
+  }
 }
 
 export async function listHolidaysForMonth(
@@ -246,6 +255,31 @@ export async function createFirmHoliday(
     })
     .returning();
   return rows[0]!;
+}
+
+export async function updateFirmHoliday(
+  firmId: string,
+  id: string,
+  input: { holidayDate?: Date; name?: string; country?: string },
+) {
+  const db = getDb();
+  const patch: {
+    holidayDate?: Date;
+    name?: string;
+    country?: string;
+    updatedAt: Date;
+  } = { updatedAt: new Date() };
+  if (input.holidayDate) patch.holidayDate = input.holidayDate;
+  if (typeof input.name === "string" && input.name.trim()) patch.name = input.name.trim();
+  if (typeof input.country === "string" && input.country.trim()) {
+    patch.country = input.country.trim();
+  }
+  const rows = await db
+    .update(firmHolidays)
+    .set(patch)
+    .where(and(eq(firmHolidays.firmId, firmId), eq(firmHolidays.id, id)))
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function deleteFirmHoliday(firmId: string, id: string) {
