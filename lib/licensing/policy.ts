@@ -1,15 +1,21 @@
 import "server-only";
 
+/**
+ * Commercial licence / seat gates are deferred.
+ * Enforcement is intentionally disabled until the product owner wires billing.
+ * Keep helpers and Settings display; do not block create/use paths.
+ */
 import { and, count, eq } from "drizzle-orm";
-import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { matters, users } from "@/lib/db/schema";
 import {
-  DEFAULT_MAX_MATTERS,
   isLicenceFeatureKey,
   type LicenceFeatureKey,
 } from "@/lib/licensing/types";
 import { getEffectiveLicence, type EffectiveLicence } from "@/lib/repos/licences";
+
+/** Soft unlimited until commercial licensing is re-enabled. */
+const UNLIMITED_SEATS = 10_000;
 
 export async function countActiveFirmUsers(firmId: string): Promise<number> {
   const db = getDb();
@@ -36,83 +42,46 @@ export async function countFirmMatters(firmId: string): Promise<number> {
 }
 
 export function canUseFeature(
-  licence: EffectiveLicence,
-  feature: LicenceFeatureKey,
+  _licence: EffectiveLicence,
+  _feature: LicenceFeatureKey,
 ): boolean {
-  if (feature === "export") return true;
-  return Boolean(licence.features[feature]);
+  return true;
 }
 
 export async function canUse(
-  firmId: string,
+  _firmId: string,
   feature: LicenceFeatureKey | string,
 ): Promise<boolean> {
-  if (!isLicenceFeatureKey(feature)) return false;
-  if (feature === "export") return true;
-  const licence = await getEffectiveLicence(firmId);
-  return canUseFeature(licence, feature);
+  if (!isLicenceFeatureKey(feature)) return true;
+  return true;
 }
 
 export async function assertCanUse(
   firmId: string,
-  feature: LicenceFeatureKey,
+  _feature: LicenceFeatureKey,
 ): Promise<EffectiveLicence> {
-  const licence = await getEffectiveLicence(firmId);
-  if (feature === "export") return licence;
-  if (!canUseFeature(licence, feature)) {
-    throw new AuthError(
-      "feature_disabled",
-      `This firm’s ${licence.edition} edition does not include “${feature}”. Upgrade the licence or contact LexZim ops.`,
-    );
-  }
-  return licence;
+  return getEffectiveLicence(firmId);
 }
 
 /**
- * Soft commercial gate: expired/revoked licences cannot open new matters.
- * Also enforces trial matter caps. Export is never blocked here.
+ * Formerly blocked new matters on expired licences / trial caps.
+ * Disabled until commercial licensing is wired.
  */
-export async function assertCanCreateMatter(firmId: string): Promise<void> {
-  const licence = await getEffectiveLicence(firmId);
-  if (licence.blocksNewMatters) {
-    throw new AuthError(
-      "licence_expired",
-      licence.reason ??
-        "Firm licence is not active. New matters are blocked. Export remains available from Settings → Backup & Export.",
-    );
-  }
-
-  const maxMatters =
-    licence.maxMatters ??
-    DEFAULT_MAX_MATTERS[licence.edition] ??
-    null;
-  if (maxMatters !== null) {
-    const used = await countFirmMatters(firmId);
-    if (used >= maxMatters) {
-      throw new AuthError(
-        "matter_limit",
-        `Trial matter cap reached (${used}/${maxMatters}). Upgrade edition or contact LexZim ops. Export remains available.`,
-      );
-    }
-  }
+export async function assertCanCreateMatter(_firmId: string): Promise<void> {
+  return;
 }
 
-/** Enforce seat limits before creating or reactivating a user. */
+/** Formerly enforced seat limits. Disabled until commercial licensing is wired. */
 export async function assertSeatAvailable(
   firmId: string,
-  opts?: { extraSeats?: number },
+  _opts?: { extraSeats?: number },
 ): Promise<{ seats: number; used: number; remaining: number }> {
-  const licence = await getEffectiveLicence(firmId);
   const used = await countActiveFirmUsers(firmId);
-  const need = opts?.extraSeats ?? 1;
-  const remaining = Math.max(0, licence.seats - used);
-  if (used + need > licence.seats) {
-    throw new AuthError(
-      "seat_limit",
-      `Seat limit reached (${used}/${licence.seats} active users on ${licence.edition}). Deactivate a user or upgrade seats.`,
-    );
-  }
-  return { seats: licence.seats, used, remaining };
+  return {
+    seats: UNLIMITED_SEATS,
+    used,
+    remaining: Math.max(0, UNLIMITED_SEATS - used),
+  };
 }
 
 export async function getLicenceUsage(firmId: string) {
@@ -121,16 +90,14 @@ export async function getLicenceUsage(firmId: string) {
     countActiveFirmUsers(firmId),
     countFirmMatters(firmId),
   ]);
-  const maxMatters =
-    licence.maxMatters ?? DEFAULT_MAX_MATTERS[licence.edition] ?? null;
   return {
-    seats: licence.seats,
+    seats: UNLIMITED_SEATS,
     seatsUsed,
-    seatsRemaining: Math.max(0, licence.seats - seatsUsed),
+    seatsRemaining: Math.max(0, UNLIMITED_SEATS - seatsUsed),
     mattersUsed,
-    maxMatters,
+    maxMatters: null as number | null,
     features: licence.features,
     edition: licence.edition,
-    aiProxyEligible: Boolean(licence.features.ai_proxy),
+    aiProxyEligible: true,
   };
 }

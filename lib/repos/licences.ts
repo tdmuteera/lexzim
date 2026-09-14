@@ -69,11 +69,11 @@ export function evaluateLicence(row: FirmLicenceRow, now = new Date()): Effectiv
 
   if (storedStatus === "revoked") {
     status = "revoked";
-    reason = "Licence was revoked. Export remains available.";
+    reason = "Licence was revoked (enforcement currently off).";
   } else if (storedStatus === "expired" || pastExpiry) {
     status = "expired";
     reason =
-      "Licence has expired. New matters are blocked. Export and existing data remain available.";
+      "Licence has expired (enforcement currently off; create and seats are not blocked).";
   }
 
   const isActive = status === "active";
@@ -91,7 +91,8 @@ export function evaluateLicence(row: FirmLicenceRow, now = new Date()): Effectiv
     notes: row.notes,
     issuedBy: row.issuedBy,
     isActive,
-    blocksNewMatters: !isActive,
+    // Commercial matter block deferred until licensing is re-wired.
+    blocksNewMatters: false,
     exportAllowed: true,
     reason,
   };

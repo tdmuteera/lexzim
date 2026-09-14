@@ -105,21 +105,16 @@ export function defaultFeaturesForEdition(edition: LicenceEdition): LicenceFeatu
 /**
  * Merge stored features_json over edition defaults.
  * Export is always true (never hostage data).
+ * While commercial enforcement is deferred, all edition features are treated as on.
  */
 export function resolveFeatures(
   edition: LicenceEdition,
-  stored: LicenceFeatures | null | undefined,
+  _stored: LicenceFeatures | null | undefined,
 ): Record<LicenceFeatureKey, boolean> {
   const base = { ...EDITION_MATRIX[edition].features };
-  if (stored) {
-    for (const key of LICENCE_FEATURE_KEYS) {
-      if (key === "export") continue;
-      if (typeof stored[key] === "boolean") {
-        base[key] = stored[key] as boolean;
-      }
-    }
+  for (const key of LICENCE_FEATURE_KEYS) {
+    base[key] = true;
   }
-  base.export = true;
   return base;
 }
 
