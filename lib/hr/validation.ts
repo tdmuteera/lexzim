@@ -8,6 +8,13 @@ import {
 export const HR_CONTRACT_STATUSES = ["draft", "active", "expired", "terminated"] as const;
 export type HrContractStatus = (typeof HR_CONTRACT_STATUSES)[number];
 
+export const HR_ID_DOCUMENT_TYPES = ["national_id", "passport"] as const;
+export type HrIdDocumentType = (typeof HR_ID_DOCUMENT_TYPES)[number];
+
+function isHrIdDocumentType(value: string): value is HrIdDocumentType {
+  return (HR_ID_DOCUMENT_TYPES as readonly string[]).includes(value);
+}
+
 function parseOptionalDate(value: unknown, field: string): Date | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value !== "string") {
@@ -65,6 +72,7 @@ export type StaffProfileInput = {
   jobCategory: HrJobCategory | null;
   department: string | null;
   employeeNumber: string | null;
+  idDocumentType: HrIdDocumentType | null;
   idPassport: string | null;
   workLocation: string | null;
   startDate: Date | null;
@@ -141,6 +149,17 @@ export function parseStaffProfileInput(body: unknown): StaffProfileInput {
     markAsLawyer = Boolean(raw.markAsLawyer);
   }
 
+  let idDocumentType: HrIdDocumentType | null = null;
+  if (raw.idDocumentType !== null && raw.idDocumentType !== undefined && raw.idDocumentType !== "") {
+    if (typeof raw.idDocumentType !== "string" || !isHrIdDocumentType(raw.idDocumentType)) {
+      throw new AuthError(
+        "validation",
+        `idDocumentType must be one of: ${HR_ID_DOCUMENT_TYPES.join(", ")}.`,
+      );
+    }
+    idDocumentType = raw.idDocumentType;
+  }
+
   const nokFullName = parseOptionalString(raw.nokFullName, 200);
   const nokPhone1 = parseOptionalString(raw.nokPhone1, 80);
   const emergencyContactName =
@@ -156,6 +175,7 @@ export function parseStaffProfileInput(body: unknown): StaffProfileInput {
     jobCategory,
     department: parseOptionalString(raw.department, 120),
     employeeNumber: parseOptionalString(raw.employeeNumber, 80),
+    idDocumentType,
     idPassport: parseOptionalString(raw.idPassport, 80),
     workLocation: parseOptionalString(raw.workLocation, 200),
     startDate: parseOptionalDate(raw.startDate, "startDate"),

@@ -12,6 +12,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { HR_JOB_CATEGORIES } from "@/lib/hr/job-categories";
 import { dollarsToCents } from "@/lib/billing/money";
 
+const ID_DOCUMENT_OPTIONS = [
+  { value: "national_id", label: "National ID" },
+  { value: "passport", label: "Passport" },
+] as const;
+
 type StaffItem = {
   id: string;
   fullName: string;
@@ -21,6 +26,7 @@ type StaffItem = {
   jobCategory: string | null;
   department: string | null;
   employeeNumber: string | null;
+  idDocumentType: string | null;
   idPassport: string | null;
   workLocation: string | null;
   startDate: string | null;
@@ -103,6 +109,7 @@ export function HrStaffView() {
   const [jobCategory, setJobCategory] = useState("");
   const [department, setDepartment] = useState("");
   const [employeeNumber, setEmployeeNumber] = useState("");
+  const [idDocumentType, setIdDocumentType] = useState("");
   const [idPassport, setIdPassport] = useState("");
   const [workLocation, setWorkLocation] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -163,6 +170,7 @@ export function HrStaffView() {
     setJobCategory("");
     setDepartment("");
     setEmployeeNumber("");
+    setIdDocumentType("");
     setIdPassport("");
     setWorkLocation("");
     setStartDate("");
@@ -201,6 +209,7 @@ export function HrStaffView() {
     setJobCategory(row.jobCategory ?? "");
     setDepartment(row.department ?? "");
     setEmployeeNumber(row.employeeNumber ?? "");
+    setIdDocumentType(row.idDocumentType ?? "");
     setIdPassport(row.idPassport ?? "");
     setWorkLocation(row.workLocation ?? "");
     setStartDate(dateInputFromIso(row.startDate));
@@ -248,7 +257,8 @@ export function HrStaffView() {
         jobTitle: jobTitle || null,
         jobCategory: jobCategory || null,
         department: department || null,
-        employeeNumber: employeeNumber || null,
+        employeeNumber: editingId ? employeeNumber || null : null,
+        idDocumentType: idDocumentType || null,
         idPassport: idPassport || null,
         workLocation: workLocation || null,
         startDate: startDate || null,
@@ -466,10 +476,35 @@ export function HrStaffView() {
                 </label>
                 <label>
                   Employee number
-                  <input className="filter-input" value={employeeNumber} onChange={(e) => setEmployeeNumber(e.target.value)} />
+                  <input
+                    className="filter-input"
+                    value={employeeNumber}
+                    onChange={(e) => setEmployeeNumber(e.target.value)}
+                    readOnly={!editingId}
+                    placeholder={editingId ? undefined : "Assigned automatically on save"}
+                  />
                 </label>
                 <label>
-                  ID / passport
+                  Document type
+                  <select
+                    className="filter-select"
+                    value={idDocumentType}
+                    onChange={(e) => setIdDocumentType(e.target.value)}
+                  >
+                    <option value="">Select type</option>
+                    {ID_DOCUMENT_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {idDocumentType === "passport"
+                    ? "Passport number"
+                    : idDocumentType === "national_id"
+                      ? "ID number"
+                      : "ID / passport number"}
                   <input className="filter-input" value={idPassport} onChange={(e) => setIdPassport(e.target.value)} />
                 </label>
                 <label>

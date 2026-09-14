@@ -1,9 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
+import { validateEmail } from "@/lib/auth/password";
 import { getDb } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
+import {
+  getPrimaryCommunicationEmail,
+  setPrimaryCommunicationEmail,
+} from "@/lib/repos/staff-communication-emails";
 import { requirePermission } from "@/lib/rbac/guards";
 import {
   getEffectivePermissionCodes,
@@ -14,6 +19,7 @@ import {
   mergePreservedGrants,
   navTicksFromGrants,
 } from "@/lib/rbac/access-ticks";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 function parseTickCodes(raw: unknown): string[] | null {
@@ -24,7 +30,7 @@ function parseTickCodes(raw: unknown): string[] | null {
   return raw.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
 }
 
-/** Update job title and/or module access ticks. */
+/** Update job title, emails, and/or module access ticks. */
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -37,12 +43,15 @@ export async function PATCH(
       jobTitle?: string | null;
       permissionCodes?: unknown;
       isLawyer?: boolean;
+      email?: string;
+      communicationEmail?: string | null;
     };
 
     const db = getDb();
     const rows = await db
       .select({
         id: users.id,
+        email: users.email,
         roleId: users.roleId,
         roleCode: roles.code,
         jobTitle: users.jobTitle,
@@ -59,6 +68,7 @@ export async function PATCH(
     const tickCodes = parseTickCodes(body.permissionCodes);
     let savedTicks: string[] | undefined;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
+    let nextEmail = target.email;
 
     if (typeof body.jobTitle === "string" || body.jobTitle === null) {
       patch.jobTitle =
@@ -70,11 +80,65 @@ export async function PATCH(
       patch.isLawyer = body.isLawyer;
     }
 
+    if (typeof body.email === "string" && body.email.trim()) {
+      if (!target.isSystemUser) {
+        throw new AuthError(
+          "validation",
+          "Directory people (no login) do not have a login email to change here.",
+        );
+      }
+      nextEmail = validateEmail(body.email);
+      if (nextEmail !== target.email) {
+        const conflict = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.firmId, firmId), ne(users.id, id), eq(users.email, nextEmail)))
+          .limit(1);
+        if (conflict[0]) {
+          throw new AuthError(
+            "validation",
+            "That email is already used by another user in this firm.",
+          );
+        }
+        const admin = createAdminClient();
+        const authUpdate = await admin.auth.admin.updateUserById(id, {
+          email: nextEmail,
+          email_confirm: true,
+        });
+        if (authUpdate.error) {
+          throw new AuthError(
+            "validation",
+            authUpdate.error.message || "Could not update login email.",
+          );
+        }
+        patch.email = nextEmail;
+      }
+    }
+
     if (Object.keys(patch).length > 1) {
       await db
         .update(users)
         .set(patch)
         .where(and(eq(users.id, id), eq(users.firmId, firmId)));
+    }
+
+    let communicationEmail =
+      (await getPrimaryCommunicationEmail(firmId, id)) || nextEmail;
+    if (typeof body.communicationEmail === "string") {
+      if (!target.isSystemUser) {
+        throw new AuthError(
+          "validation",
+          "Directory people (no login) do not receive system notification emails.",
+        );
+      }
+      if (body.communicationEmail.trim()) {
+        const row = await setPrimaryCommunicationEmail(
+          firmId,
+          id,
+          body.communicationEmail,
+        );
+        communicationEmail = row.email;
+      }
     }
 
     if (tickCodes) {
@@ -138,9 +202,27 @@ export async function PATCH(
       });
     }
 
+    if (patch.email || typeof body.communicationEmail === "string") {
+      await writeAuditLog({
+        action: "users.email_update",
+        firmId,
+        userId: session.id,
+        entityType: "user",
+        entityId: target.id,
+        metadata: {
+          email: nextEmail,
+          communicationEmail,
+          byAdmin: true,
+        },
+        ipOrUserAgent: clientInfo(request),
+      });
+    }
+
     return jsonOk({
       user: {
         id: target.id,
+        email: nextEmail,
+        communicationEmail,
         permissionCodes: savedTicks ?? tickCodes,
         isLawyer:
           typeof body.isLawyer === "boolean" ? body.isLawyer : target.isLawyer,

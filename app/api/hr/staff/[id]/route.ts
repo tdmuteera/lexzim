@@ -26,6 +26,7 @@ function serializeStaff(row: NonNullable<Awaited<ReturnType<typeof getStaffProfi
     jobCategory: p.jobCategory,
     department: p.department,
     employeeNumber: p.employeeNumber,
+    idDocumentType: p.idDocumentType,
     idPassport: p.idPassport,
     workLocation: p.workLocation,
     startDate: p.startDate?.toISOString() ?? null,

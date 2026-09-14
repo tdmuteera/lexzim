@@ -154,7 +154,7 @@ export function UserProfilePanel() {
           />
         </label>
         <label>
-          <span className="muted">Email (login)</span>
+          <span className="muted">Login email</span>
           <input
             type="email"
             value={email}
@@ -172,18 +172,19 @@ export function UserProfilePanel() {
           />
         </label>
         <label>
-          <span className="muted">Communication email (tasks / approvals)</span>
+          <span className="muted">Notification email (tasks / approvals)</span>
           <input
             type="email"
             value={communicationEmail}
             onChange={(e) => setCommunicationEmail(e.target.value)}
-            placeholder="May differ from login email"
+            placeholder="Personal or work email for system notices"
             disabled={loading || saving}
           />
         </label>
         <p className="settings-hint" style={{ marginTop: 0 }}>
-          LexZim emails task assignments and approval requests here when firm SMTP is configured.
-          If blank, your login email is used. Client emails are never sent automatically.
+          Login email is what you use to sign in. Notification email is where LexZim sends task
+          assignments and approval requests when firm SMTP is configured (personal or work). If
+          blank, your login email is used. Client emails are never sent automatically.
         </p>
       </section>
 

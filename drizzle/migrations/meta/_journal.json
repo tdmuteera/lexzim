@@ -330,6 +330,13 @@
       "when": 1788900000000,
       "tag": "0046_fee_vault_destination",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0047_staff_id_document_type",
+      "breakpoints": true
     }
   ]
 }

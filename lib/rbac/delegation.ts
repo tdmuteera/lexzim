@@ -25,6 +25,11 @@ export const DELEGATION_CAPABILITIES = [
     label: "Approve salary advances",
     description: "Approve salary advance requests.",
   },
+  {
+    code: "finance.requisitions.approve" as const,
+    label: "Approve requisitions",
+    description: "Approve or reject finance requisitions.",
+  },
 ] as const;
 
 export type DelegationCapabilityCode =

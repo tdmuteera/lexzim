@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { firmSettings, matters } from "@/lib/db/schema";
+import { firmSettings, hrStaffProfiles, matters } from "@/lib/db/schema";
 
 export const LAST_EXPORT_AT_KEY = "last_export_at";
 
@@ -20,6 +20,9 @@ export const TRUST_REF_PREFIX_KEY = "trust_ref_prefix";
 export const NEXT_TRUST_REF_NUMBER_KEY = "next_trust_ref_number";
 export const MATTER_PREFIX_KEY = "matter_prefix";
 export const NEXT_MATTER_NUMBER_KEY = "next_matter_number";
+/** HR: EMP-0001 style employee numbers per firm. */
+export const EMPLOYEE_PREFIX_KEY = "employee_prefix";
+export const NEXT_EMPLOYEE_NUMBER_KEY = "next_employee_number";
 /** P3-04: firm allows in-browser Notification API while app is open (no push/SMTP). */
 export const BROWSER_NOTIFICATIONS_KEY = "browser_notifications_enabled";
 
@@ -326,6 +329,73 @@ export async function allocateMatterNumber(firmId: string): Promise<string> {
         and(
           eq(firmSettings.firmId, firmId),
           eq(firmSettings.key, NEXT_MATTER_NUMBER_KEY),
+        ),
+      );
+
+    return candidate;
+  });
+}
+
+/** Allocate next employee number (EMP-0001 per firm). Skips numbers already in use. */
+export async function allocateEmployeeNumber(firmId: string): Promise<string> {
+  const db = getDb();
+  const prefixExisting = await getFirmSetting(firmId, EMPLOYEE_PREFIX_KEY);
+  const prefix = prefixExisting || "EMP";
+  if (!prefixExisting) {
+    await upsertFirmSetting(firmId, EMPLOYEE_PREFIX_KEY, prefix);
+  }
+
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(firmSettings)
+      .values({
+        firmId,
+        key: NEXT_EMPLOYEE_NUMBER_KEY,
+        value: "1",
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [firmSettings.firmId, firmSettings.key],
+      });
+
+    const locked = await tx.execute<{ value: string }>(sql`
+      select value
+      from firm_settings
+      where firm_id = ${firmId}
+        and key = ${NEXT_EMPLOYEE_NUMBER_KEY}
+      for update
+    `);
+
+    const lockedRows =
+      (locked as unknown as { rows?: Array<{ value: string }> }).rows ??
+      (Array.isArray(locked) ? (locked as Array<{ value: string }>) : []);
+    let next = Number(lockedRows[0]?.value ?? "1");
+    if (!Number.isInteger(next) || next < 1) next = 1;
+
+    let candidate = `${prefix}-${String(next).padStart(4, "0")}`;
+    for (let guard = 0; guard < 500; guard += 1) {
+      const existing = await tx
+        .select({ id: hrStaffProfiles.id })
+        .from(hrStaffProfiles)
+        .where(
+          and(
+            eq(hrStaffProfiles.firmId, firmId),
+            eq(hrStaffProfiles.employeeNumber, candidate),
+          ),
+        )
+        .limit(1);
+      if (!existing[0]) break;
+      next += 1;
+      candidate = `${prefix}-${String(next).padStart(4, "0")}`;
+    }
+
+    await tx
+      .update(firmSettings)
+      .set({ value: String(next + 1), updatedAt: new Date() })
+      .where(
+        and(
+          eq(firmSettings.firmId, firmId),
+          eq(firmSettings.key, NEXT_EMPLOYEE_NUMBER_KEY),
         ),
       );
 

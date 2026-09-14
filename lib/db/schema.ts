@@ -1892,6 +1892,8 @@ export const hrStaffProfiles = pgTable(
     /** Managing Partner | Partner | Senior Associate | Junior Associate | Attorney | custom */
     jobCategory: text("job_category"),
     employeeNumber: text("employee_number"),
+    /** national_id | passport */
+    idDocumentType: text("id_document_type"),
     idPassport: text("id_passport"),
     workLocation: text("work_location"),
     startDate: timestamp("start_date", { withTimezone: true }),

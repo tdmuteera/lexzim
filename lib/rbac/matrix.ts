@@ -149,7 +149,7 @@ export const PERMISSION_DEFS: {
   {
     code: "finance.requisitions.approve",
     name: "Approve requisitions",
-    description: "Approve or reject finance requisitions",
+    description: "Approve or reject finance requisitions (delegable)",
     module: "finance",
   },
   {

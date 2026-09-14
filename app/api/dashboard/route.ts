@@ -13,6 +13,7 @@ import {
   listUpcomingHearings,
   listUpcomingMeetings,
 } from "@/lib/repos/dashboard";
+import { countFirmTasks } from "@/lib/repos/firm-tasks";
 import {
   buildLawyerPerformance,
   lastMonthsRange,
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
       recentActivity,
       statusMix,
       commandKpis,
+      taskCounts,
     ] = await Promise.all([
       canMatters
         ? getDashboardStats({ firmId, userId: session.id, viewAll })
@@ -120,6 +122,7 @@ export async function GET(request: Request) {
         ? getDashboardMatterStatusMix({ firmId, userId: session.id, viewAll })
         : Promise.resolve({ byStatus: {}, total: 0 }),
       getDashboardCommandKpis({ firmId, userId: session.id, viewAll }),
+      countFirmTasks(firmId, session.id),
     ]);
 
     if (canCalendar) {
@@ -232,6 +235,10 @@ export async function GET(request: Request) {
       overdueInvoices,
       trustAttention,
       financeKpis,
+      pendingTasks: {
+        count: taskCounts.myPending,
+        overdue: taskCounts.overdue,
+      },
       labels: { billing: "Fee notes", trust: "Trust" },
     });
   } catch (err) {

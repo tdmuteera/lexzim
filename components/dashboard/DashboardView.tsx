@@ -163,6 +163,10 @@ type DashboardData = {
     }>;
   } | null;
   financeKpis: FinanceKpis | null;
+  pendingTasks?: {
+    count: number;
+    overdue: number;
+  } | null;
   lawyerPerformance: {
     viewAll: boolean;
     canViewRevenue: boolean;
@@ -613,6 +617,20 @@ export function DashboardView() {
       ) : null}
 
       <div className="stats-grid dash-kpi-row motion-kpis">
+        {(data.pendingTasks?.count ?? 0) > 0 ? (
+          <KpiCard
+            href="/workflow/tasks"
+            icon="clipboard"
+            label="Pending tasks"
+            value={data.pendingTasks!.count}
+            hint={
+              data.pendingTasks!.overdue > 0
+                ? `${data.pendingTasks!.overdue} overdue`
+                : "Assigned to you"
+            }
+            delay={0}
+          />
+        ) : null}
         {permissions.clients ? (
           <KpiCard
             href="/clients"

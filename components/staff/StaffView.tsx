@@ -52,6 +52,16 @@ type SessionRow = {
   lastSeenAt: string;
 };
 
+type EligibleStaff = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  jobTitle: string | null;
+  employeeNumber: string | null;
+  userId: string | null;
+  linkedDirectoryOnly: boolean;
+};
+
 type StaffTab = "logins" | "lawyers" | "delegations";
 
 const DEFAULT_TICKS = ["dashboard.view"];
@@ -64,8 +74,10 @@ export function StaffView() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<StaffRow[]>([]);
+  const [eligibleStaff, setEligibleStaff] = useState<EligibleStaff[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [seats, setSeats] = useState<SeatsInfo | null>(null);
+  const [staffProfileId, setStaffProfileId] = useState("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
@@ -80,6 +92,8 @@ export function StaffView() {
   const [editTicks, setEditTicks] = useState<string[]>([]);
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editIsLawyer, setEditIsLawyer] = useState(false);
+  const [editEmail, setEditEmail] = useState("");
+  const [editCommunicationEmail, setEditCommunicationEmail] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,6 +108,7 @@ export function StaffView() {
         data?: {
           items: StaffRow[];
           seats: SeatsInfo;
+          eligibleStaff?: EligibleStaff[];
         };
         error?: { message: string };
       };
@@ -107,6 +122,7 @@ export function StaffView() {
       }
       setItems(body.data.items);
       setSeats(body.data.seats);
+      setEligibleStaff(body.data.eligibleStaff ?? []);
       setSessions(sessBody.data?.items ?? []);
     } catch {
       setError("Could not load staff.");
@@ -132,6 +148,29 @@ export function StaffView() {
     setEditTicks(u.permissionCodes ?? []);
     setEditJobTitle(u.jobTitle ?? "");
     setEditIsLawyer(u.isLawyer);
+    setEditEmail(u.email ?? "");
+    setEditCommunicationEmail("");
+    if (u.isSystemUser) {
+      void fetch(`/api/users/${u.id}/communication-email`, { credentials: "include" })
+        .then((res) => res.json())
+        .then((body: { ok?: boolean; data?: { communicationEmail?: string | null } }) => {
+          if (body.ok && body.data) {
+            setEditCommunicationEmail(body.data.communicationEmail ?? u.email ?? "");
+          } else {
+            setEditCommunicationEmail(u.email ?? "");
+          }
+        })
+        .catch(() => setEditCommunicationEmail(u.email ?? ""));
+    }
+  }
+
+  function onSelectStaffProfile(id: string) {
+    setStaffProfileId(id);
+    const selected = eligibleStaff.find((s) => s.id === id);
+    if (!selected) return;
+    setFullName(selected.fullName);
+    setJobTitle(selected.jobTitle ?? "");
+    setEmail(selected.email ?? "");
   }
 
   async function onCreateLogin() {
@@ -144,13 +183,14 @@ export function StaffView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          fullName,
+          fullName: isTestUser ? fullName : undefined,
           jobTitle: jobTitle.trim() || undefined,
           password: password.trim() || undefined,
           permissionCodes: createTicks,
           isSystemUser: true,
           isLawyer,
           isTestUser,
+          staffProfileId: isTestUser ? undefined : staffProfileId || undefined,
         }),
       });
       const body = (await res.json()) as {
@@ -171,6 +211,7 @@ export function StaffView() {
       setFullName("");
       setJobTitle("");
       setPassword("");
+      setStaffProfileId("");
       setIsLawyer(true);
       setIsTestUser(false);
       setCreateTicks(DEFAULT_TICKS);
@@ -230,6 +271,8 @@ export function StaffView() {
       };
       if (editing?.isSystemUser) {
         payload.permissionCodes = editTicks;
+        payload.email = editEmail.trim();
+        payload.communicationEmail = editCommunicationEmail.trim() || null;
       }
       const res = await fetch(`/api/staff/${editingId}`, {
         method: "PATCH",
@@ -464,23 +507,59 @@ export function StaffView() {
             </strong>
             <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
               {tab === "logins"
-                ? "Creates a LexZim login and uses one seat. Tick modules they may use."
+                ? "Pick an existing employee from HR, confirm their login email, and set module access. Every system user must already be a staff member."
                 : "For lawyers who practice and bring revenue but do not need system access. They appear in responsible attorney lists on clients and matters."}
             </p>
-            <div className="hr-grid-2">
+            {tab === "logins" && !isTestUser ? (
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  Full name
+                  Employee (staff record)
                 </div>
-                <input
-                  className="filter-input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+                <select
+                  className="filter-select"
+                  value={staffProfileId}
+                  onChange={(e) => onSelectStaffProfile(e.target.value)}
+                >
+                  <option value="">Select employee…</option>
+                  {eligibleStaff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.fullName}
+                      {s.employeeNumber ? ` · ${s.employeeNumber}` : ""}
+                      {s.jobTitle ? ` · ${s.jobTitle}` : ""}
+                    </option>
+                  ))}
+                </select>
               </label>
+            ) : null}
+            {tab === "logins" && eligibleStaff.length === 0 && !isTestUser ? (
+              <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+                No employees are waiting for a login. Create the person under HR → Staff first, then
+                return here to grant access.
+              </p>
+            ) : null}
+            <div className="hr-grid-2">
+              {tab === "lawyers" || isTestUser ? (
+                <label>
+                  <div className="muted" style={{ fontSize: "0.8rem" }}>
+                    Full name
+                  </div>
+                  <input
+                    className="filter-input"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </label>
+              ) : (
+                <label>
+                  <div className="muted" style={{ fontSize: "0.8rem" }}>
+                    Full name
+                  </div>
+                  <input className="filter-input" value={fullName} readOnly disabled={!staffProfileId} />
+                </label>
+              )}
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  {tab === "logins" ? "Email" : "Email (optional)"}
+                  {tab === "logins" ? "Login email (confirm)" : "Email (optional)"}
                 </div>
                 <input
                   className="filter-input"
@@ -547,7 +626,14 @@ export function StaffView() {
                 <Button
                   variant="gold"
                   onClick={() => void onCreateLogin()}
-                  disabled={saving || loading || (seats !== null && seats.remaining <= 0)}
+                  disabled={
+                    saving ||
+                    loading ||
+                    (seats !== null && seats.remaining <= 0) ||
+                    (!isTestUser && !staffProfileId) ||
+                    !email.trim() ||
+                    (isTestUser && !fullName.trim())
+                  }
                 >
                   {saving ? "Creating…" : "Create user"}
                 </Button>
@@ -645,6 +731,37 @@ export function StaffView() {
                           onChange={(e) => setEditJobTitle(e.target.value)}
                         />
                       </label>
+                      {editing.isSystemUser ? (
+                        <>
+                          <label style={{ display: "block", marginBottom: "0.65rem", maxWidth: "22rem" }}>
+                            <div className="muted" style={{ fontSize: "0.8rem" }}>
+                              Login email
+                            </div>
+                            <input
+                              className="filter-input"
+                              type="email"
+                              value={editEmail}
+                              onChange={(e) => setEditEmail(e.target.value)}
+                            />
+                          </label>
+                          <label style={{ display: "block", marginBottom: "0.65rem", maxWidth: "22rem" }}>
+                            <div className="muted" style={{ fontSize: "0.8rem" }}>
+                              Notification email
+                            </div>
+                            <input
+                              className="filter-input"
+                              type="email"
+                              value={editCommunicationEmail}
+                              onChange={(e) => setEditCommunicationEmail(e.target.value)}
+                              placeholder="Personal or work email for system notices"
+                            />
+                          </label>
+                          <p className="muted" style={{ margin: "0 0 0.65rem", fontSize: "0.8rem" }}>
+                            Notification email can be their personal or work address for tasks and
+                            approvals. Login email is what they use to sign in.
+                          </p>
+                        </>
+                      ) : null}
                       <label className="hr-checkbox-row" style={{ marginBottom: "0.65rem" }}>
                         <input
                           type="checkbox"

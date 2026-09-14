@@ -1,12 +1,13 @@
 /**
  * HR staff profiles and contracts (Phase 6 P6-12).
  */
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { hrContracts, hrStaffProfiles, users } from "@/lib/db/schema";
 import { jobCategoryImpliesLawyer } from "@/lib/hr/job-categories";
 import type { HrContractInput, StaffProfileInput } from "@/lib/hr/validation";
+import { allocateEmployeeNumber } from "@/lib/repos/firm-settings";
 import { deleteFirmFile } from "@/lib/storage/firm-files";
 
 function profileValuesFromInput(firmId: string, input: StaffProfileInput) {
@@ -20,6 +21,7 @@ function profileValuesFromInput(firmId: string, input: StaffProfileInput) {
     jobCategory: input.jobCategory,
     department: input.department,
     employeeNumber: input.employeeNumber,
+    idDocumentType: input.idDocumentType,
     idPassport: input.idPassport,
     workLocation: input.workLocation,
     startDate: input.startDate,
@@ -87,6 +89,7 @@ export async function ensureEmployeeProfileForUser(input: {
   if (existing) return existing.profile;
 
   const db = getDb();
+  const employeeNumber = await allocateEmployeeNumber(input.firmId);
   const rows = await db
     .insert(hrStaffProfiles)
     .values({
@@ -95,6 +98,7 @@ export async function ensureEmployeeProfileForUser(input: {
       fullName: input.fullName,
       email: input.email ?? null,
       jobTitle: input.jobTitle ?? null,
+      employeeNumber,
       isActive: true,
       updatedAt: new Date(),
     })
@@ -125,6 +129,48 @@ export async function listStaffProfiles(
     .leftJoin(users, and(eq(users.id, hrStaffProfiles.userId), eq(users.firmId, firmId)))
     .where(and(...conditions))
     .orderBy(desc(hrStaffProfiles.isActive), asc(hrStaffProfiles.fullName));
+}
+
+/** Active employees who do not yet have a LexZim system login. */
+export async function listStaffWithoutSystemLogin(firmId: string) {
+  const db = getDb();
+  return db
+    .select({
+      profile: hrStaffProfiles,
+      userEmail: users.email,
+      userFullName: users.fullName,
+      userIsActive: users.isActive,
+      userIsLawyer: users.isLawyer,
+      userIsSystemUser: users.isSystemUser,
+    })
+    .from(hrStaffProfiles)
+    .leftJoin(users, and(eq(users.id, hrStaffProfiles.userId), eq(users.firmId, firmId)))
+    .where(
+      and(
+        eq(hrStaffProfiles.firmId, firmId),
+        eq(hrStaffProfiles.isActive, true),
+        or(isNull(hrStaffProfiles.userId), eq(users.isSystemUser, false)),
+      ),
+    )
+    .orderBy(asc(hrStaffProfiles.fullName));
+}
+
+export async function linkStaffProfileToUser(
+  firmId: string,
+  profileId: string,
+  userId: string,
+) {
+  await assertUserLinkable(firmId, userId, profileId);
+  const db = getDb();
+  const rows = await db
+    .update(hrStaffProfiles)
+    .set({ userId, updatedAt: new Date() })
+    .where(and(eq(hrStaffProfiles.firmId, firmId), eq(hrStaffProfiles.id, profileId)))
+    .returning();
+  if (!rows[0]) {
+    throw new AuthError("not_found", "Staff record not found.");
+  }
+  return rows[0];
 }
 
 export async function getStaffProfile(firmId: string, id: string) {
@@ -214,10 +260,13 @@ export async function createStaffProfile(firmId: string, input: StaffProfileInpu
     await assertUserLinkable(firmId, input.userId);
   }
 
+  const employeeNumber =
+    input.employeeNumber?.trim() || (await allocateEmployeeNumber(firmId));
+
   const db = getDb();
   const rows = await db
     .insert(hrStaffProfiles)
-    .values(profileValuesFromInput(firmId, input))
+    .values(profileValuesFromInput(firmId, { ...input, employeeNumber }))
     .returning();
   const row = rows[0]!;
   await syncLinkedUserFromProfile(firmId, row.userId, input);

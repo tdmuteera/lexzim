@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
@@ -11,6 +11,13 @@ import {
   getLicenceUsage,
 } from "@/lib/licensing/policy";
 import { createDirectoryPerson } from "@/lib/repos/directory-people";
+import {
+  ensureEmployeeProfileForUser,
+  getStaffProfile,
+  linkStaffProfileToUser,
+  listStaffWithoutSystemLogin,
+} from "@/lib/repos/hr";
+import { jobCategoryImpliesLawyer } from "@/lib/hr/job-categories";
 import { requirePermission } from "@/lib/rbac/guards";
 import {
   copyRolePermissionsToUser,
@@ -32,6 +39,11 @@ function parseTickCodes(raw: unknown): string[] | null {
     throw new AuthError("validation", "permissionCodes must be an array of tick codes.");
   }
   return raw.filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+}
+
+function isRealContactEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return email.includes("@") && !email.includes(".lexzim.local");
 }
 
 /** List firm users + seat usage + current access ticks. */
@@ -70,6 +82,7 @@ export async function GET(request: Request) {
           : rows;
 
     const usage = await getLicenceUsage(firmId);
+    const eligibleStaff = await listStaffWithoutSystemLogin(firmId);
     const items = await Promise.all(
       filtered.map(async (row) => {
         const grants = row.isSystemUser
@@ -107,6 +120,15 @@ export async function GET(request: Request) {
         remaining: usage.seatsRemaining,
         edition: usage.edition,
       },
+      eligibleStaff: eligibleStaff.map((row) => ({
+        id: row.profile.id,
+        fullName: row.profile.fullName,
+        email: row.profile.email,
+        jobTitle: row.profile.jobTitle,
+        employeeNumber: row.profile.employeeNumber,
+        userId: row.profile.userId,
+        linkedDirectoryOnly: row.userIsSystemUser === false,
+      })),
     });
   } catch (err) {
     return jsonError(err, request);
@@ -115,11 +137,7 @@ export async function GET(request: Request) {
 
 /**
  * Create a firm user (login) or directory person (no login).
- * Body: {
- *   email?, fullName, password?, jobTitle?, permissionCodes?,
- *   isSystemUser?: boolean (default true),
- *   isLawyer?: boolean
- * }
+ * System logins (except test users) must select an existing HR staff profile.
  */
 export async function POST(request: Request) {
   try {
@@ -136,19 +154,22 @@ export async function POST(request: Request) {
       isSystemUser?: boolean;
       isLawyer?: boolean;
       isTestUser?: boolean;
+      staffProfileId?: string;
     };
 
-    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
-    if (!fullName) throw new AuthError("validation", "fullName is required.");
-    const jobTitle =
-      typeof body.jobTitle === "string" && body.jobTitle.trim()
-        ? body.jobTitle.trim()
-        : null;
     const isSystemUser = body.isSystemUser !== false;
-    const isLawyer = body.isLawyer === true || (!isSystemUser && body.isLawyer !== false);
     const isTestUser = body.isTestUser === true;
+    const tickCodes = parseTickCodes(body.permissionCodes);
+    const forceChange = body.forceChange !== false;
 
     if (!isSystemUser) {
+      const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+      if (!fullName) throw new AuthError("validation", "fullName is required.");
+      const jobTitle =
+        typeof body.jobTitle === "string" && body.jobTitle.trim()
+          ? body.jobTitle.trim()
+          : null;
+      const isLawyer = body.isLawyer !== false;
       const person = await createDirectoryPerson(firmId, {
         fullName,
         email: body.email ?? null,
@@ -197,14 +218,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = validateEmail(body.email ?? "");
-    const providedPassword = typeof body.password === "string" ? body.password.trim() : "";
-    const generatedTemp = providedPassword ? null : generateTempPassword();
-    const password = providedPassword || generatedTemp!;
-    validatePassword(password);
-    const forceChange = body.forceChange !== false;
-    const tickCodes = parseTickCodes(body.permissionCodes);
-
     await assertSeatAvailable(firmId);
 
     const db = getDb();
@@ -212,73 +225,183 @@ export async function POST(request: Request) {
     const role = roleRows[0];
     if (!role) throw new AuthError("validation", "Default staff role is missing. Seed RBAC.");
 
-    const existing = await db
-      .select({ id: users.id, firmId: users.firmId })
+    const providedPassword = typeof body.password === "string" ? body.password.trim() : "";
+    const generatedTemp = providedPassword ? null : generateTempPassword();
+    const password = providedPassword || generatedTemp!;
+    validatePassword(password);
+
+    let fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+    let jobTitle =
+      typeof body.jobTitle === "string" && body.jobTitle.trim()
+        ? body.jobTitle.trim()
+        : null;
+    let isLawyer = body.isLawyer === true;
+    let staffProfileId =
+      typeof body.staffProfileId === "string" ? body.staffProfileId.trim() : "";
+    let promoteUserId: string | null = null;
+
+    if (!isTestUser) {
+      if (!staffProfileId) {
+        throw new AuthError(
+          "validation",
+          "Select an employee (staff record) before creating a system login. Every login must belong to a staff member.",
+        );
+      }
+      const staff = await getStaffProfile(firmId, staffProfileId);
+      if (!staff?.profile) {
+        throw new AuthError("not_found", "Staff record not found.");
+      }
+      if (!staff.profile.isActive) {
+        throw new AuthError("validation", "That staff record is inactive.");
+      }
+      if (staff.userIsSystemUser === true) {
+        throw new AuthError(
+          "validation",
+          "That employee already has a system login.",
+        );
+      }
+      fullName = staff.profile.fullName;
+      jobTitle = staff.profile.jobTitle ?? jobTitle;
+      if (body.isLawyer === undefined) {
+        isLawyer =
+          Boolean(staff.userIsLawyer) ||
+          jobCategoryImpliesLawyer(staff.profile.jobCategory);
+      }
+      if (staff.profile.userId && staff.userIsSystemUser === false) {
+        promoteUserId = staff.profile.userId;
+      }
+      if (!body.email?.trim() && isRealContactEmail(staff.profile.email)) {
+        body.email = staff.profile.email!;
+      }
+    } else if (!fullName) {
+      throw new AuthError("validation", "fullName is required for test users.");
+    }
+
+    const email = validateEmail(body.email ?? "");
+
+    const existingEmail = await db
+      .select({ id: users.id, isSystemUser: users.isSystemUser })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
-    if (existing[0]) {
+    if (existingEmail[0] && existingEmail[0].id !== promoteUserId) {
       throw new AuthError("validation", "A user with this email already exists.");
     }
 
     const admin = createAdminClient();
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
-    if (createError || !created.user) {
-      throw new AuthError(
-        "validation",
-        createError?.message?.includes("already")
-          ? "A user with this email already exists in auth."
-          : "Could not create user.",
-      );
-    }
+    let createdUserId: string;
 
-    try {
-      await db.insert(users).values({
-        id: created.user.id,
-        firmId,
+    if (promoteUserId) {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        id: promoteUserId,
         email,
-        fullName,
-        jobTitle,
-        roleId: role.id,
-        isActive: true,
-        isSystemUser: true,
-        isLawyer,
-        isTestUser,
-        mustChangePassword: forceChange,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
       });
-
-      if (tickCodes) {
-        const expanded = expandAccessTicks(tickCodes);
-        await replaceUserPermissionCodes({
-          userId: created.user.id,
-          firmId,
-          codes: expanded,
-          actorUserId: session.id,
-          targetRoleCode: DEFAULT_ROLE,
-        });
-      } else {
-        await copyRolePermissionsToUser(created.user.id, firmId, role.id);
+      if (createError || !created.user) {
+        throw new AuthError(
+          "validation",
+          createError?.message?.includes("already")
+            ? "A user with this email already exists in auth."
+            : createError?.message || "Could not create login for this employee.",
+        );
       }
+      createdUserId = created.user.id;
 
-      if (!isTestUser) {
-        const { ensureEmployeeProfileForUser } = await import("@/lib/repos/hr");
-        await ensureEmployeeProfileForUser({
+      try {
+        await db
+          .update(users)
+          .set({
+            email,
+            fullName,
+            jobTitle,
+            isActive: true,
+            isSystemUser: true,
+            isLawyer,
+            isTestUser: false,
+            mustChangePassword: forceChange,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(users.id, promoteUserId), eq(users.firmId, firmId)));
+
+        if (tickCodes) {
+          const expanded = expandAccessTicks(tickCodes);
+          await replaceUserPermissionCodes({
+            userId: createdUserId,
+            firmId,
+            codes: expanded,
+            actorUserId: session.id,
+            targetRoleCode: DEFAULT_ROLE,
+          });
+        } else {
+          await copyRolePermissionsToUser(createdUserId, firmId, role.id);
+        }
+      } catch (err) {
+        await admin.auth.admin.deleteUser(createdUserId).catch(() => undefined);
+        throw err;
+      }
+    } else {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      });
+      if (createError || !created.user) {
+        throw new AuthError(
+          "validation",
+          createError?.message?.includes("already")
+            ? "A user with this email already exists in auth."
+            : "Could not create user.",
+        );
+      }
+      createdUserId = created.user.id;
+
+      try {
+        await db.insert(users).values({
+          id: createdUserId,
           firmId,
-          userId: created.user.id,
-          fullName,
           email,
+          fullName,
           jobTitle,
-          isTestUser: false,
+          roleId: role.id,
+          isActive: true,
+          isSystemUser: true,
+          isLawyer,
+          isTestUser,
+          mustChangePassword: forceChange,
         });
+
+        if (tickCodes) {
+          const expanded = expandAccessTicks(tickCodes);
+          await replaceUserPermissionCodes({
+            userId: createdUserId,
+            firmId,
+            codes: expanded,
+            actorUserId: session.id,
+            targetRoleCode: DEFAULT_ROLE,
+          });
+        } else {
+          await copyRolePermissionsToUser(createdUserId, firmId, role.id);
+        }
+
+        if (staffProfileId) {
+          await linkStaffProfileToUser(firmId, staffProfileId, createdUserId);
+        } else if (!isTestUser) {
+          await ensureEmployeeProfileForUser({
+            firmId,
+            userId: createdUserId,
+            fullName,
+            email,
+            jobTitle,
+            isTestUser: false,
+          });
+        }
+      } catch (err) {
+        await admin.auth.admin.deleteUser(createdUserId).catch(() => undefined);
+        throw err;
       }
-    } catch (err) {
-      await admin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
-      throw err;
     }
 
     await writeAuditLog({
@@ -286,17 +409,18 @@ export async function POST(request: Request) {
       firmId,
       userId: session.id,
       entityType: "user",
-      entityId: created.user.id,
+      entityId: createdUserId,
       metadata: {
         email,
         fullName,
         jobTitle,
         isLawyer,
         isTestUser,
+        staffProfileId: staffProfileId || null,
+        promotedDirectoryUser: Boolean(promoteUserId),
         tempPasswordGenerated: Boolean(generatedTemp),
         forceChange,
         permissionCodes: tickCodes,
-        hrProfileEnsured: !isTestUser,
       },
       ipOrUserAgent: clientInfo(request),
     });
@@ -305,7 +429,7 @@ export async function POST(request: Request) {
     return jsonOk(
       {
         user: {
-          id: created.user.id,
+          id: createdUserId,
           email,
           fullName,
           jobTitle,
