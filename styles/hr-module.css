@@ -367,6 +367,31 @@
   padding: 1rem 1.25rem;
 }
 
+.hr-activity-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.hr-activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.hr-activity-table th,
+.hr-activity-table td {
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.hr-activity-table th {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted, #666);
+}
+
 .hr-user-list {
   display: grid;
   gap: 0;

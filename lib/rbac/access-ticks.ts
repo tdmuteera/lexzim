@@ -54,6 +54,7 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   "finance.commission.view": ["finance.commission.view", "finance.commission.configure"],
   "hr.view": ["hr.view", "hr.manage"],
   "users.manage": ["users.manage"],
+  "users.activity.view": ["users.activity.view"],
   "reports.view": ["reports.view"],
   "ai.use": ["ai.use"],
   "audit.view": ["audit.view"],
@@ -84,6 +85,12 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     section: "Finance",
     label: "All client finance accounts",
     hint: "Open trust and fee accounts for every client (bookkeeper / office manager).",
+  },
+  {
+    code: "users.activity.view",
+    section: "Platform",
+    label: "View user activity",
+    hint: "User activity tab under Lawyers & Staff: who changed what and when. Does not include the full Audit Log page.",
   },
 ];
 

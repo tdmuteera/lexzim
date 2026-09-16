@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/format/dates";
 import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { AccessChecklist } from "@/components/staff/AccessChecklist";
 import { DelegationsPanel } from "@/components/staff/DelegationsPanel";
+import { UserActivityPanel } from "@/components/staff/UserActivityPanel";
 
 function initials(name: string) {
   return name
@@ -62,13 +63,13 @@ type EligibleStaff = {
   linkedDirectoryOnly: boolean;
 };
 
-type StaffTab = "logins" | "lawyers" | "delegations";
+type StaffTab = "logins" | "lawyers" | "delegations" | "activity";
 
 const DEFAULT_TICKS = ["dashboard.view"];
 
 export function StaffView() {
   const { toast } = useToast();
-  const { user: me, refresh } = useAuth();
+  const { user: me, refresh, can } = useAuth();
   const [tab, setTab] = useState<StaffTab>("logins");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -135,7 +136,15 @@ export function StaffView() {
     void load();
   }, [load]);
 
-  const loginUsers = useMemo(() => items.filter((u) => u.isSystemUser), [items]);
+  const loginUsers = useMemo(() => {
+    const list = items.filter((u) => u.isSystemUser);
+    return [...list].sort((a, b) => {
+      const ta = a.lastLoginAt ? Date.parse(a.lastLoginAt) : 0;
+      const tb = b.lastLoginAt ? Date.parse(b.lastLoginAt) : 0;
+      if (tb !== ta) return tb - ta;
+      return a.fullName.localeCompare(b.fullName);
+    });
+  }, [items]);
   const directoryLawyers = useMemo(
     () => items.filter((u) => !u.isSystemUser),
     [items],
@@ -461,10 +470,24 @@ export function StaffView() {
           >
             Delegations
           </button>
+          {can("users.activity.view") ? (
+            <button
+              type="button"
+              className={["tab", tab === "activity" ? "active" : ""].filter(Boolean).join(" ")}
+              onClick={() => {
+                setTab("activity");
+                setEditingId(null);
+              }}
+            >
+              User activity
+            </button>
+          ) : null}
         </div>
 
         {tab === "delegations" ? (
           <DelegationsPanel loginUsers={loginUsers} currentUserId={me?.id} />
+        ) : tab === "activity" ? (
+          <UserActivityPanel loginUsers={loginUsers} />
         ) : (
           <>
         {tab === "logins" && seats !== null && seats.remaining <= 0 ? (

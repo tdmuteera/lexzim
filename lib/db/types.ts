@@ -123,6 +123,7 @@ export type PermissionCode =
   | "audit.view"
   | "settings.manage"
   | "users.manage"
+  | "users.activity.view"
   | "reports.view"
   | "knowledge.reports.view"
   | "knowledge.reports.manage"

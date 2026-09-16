@@ -189,6 +189,12 @@ export const PERMISSION_DEFS: {
   { code: "audit.view", name: "View audit log", description: "Read audit events", module: "audit" },
   { code: "settings.manage", name: "Manage settings", description: "Firm settings and exports", module: "settings" },
   { code: "users.manage", name: "Manage users", description: "Invite/deactivate users", module: "users" },
+  {
+    code: "users.activity.view",
+    name: "View user activity",
+    description: "See what staff did in the system (audit trail on User access)",
+    module: "users",
+  },
   { code: "reports.view", name: "View reports", description: "Run management reports", module: "reports" },
   {
     code: "knowledge.reports.view",
