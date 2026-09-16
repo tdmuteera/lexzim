@@ -32,8 +32,10 @@ function parseOptionalDate(value: string | null, label: string): Date | undefine
 }
 
 function parseScope(value: string | null): CalendarListScope {
-  if (value === "firm" || value === "shared" || value === "mine") return value;
-  return "mine";
+  if (value === "firm" || value === "shared" || value === "mine" || value === "all") {
+    return value;
+  }
+  return "all";
 }
 
 export async function GET(request: Request) {
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
       items: rows.map((r) => {
         const creatorCalendarColor =
           r.creatorCalendarColor ??
-          (r.event.createdBy === session.id ? effectiveMyColor : null);
+          (r.event.createdBy === session.id ? effectiveMyColor : DEFAULT_CALENDAR_COLOR);
         return serializeCalendarEventRow({
           ...r,
           creatorCalendarColor,

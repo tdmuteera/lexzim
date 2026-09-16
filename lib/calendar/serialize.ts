@@ -21,6 +21,7 @@ export type SerializedCalendarEvent = {
   visibility: string;
   sharedUserIds?: string[];
   creatorCalendarColor?: string | null;
+  creatorFullName?: string | null;
   canEdit?: boolean;
   createdBy: string | null;
   createdAt: string;
@@ -38,6 +39,7 @@ export function serializeCalendarEvent(
     clientTradingName?: string | null;
     sharedUserIds?: string[];
     creatorCalendarColor?: string | null;
+    creatorFullName?: string | null;
     canEdit?: boolean;
   } | null,
 ): SerializedCalendarEvent {
@@ -71,6 +73,7 @@ export function serializeCalendarEvent(
     visibility: row.visibility ?? "private",
     sharedUserIds: extras?.sharedUserIds,
     creatorCalendarColor: extras?.creatorCalendarColor ?? null,
+    creatorFullName: extras?.creatorFullName ?? null,
     canEdit: extras?.canEdit,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
@@ -88,6 +91,7 @@ export function serializeCalendarEventRow(row: {
   clientTradingName?: string | null;
   sharedUserIds?: string[];
   creatorCalendarColor?: string | null;
+  creatorFullName?: string | null;
   canEdit?: boolean;
 }) {
   return serializeCalendarEvent(row.event, {
@@ -99,6 +103,7 @@ export function serializeCalendarEventRow(row: {
     clientTradingName: row.clientTradingName,
     sharedUserIds: row.sharedUserIds,
     creatorCalendarColor: row.creatorCalendarColor,
+    creatorFullName: row.creatorFullName,
     canEdit: row.canEdit,
   });
 }

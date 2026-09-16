@@ -34,6 +34,7 @@ type SerializedEvent = {
   visibility?: string;
   sharedUserIds?: string[];
   creatorCalendarColor?: string | null;
+  creatorFullName?: string | null;
   canEdit?: boolean;
   createdBy?: string | null;
 };
@@ -64,7 +65,6 @@ type EventResponse = {
 };
 
 type ViewMode = "month" | "agenda";
-type ScopeFilter = "mine" | "firm" | "shared";
 type CategoryFilter = "all" | "meetings" | "hearings";
 
 type FormState = {
@@ -200,12 +200,12 @@ function eventColourStyle(
   ev: SerializedEvent,
   myColor: string,
   userId?: string,
-): { backgroundColor: string; borderColor: string; color: string } | undefined {
-  const fromEvent = ev.creatorCalendarColor?.trim();
-  const colour =
-    fromEvent ||
-    (userId && ev.createdBy === userId ? myColor.trim() : "");
-  if (!colour) return undefined;
+): { backgroundColor: string; borderColor: string; color: string } {
+  // Colour follows the creator so shared / firm events stay distinct on one calendar.
+  const colour = (
+    ev.creatorCalendarColor?.trim() ||
+    (userId && ev.createdBy === userId ? myColor.trim() : DEFAULT_CALENDAR_COLOR)
+  ).trim();
   return {
     backgroundColor: colour,
     borderColor: colour,
@@ -213,9 +213,8 @@ function eventColourStyle(
   };
 }
 
-function eventColourClass(ev: SerializedEvent, myColor: string, userId?: string) {
-  const style = eventColourStyle(ev, myColor, userId);
-  return style ? "coloured" : eventCssClass(ev.eventType);
+function eventColourClass() {
+  return "coloured";
 }
 
 export function CalendarView() {
@@ -230,7 +229,6 @@ export function CalendarView() {
   const [pendingCalendarColor, setPendingCalendarColor] = useState(DEFAULT_MY_COLOUR);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scope, setScope] = useState<ScopeFilter>("mine");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [matterFilter, setMatterFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -269,7 +267,7 @@ export function CalendarView() {
       const params = new URLSearchParams();
       params.set("from", range.from.toISOString());
       params.set("to", range.to.toISOString());
-      params.set("scope", scope);
+      params.set("scope", "all");
       if (categoryFilter === "meetings") params.set("eventType", "appointment");
       if (categoryFilter === "hearings") params.set("eventType", "hearing");
       if (matterFilter) params.set("matterId", matterFilter);
@@ -293,7 +291,7 @@ export function CalendarView() {
     } finally {
       setLoading(false);
     }
-  }, [range, categoryFilter, matterFilter, scope]);
+  }, [range, categoryFilter, matterFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -547,7 +545,12 @@ export function CalendarView() {
   }
 
   function setSharedUserIds(ids: string[]) {
-    setForm((f) => ({ ...f, sharedUserIds: ids }));
+    setForm((f) => ({
+      ...f,
+      sharedUserIds: ids,
+      // Picking people implies Specific people visibility so shares actually persist.
+      visibility: ids.length > 0 ? "people" : f.visibility === "people" ? "private" : f.visibility,
+    }));
   }
 
   const colourDirty = pendingCalendarColor !== myCalendarColor;
@@ -584,33 +587,15 @@ export function CalendarView() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "0.8rem" }}>
-            Private by default. Share with the firm or specific people. Click a day to create.
-            Google and Outlook sync coming later.
+            One calendar for everything you can see: your events, firm events, and events shared
+            with you. Colour follows the person who created the event (set yours below). Private
+            events stay private to their creator. Click a day to create.
           </p>
 
           <div
             className="toolbar"
             style={{ marginBottom: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
           >
-            <div style={{ display: "flex", gap: "0.35rem" }}>
-              {(
-                [
-                  ["mine", "My calendar"],
-                  ["firm", "Firm calendar"],
-                  ["shared", "Shared with me"],
-                ] as const
-              ).map(([key, label]) => (
-                <Button
-                  key={key}
-                  size="sm"
-                  variant={scope === key ? "primary" : "outline"}
-                  onClick={() => setScope(key)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <span className="toolbar-spacer" />
             <div className="cal-colour-picker">
               <label className="cal-colour-picker-label" htmlFor="cal-my-colour">
                 My colour
@@ -754,7 +739,7 @@ export function CalendarView() {
                     {dayEvents.slice(0, 3).map((ev) => (
                       <div
                         key={ev.id}
-                        className={`cal-event ${eventColourClass(ev, myCalendarColor, user?.id)}`}
+                        className={`cal-event ${eventColourClass()}`}
                         style={eventColourStyle(ev, myCalendarColor, user?.id)}
                         title={ev.title}
                         onClick={(e) => {
@@ -877,6 +862,12 @@ export function CalendarView() {
                       selected.visibility ??
                       "Private"}
                   </span>
+                </p>
+                <p>
+                  <strong>Created by:</strong>{" "}
+                  {selected.createdBy === user?.id
+                    ? "You"
+                    : selected.creatorFullName?.trim() || "Someone in the firm"}
                 </p>
                 <p>
                   <strong>When:</strong> {formatWhen(selected)}

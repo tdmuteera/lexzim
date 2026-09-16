@@ -27,7 +27,7 @@ import {
 /** Marker so matter Next hearing rows can be updated without touching manual diary events. */
 export const MATTER_HEARING_SYNC_NOTE = "Synced from matter Next hearing";
 
-export type CalendarListScope = "mine" | "firm" | "shared";
+export type CalendarListScope = "mine" | "firm" | "shared" | "all";
 
 export type ListCalendarEventsOpts = {
   from?: Date;
@@ -37,7 +37,10 @@ export type ListCalendarEventsOpts = {
   /** When false, only firm events with no matter, or matters the user can access. */
   viewAll?: boolean;
   userId?: string;
-  /** Privacy tab. Default mine. */
+  /**
+   * List filter. Default `all` (everything the viewer may see).
+   * `mine` / `all` are the same unified diary. `firm` and `shared` remain for API filters.
+   */
   scope?: CalendarListScope;
 };
 
@@ -50,6 +53,7 @@ export type CalendarEventListRow = {
   clientLegalName: string | null;
   clientTradingName: string | null;
   creatorCalendarColor: string | null;
+  creatorFullName: string | null;
   sharedUserIds?: string[];
 };
 
@@ -171,7 +175,7 @@ export async function setUserCalendarColor(
 
 export async function listCalendarEvents(firmId: string, opts?: ListCalendarEventsOpts) {
   const db = getDb();
-  const scope: CalendarListScope = opts?.scope ?? "mine";
+  const scope: CalendarListScope = opts?.scope ?? "all";
   const userId = opts?.userId;
   const conditions = [eq(calendarEvents.firmId, firmId)];
   if (opts?.from) conditions.push(gte(calendarEvents.startsAt, opts.from));
@@ -182,8 +186,21 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
   if (!userId) {
     // Safety: without a viewer, only return firm-visible rows.
     conditions.push(eq(calendarEvents.visibility, "firm"));
-  } else if (scope === "mine") {
-    conditions.push(eq(calendarEvents.createdBy, userId));
+  } else if (scope === "all" || scope === "mine") {
+    // One diary: own events, firm-wide events, and events shared with this user.
+    const sharedIds = db
+      .select({ eventId: calendarEventShares.eventId })
+      .from(calendarEventShares)
+      .where(
+        and(eq(calendarEventShares.firmId, firmId), eq(calendarEventShares.userId, userId)),
+      );
+    conditions.push(
+      or(
+        eq(calendarEvents.createdBy, userId),
+        eq(calendarEvents.visibility, "firm"),
+        and(eq(calendarEvents.visibility, "people"), inArray(calendarEvents.id, sharedIds)),
+      )!,
+    );
   } else if (scope === "firm") {
     conditions.push(eq(calendarEvents.visibility, "firm"));
   } else if (scope === "shared") {
@@ -210,6 +227,7 @@ export async function listCalendarEvents(firmId: string, opts?: ListCalendarEven
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
       creatorCalendarColor: users.calendarColor,
+      creatorFullName: users.fullName,
     })
     .from(calendarEvents)
     .leftJoin(
@@ -261,7 +279,7 @@ async function listMatterHearingsForCalendar(
   firmId: string,
   opts?: ListCalendarEventsOpts,
 ): Promise<CalendarEventListRow[]> {
-  const scope: CalendarListScope = opts?.scope ?? "mine";
+  const scope: CalendarListScope = opts?.scope ?? "all";
   const userId = opts?.userId;
   if (scope === "shared") return [];
 
@@ -271,11 +289,8 @@ async function listMatterHearingsForCalendar(
   if (opts?.to) conditions.push(lte(matters.nextHearingAt, opts.to));
   if (opts?.matterId) conditions.push(eq(matters.id, opts.matterId));
 
-  if (scope === "mine" && userId) {
-    // Synthetic hearings on My only when this user is the responsible lawyer.
-    conditions.push(eq(matters.responsibleLawyerId, userId));
-  } else if (opts?.viewAll === false && userId) {
-    // Firm tab: keep previous matter-access gating for synthetic rows.
+  // Unified diary and firm: show hearings on matters this user can access.
+  if (userId && opts?.viewAll === false) {
     const teamMatterIds = db
       .select({ matterId: matterTeam.matterId })
       .from(matterTeam)
@@ -297,6 +312,7 @@ async function listMatterHearingsForCalendar(
       updatedAt: matters.updatedAt,
       responsibleLawyerId: matters.responsibleLawyerId,
       creatorCalendarColor: users.calendarColor,
+      creatorFullName: users.fullName,
     })
     .from(matters)
     .leftJoin(users, eq(users.id, matters.createdBy))
@@ -333,6 +349,7 @@ async function listMatterHearingsForCalendar(
         clientLegalName: null,
         clientTradingName: null,
         creatorCalendarColor: row.creatorCalendarColor,
+        creatorFullName: row.creatorFullName,
         sharedUserIds: [],
       };
     });
@@ -606,6 +623,7 @@ export async function getCalendarEvent(firmId: string, id: string) {
       clientLegalName: clients.legalName,
       clientTradingName: clients.tradingName,
       creatorCalendarColor: users.calendarColor,
+      creatorFullName: users.fullName,
     })
     .from(calendarEvents)
     .leftJoin(
