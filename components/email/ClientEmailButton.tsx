@@ -11,6 +11,8 @@ import {
 type Props = {
   clientId: string;
   defaultEmail?: string | null;
+  defaultSubject?: string;
+  buttonLabel?: string;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,11 +22,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * or accounts (billing.manage) by the caller's <Can> wrapper.
  * Manual send only.
  */
-export function ClientEmailButton({ clientId, defaultEmail }: Props) {
+export function ClientEmailButton({
+  clientId,
+  defaultEmail,
+  defaultSubject,
+  buttonLabel = "Email client",
+}: Props) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [to, setTo] = useState(defaultEmail ?? "");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(defaultSubject ?? "");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +84,10 @@ export function ClientEmailButton({ clientId, defaultEmail }: Props) {
           setOpen(true);
           setError(null);
           setTo(defaultEmail ?? "");
+          setSubject(defaultSubject ?? "");
         }}
       >
-        Email client
+        {buttonLabel}
       </Button>
     );
   }
@@ -92,7 +100,11 @@ export function ClientEmailButton({ clientId, defaultEmail }: Props) {
       style={{ position: "absolute", zIndex: 30, marginTop: "2.5rem", width: "24rem", right: 0 }}
     >
       <div className="panel-body" style={{ display: "grid", gap: "0.5rem" }}>
-        <strong>Email client</strong>
+        <strong>Craft birthday / client email</strong>
+        <p className="muted" style={{ margin: 0, fontSize: "0.78rem" }}>
+          Write the message and paste your signature below, then confirm Send. Nothing is sent until
+          you click Send.
+        </p>
         <label>
           <div className="muted" style={{ fontSize: "0.75rem" }}>
             Recipient

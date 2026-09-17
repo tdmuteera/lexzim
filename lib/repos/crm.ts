@@ -11,6 +11,7 @@ export type BirthdayRow = {
   clientNumber: string;
   displayName: string;
   displayLabel: string;
+  email: string | null;
   dateOfBirth: string;
   dayOfMonth: number;
   month: number;
@@ -111,6 +112,7 @@ async function loadBirthdayRows(
       clientNumber: c.clientNumber,
       displayName: clientDisplayName(c),
       displayLabel: clientDisplayLabel(c),
+      email: c.email?.trim() || null,
       dateOfBirth: dob.toISOString(),
       dayOfMonth: dob.getUTCDate(),
       month,

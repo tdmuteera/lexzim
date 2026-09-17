@@ -192,17 +192,23 @@ export async function notifyInvoiceApprovers(input: {
   firmId: string;
   invoiceId: string;
   invoiceNumber: string;
+  matterNumber?: string | null;
   excludeUserId?: string | null;
 }) {
   const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
   const ids = await listInvoiceApproverUserIds(input.firmId);
   const targets = ids.filter((id) => id !== input.excludeUserId);
   const href = `/finance/invoicing/invoices/${input.invoiceId}`;
+  const matterBit = input.matterNumber?.trim()
+    ? ` (matter ${input.matterNumber.trim()})`
+    : "";
+  // No fee figures in the email by design.
+  const body = `Invoice ${input.invoiceNumber}${matterBit} was submitted for approval. Open LexZim to approve or reject. Amounts are not included in this notice.`;
   await notifyStaffEvent({
     firmId: input.firmId,
     userIds: targets,
     subject: `LexZim: Invoice ${input.invoiceNumber} awaits approval`,
-    body: `Fee note ${input.invoiceNumber} was submitted for approval. Please approve or reject in LexZim.`,
+    body,
     inApp: {
       type: "invoice.approval_pending",
       title: `Invoice ${input.invoiceNumber} awaits approval`,
@@ -211,7 +217,7 @@ export async function notifyInvoiceApprovers(input: {
           ? "Submit for approval is complete. An approver should review this fee note."
           : "Please approve or reject this fee note.",
       href,
-      metadata: { invoiceId: input.invoiceId },
+      metadata: { invoiceId: input.invoiceId, matterNumber: input.matterNumber ?? null },
     },
     broadcastInAppIfEmpty: true,
   });
@@ -222,28 +228,40 @@ export async function notifyInvoiceCreator(input: {
   creatorUserId: string | null | undefined;
   invoiceId: string;
   invoiceNumber: string;
+  matterNumber?: string | null;
   outcome: "approved" | "rejected";
   rejectionNote?: string | null;
   actorUserId: string;
 }) {
   if (!input.creatorUserId || input.creatorUserId === input.actorUserId) return;
-  const { createStaffNotification } = await import("@/lib/notifications/staff");
-  await createStaffNotification({
+  const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
+  const matterBit = input.matterNumber?.trim()
+    ? ` (matter ${input.matterNumber.trim()})`
+    : "";
+  const approved = input.outcome === "approved";
+  const subject = approved
+    ? `LexZim: Invoice ${input.invoiceNumber} approved`
+    : `LexZim: Invoice ${input.invoiceNumber} rejected`;
+  const body = approved
+    ? `Invoice ${input.invoiceNumber}${matterBit} was approved. You can mark it as sent when ready. Amounts are not included in this notice.`
+    : `Invoice ${input.invoiceNumber}${matterBit} was rejected.${
+        input.rejectionNote ? ` Note: ${input.rejectionNote}` : " Please revise and resubmit."
+      }`;
+  await notifyStaffEvent({
     firmId: input.firmId,
-    userId: input.creatorUserId,
-    type:
-      input.outcome === "approved"
-        ? "invoice.approval_approved"
-        : "invoice.approval_rejected",
-    title:
-      input.outcome === "approved"
+    userIds: [input.creatorUserId],
+    subject,
+    body,
+    inApp: {
+      type: approved ? "invoice.approval_approved" : "invoice.approval_rejected",
+      title: approved
         ? `Invoice ${input.invoiceNumber} approved`
         : `Invoice ${input.invoiceNumber} rejected`,
-    body:
-      input.outcome === "approved"
+      body: approved
         ? "Ready to mark as sent when you are ready."
         : input.rejectionNote || "Please revise and resubmit for approval.",
-    href: `/finance/invoicing/invoices/${input.invoiceId}`,
-    metadata: { invoiceId: input.invoiceId, outcome: input.outcome },
+      href: `/finance/invoicing/invoices/${input.invoiceId}`,
+      metadata: { invoiceId: input.invoiceId, outcome: input.outcome },
+    },
   });
 }

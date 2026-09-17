@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
+import { ClientEmailButton } from "@/components/email/ClientEmailButton";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,7 @@ type BirthdayRow = {
   clientNumber: string;
   displayName: string;
   displayLabel: string;
+  email?: string | null;
   dateOfBirth: string;
   dayOfMonth: number;
   ageTurning: number | null;
@@ -235,8 +237,9 @@ export function CrmView() {
           <div className="finance-desk-callout firm-desk-callout" role="note">
             <div className="finance-desk-callout-title">Practice CRM, not marketing</div>
             <p>
-              Use this desk to remember client birthdays and plan around public holidays. Greeting
-              emails are not sent automatically.
+              Birthdays stay visible here so you can greet clients thoughtfully. Holiday client
+              emails are not automatic for now. Use <strong>Send greeting</strong> to craft a
+              message and signature, then confirm Send.
             </p>
           </div>
 
@@ -328,6 +331,7 @@ export function CrmView() {
                         <th>Client</th>
                         <th>Turning</th>
                         <th>Lawyer(s)</th>
+                        <th>Greeting</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -342,6 +346,19 @@ export function CrmView() {
                             {row.responsibleLawyers.length
                               ? row.responsibleLawyers.join(", ")
                               : "Unassigned"}
+                          </td>
+                          <td style={{ position: "relative", minWidth: "8rem" }}>
+                            <Can
+                              permissions={["crm.view", "crm.manage", "users.manage", "billing.manage"]}
+                              mode="any"
+                            >
+                              <ClientEmailButton
+                                clientId={row.clientId}
+                                defaultEmail={row.email}
+                                defaultSubject={`Happy Birthday, ${row.displayName}`}
+                                buttonLabel="Send greeting"
+                              />
+                            </Can>
                           </td>
                         </tr>
                       ))}

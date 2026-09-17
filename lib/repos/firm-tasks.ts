@@ -9,7 +9,6 @@ import { alias } from "drizzle-orm/pg-core";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { firmTasks, users } from "@/lib/db/schema";
-import { createStaffNotification } from "@/lib/notifications/staff";
 import { notifyStaffEvent } from "@/lib/notifications/notify-staff-event";
 
 const assigneeUsers = alias(users, "firm_task_assignee");
@@ -203,14 +202,18 @@ export async function completeFirmTask(
   const task = rows[0]!;
 
   if (task.assignerUserId !== actorUserId) {
-    await createStaffNotification({
+    await notifyStaffEvent({
       firmId,
-      userId: task.assignerUserId,
-      type: "task.completed",
-      title: "Task completed",
-      body: task.title,
-      href: "/workflow/tasks",
-      metadata: { taskId: task.id },
+      userIds: [task.assignerUserId],
+      subject: `LexZim: Task completed — ${task.title}`,
+      body: `The task "${task.title}" was marked complete.`,
+      inApp: {
+        type: "task.completed",
+        title: "Task completed",
+        body: task.title,
+        href: "/workflow/tasks",
+        metadata: { taskId: task.id },
+      },
     });
   }
 

@@ -16,7 +16,12 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  */
 export async function POST(request: Request) {
   try {
-    const session = await requireAny(["users.manage", "billing.manage"]);
+    const session = await requireAny([
+      "users.manage",
+      "billing.manage",
+      "crm.view",
+      "crm.manage",
+    ]);
     const firmId = tenantFirmId(session);
     const payload = (await request.json()) as {
       clientId?: string;

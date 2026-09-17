@@ -41,6 +41,16 @@ export type RequisitionListFilters = {
   limit?: number;
 };
 
+async function userFullName(firmId: string, userId: string): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ fullName: users.fullName })
+    .from(users)
+    .where(and(eq(users.firmId, firmId), eq(users.id, userId)))
+    .limit(1);
+  return rows[0]?.fullName?.trim() || null;
+}
+
 function serializeJoined(row: {
   requisition: typeof financeRequisitions.$inferSelect;
   clientType: string | null;
@@ -201,6 +211,7 @@ export async function createRequisition(
       type: input.type,
       amountCents: input.amountCents,
       currency: input.currency,
+      requesterName: await userFullName(firmId, userId),
       excludeUserId: userId,
     });
   }
@@ -214,6 +225,7 @@ export async function notifyRequisitionApprovers(input: {
   type: string;
   amountCents: number;
   currency: string;
+  requesterName?: string | null;
   excludeUserId?: string | null;
 }) {
   const ids = await listUsersWithPermissionCode(
@@ -222,8 +234,10 @@ export async function notifyRequisitionApprovers(input: {
   );
   const targets = ids.filter((id) => id !== input.excludeUserId);
   const amount = (input.amountCents / 100).toFixed(2);
-  const title = `${input.type === "business" ? "Business" : "Disbursement"} requisition awaits approval`;
-  const body = `${input.currency} ${amount}. Review in Finance → Requisitions.`;
+  const kind = input.type === "business" ? "Business" : "Disbursement";
+  const byWhom = input.requesterName?.trim() ? ` by ${input.requesterName.trim()}` : "";
+  const title = `${kind} requisition awaits approval`;
+  const body = `A ${kind.toLowerCase()} requisition${byWhom} needs approval (${input.currency} ${amount}). Open Finance → Requisitions.`;
   const href = `/finance/requisitions?id=${input.requisitionId}`;
   const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
   await notifyStaffEvent({
@@ -251,14 +265,26 @@ async function notifyRequester(input: {
   note?: string | null;
 }) {
   if (input.requesterUserId === input.actorUserId) return;
-  await createStaffNotification({
+  const { notifyStaffEvent } = await import("@/lib/notifications/notify-staff-event");
+  const outcomeLabel = input.outcome.replace(/_/g, " ");
+  const approvedBody =
+    "Your requisition was approved. Funds are ready to collect. Open LexZim for details.";
+  const body =
+    input.outcome === "approved"
+      ? approvedBody
+      : input.note || `Your requisition was ${outcomeLabel}.`;
+  await notifyStaffEvent({
     firmId: input.firmId,
-    userId: input.requesterUserId,
-    type: `requisition.${input.outcome}`,
-    title: `Requisition ${input.outcome.replace(/_/g, " ")}`,
-    body: input.note || `Your requisition was ${input.outcome}.`,
-    href: `/finance/requisitions?id=${input.requisitionId}`,
-    metadata: { requisitionId: input.requisitionId },
+    userIds: [input.requesterUserId],
+    subject: `LexZim: Requisition ${outcomeLabel}`,
+    body,
+    inApp: {
+      type: `requisition.${input.outcome}`,
+      title: `Requisition ${outcomeLabel}`,
+      body,
+      href: `/finance/requisitions?id=${input.requisitionId}`,
+      metadata: { requisitionId: input.requisitionId },
+    },
   });
 }
 
@@ -290,6 +316,7 @@ export async function submitRequisition(
     type: existing.type,
     amountCents: existing.amountCents,
     currency: existing.currency,
+    requesterName: existing.requesterName ?? (await userFullName(firmId, userId)),
     excludeUserId: userId,
   });
 

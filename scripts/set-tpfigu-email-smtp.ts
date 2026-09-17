@@ -33,10 +33,10 @@ const SMTP = {
   host: "mail.tpfiguattorneys.com",
   port: "465",
   secure: "true",
-  user: "info@tpfiguattorneys.com",
+  user: "tech@tpfiguattorneys.com",
   fromName: "T Pfigu Attorneys",
-  fromEmail: "info@tpfiguattorneys.com",
-  replyTo: "info@tpfiguattorneys.com",
+  fromEmail: "tech@tpfiguattorneys.com",
+  replyTo: "tech@tpfiguattorneys.com",
 } as const;
 
 function vaultSecret(): Buffer {
@@ -107,7 +107,7 @@ async function main() {
             ]
           : [
               "Open LexZim → Settings → Email.",
-              "Enter the mailbox password for info@tpfiguattorneys.com → Save.",
+              "Enter the mailbox password for tech@tpfiguattorneys.com → Save.",
               "Click Send test email.",
             ],
         note: "LexZim uses SMTP only (port 465 SSL). IMAP/CalDAV are for mail apps, not LexZim.",

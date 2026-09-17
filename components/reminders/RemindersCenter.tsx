@@ -31,16 +31,18 @@ export type RemindersPayload = {
     dueSoon: number;
     hearings: number;
     meetings: number;
+    calendar?: number;
     total: number;
   };
   overdue: ReminderItem[];
   dueSoon: ReminderItem[];
   hearings: ReminderItem[];
   meetings: ReminderItem[];
+  calendar?: ReminderItem[];
   settings?: { browserNotificationsEnabled: boolean };
 };
 
-type Tab = "overdue" | "dueSoon" | "hearings" | "meetings";
+type Tab = "calendar" | "overdue" | "dueSoon" | "hearings" | "meetings";
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -58,7 +60,7 @@ export function RemindersCenter() {
   );
   const [loading, setLoading] = useState(() => !getModuleCache(REMINDERS_CACHE_KEY));
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("overdue");
+  const [tab, setTab] = useState<Tab>("calendar");
 
   const load = useCallback(async (opts?: { background?: boolean }) => {
     const background = Boolean(opts?.background);
@@ -81,10 +83,11 @@ export function RemindersCenter() {
       setModuleCache(REMINDERS_CACHE_KEY, body.data);
       setData(body.data);
       setTab((current) => {
+        if ((body.data!.counts.calendar ?? 0) > 0) return "calendar";
         if (body.data!.counts.overdue > 0) return "overdue";
         if (body.data!.counts.dueSoon > 0) return "dueSoon";
         if (current) return current;
-        return "hearings";
+        return "calendar";
       });
     } catch {
       if (!background) {
@@ -102,13 +105,15 @@ export function RemindersCenter() {
   }, [load]);
 
   const items =
-    tab === "overdue"
-      ? data?.overdue ?? []
-      : tab === "dueSoon"
-        ? data?.dueSoon ?? []
-        : tab === "meetings"
-          ? data?.meetings ?? []
-          : data?.hearings ?? [];
+    tab === "calendar"
+      ? data?.calendar ?? []
+      : tab === "overdue"
+        ? data?.overdue ?? []
+        : tab === "dueSoon"
+          ? data?.dueSoon ?? []
+          : tab === "meetings"
+            ? data?.meetings ?? []
+            : data?.hearings ?? [];
 
   return (
     <section className="view active scrollable" aria-label="Reminders">
@@ -121,10 +126,9 @@ export function RemindersCenter() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Overdue work, items due in the next {data?.dueSoonDays ?? 7} days, client meetings in
-            the next {data?.meetingHorizonDays ?? 7} days, and hearings in the next{" "}
-            {data?.hearingHorizonDays ?? 60} days. In-app only (no email). Optional browser
-            alerts while LexZim is open: Settings → Reminders.
+            Calendar lists every diary event you can see. Other tabs keep overdue work, due soon,
+            meetings, and hearings. Automatic calendar emails go out at 5:00 pm the day before and
+            8:00 am on the day (Africa/Harare).
           </p>
 
           {error ? (
@@ -134,6 +138,13 @@ export function RemindersCenter() {
           ) : null}
 
           <div className="toolbar" style={{ marginBottom: "0.75rem" }}>
+            <Button
+              size="sm"
+              variant={tab === "calendar" ? "primary" : "outline"}
+              onClick={() => setTab("calendar")}
+            >
+              Calendar ({data?.counts.calendar ?? 0})
+            </Button>
             <Button
               size="sm"
               variant={tab === "overdue" ? "primary" : "outline"}
@@ -173,13 +184,15 @@ export function RemindersCenter() {
           {!loading && items.length === 0 ? (
             <EmptyState
               title={
-                tab === "overdue"
-                  ? "Nothing overdue"
-                  : tab === "dueSoon"
-                    ? "Nothing due soon"
-                    : tab === "meetings"
-                      ? "No meetings in window"
-                      : "No hearings in window"
+                tab === "calendar"
+                  ? "No upcoming calendar events"
+                  : tab === "overdue"
+                    ? "Nothing overdue"
+                    : tab === "dueSoon"
+                      ? "Nothing due soon"
+                      : tab === "meetings"
+                        ? "No meetings in window"
+                        : "No hearings in window"
               }
               detail="When procedures, filing deadlines, client meetings, or hearings need attention, they appear here."
             />

@@ -2,7 +2,25 @@
 
 LexZim sends transactional documents (quotations, invoices, receipts) and generic client notifications by email, and gates password recovery behind admin approval.
 
-**Manual send only.** Staff review To, Subject, body note, and attachment, then click Send. There is no silent cron or auto-email to clients (birthdays/newsletters remain export-only until an explicit send flow is approved).
+**Client greetings:** birthday emails from CRM are **craft-then-send** (staff write the message, then click Send). They are not silent cron campaigns.
+
+**Staff workflow emails are automatic** (in-app + SMTP via `notifyStaffEvent`): invoice approval request/outcome, task assigned/completed, requisition submit/approve, and scheduled calendar event reminders.
+
+## Calendar event reminder emails (cron)
+
+Endpoint: `GET`/`POST` `/api/cron/calendar-event-emails`  
+Auth: `Authorization: Bearer $CRON_SECRET`
+
+Timezone: **Africa/Harare**. Sends at **17:00** (day before) and **08:00** (day of) for **all** calendar event types to the **creator + shared people**. Email **subject = event title**.
+
+Railway: add `CRON_SECRET`, then schedule two HTTP jobs:
+
+| UTC time | Harare | Slot |
+|---|---|---|
+| 15:00 daily | 17:00 | day before |
+| 06:00 daily | 08:00 | day of |
+
+Manual test: `?forceSlot=day_before` or `?forceSlot=day_of` with the same Bearer token.
 
 ## Email transport: firm BYO vs server env
 

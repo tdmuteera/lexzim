@@ -935,6 +935,7 @@ export async function applyInvoiceApprovalAction(
       firmId,
       invoiceId,
       invoiceNumber: updated.invoiceNumber,
+      matterNumber: full.matterNumber ?? null,
       excludeUserId: actorUserId,
     });
   } else {
@@ -943,6 +944,7 @@ export async function applyInvoiceApprovalAction(
       creatorUserId: full.invoice.createdBy ?? full.invoice.submittedBy,
       invoiceId,
       invoiceNumber: updated.invoiceNumber,
+      matterNumber: full.matterNumber ?? null,
       outcome: action === "approve" ? "approved" : "rejected",
       rejectionNote: updated.rejectionNote,
       actorUserId,
