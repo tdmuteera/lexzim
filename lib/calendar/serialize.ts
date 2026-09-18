@@ -20,6 +20,17 @@ export type SerializedCalendarEvent = {
   allDay: boolean;
   visibility: string;
   sharedUserIds?: string[];
+  guests?: Array<{
+    email: string;
+    displayName: string | null;
+    source: string;
+    notify: boolean;
+  }>;
+  notifyClient?: boolean;
+  recurrenceRule?: string | null;
+  recurrenceUntil?: string | null;
+  seriesId?: string | null;
+  postponedFrom?: string | null;
   creatorCalendarColor?: string | null;
   creatorFullName?: string | null;
   canEdit?: boolean;
@@ -38,6 +49,7 @@ export function serializeCalendarEvent(
     clientLegalName?: string | null;
     clientTradingName?: string | null;
     sharedUserIds?: string[];
+    guests?: SerializedCalendarEvent["guests"];
     creatorCalendarColor?: string | null;
     creatorFullName?: string | null;
     canEdit?: boolean;
@@ -72,6 +84,12 @@ export function serializeCalendarEvent(
     allDay: row.allDay,
     visibility: row.visibility ?? "private",
     sharedUserIds: extras?.sharedUserIds,
+    guests: extras?.guests,
+    notifyClient: row.notifyClient ?? false,
+    recurrenceRule: row.recurrenceRule ?? null,
+    recurrenceUntil: row.recurrenceUntil ? row.recurrenceUntil.toISOString() : null,
+    seriesId: row.seriesId ?? null,
+    postponedFrom: row.postponedFrom ? row.postponedFrom.toISOString() : null,
     creatorCalendarColor: extras?.creatorCalendarColor ?? null,
     creatorFullName: extras?.creatorFullName ?? null,
     canEdit: extras?.canEdit,
@@ -90,6 +108,7 @@ export function serializeCalendarEventRow(row: {
   clientLegalName?: string | null;
   clientTradingName?: string | null;
   sharedUserIds?: string[];
+  guests?: SerializedCalendarEvent["guests"];
   creatorCalendarColor?: string | null;
   creatorFullName?: string | null;
   canEdit?: boolean;
@@ -102,6 +121,7 @@ export function serializeCalendarEventRow(row: {
     clientLegalName: row.clientLegalName,
     clientTradingName: row.clientTradingName,
     sharedUserIds: row.sharedUserIds,
+    guests: row.guests,
     creatorCalendarColor: row.creatorCalendarColor,
     creatorFullName: row.creatorFullName,
     canEdit: row.canEdit,

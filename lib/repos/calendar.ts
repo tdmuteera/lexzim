@@ -14,6 +14,7 @@ import {
 } from "@/lib/deadlines/validation";
 import { getDb } from "@/lib/db";
 import {
+  calendarEventGuests,
   calendarEventShares,
   calendarEvents,
   clients,
@@ -23,6 +24,10 @@ import {
   matters,
   users,
 } from "@/lib/db/schema";
+import type { CalendarGuestInput } from "@/lib/calendar/validation";
+import { randomUUID } from "crypto";
+
+const EMAIL_RE_SIMPLE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Marker so matter Next hearing rows can be updated without touching manual diary events. */
 export const MATTER_HEARING_SYNC_NOTE = "Synced from matter Next hearing";
@@ -55,6 +60,12 @@ export type CalendarEventListRow = {
   creatorCalendarColor: string | null;
   creatorFullName: string | null;
   sharedUserIds?: string[];
+  guests?: Array<{
+    email: string;
+    displayName: string | null;
+    source: string;
+    notify: boolean;
+  }>;
 };
 
 export async function listSharesForEvent(firmId: string, eventId: string): Promise<string[]> {
@@ -338,6 +349,11 @@ async function listMatterHearingsForCalendar(
           endsAt,
           allDay: false,
           visibility: "firm",
+          recurrenceRule: null,
+          recurrenceUntil: null,
+          seriesId: null,
+          postponedFrom: null,
+          notifyClient: false,
           createdBy: row.createdBy,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -640,7 +656,17 @@ export async function getCalendarEvent(firmId: string, id: string) {
   const row = rows[0];
   if (!row) return null;
   const sharedUserIds = await listSharesForEvent(firmId, id);
-  return { ...row, sharedUserIds };
+  const guestRows = await listGuestsForEvent(firmId, id);
+  return {
+    ...row,
+    sharedUserIds,
+    guests: guestRows.map((g) => ({
+      email: g.email,
+      displayName: g.displayName,
+      source: g.source,
+      notify: g.notify,
+    })),
+  };
 }
 
 export async function createCalendarEvent(
@@ -650,36 +676,93 @@ export async function createCalendarEvent(
 ) {
   const db = getDb();
   const visibility = input.visibility ?? "private";
-  const rows = await db
-    .insert(calendarEvents)
-    .values({
-      firmId,
-      matterId: input.matterId,
-      clientId: input.clientId,
-      eventType: input.eventType,
-      title: input.title,
-      description: input.description,
-      location: input.location,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      allDay: input.allDay,
-      visibility,
-      createdBy: userId,
-      updatedAt: new Date(),
-    })
-    .returning();
-  const event = rows[0]!;
-  if (visibility === "people") {
-    await replaceEventShares(firmId, event.id, input.sharedUserIds ?? []);
+  const notifyClient = Boolean(input.notifyClient);
+  const guests = [...(input.guests ?? [])];
+  if (notifyClient && input.clientId) {
+    const clientRows = await db
+      .select({
+        email: clients.email,
+        fullName: clients.fullName,
+        legalName: clients.legalName,
+        tradingName: clients.tradingName,
+      })
+      .from(clients)
+      .where(and(eq(clients.firmId, firmId), eq(clients.id, input.clientId)))
+      .limit(1);
+    const client = clientRows[0];
+    const email = client?.email?.trim().toLowerCase();
+    if (email && EMAIL_RE_SIMPLE.test(email) && !guests.some((g) => g.email === email)) {
+      guests.push({
+        email,
+        displayName:
+          client.fullName || client.legalName || client.tradingName || null,
+        source: "client",
+        notify: true,
+      });
+    }
+  }
+  const recurrenceRule = input.recurrenceRule ?? null;
+  const recurrenceUntil = input.recurrenceUntil ?? null;
+  const seriesId = recurrenceRule ? randomUUID() : null;
+
+  const durationMs =
+    input.endsAt && input.startsAt
+      ? Math.max(0, input.endsAt.getTime() - input.startsAt.getTime())
+      : 0;
+
+  const occurrenceStarts = buildRecurrenceStarts(
+    input.startsAt,
+    recurrenceRule,
+    recurrenceUntil,
+  );
+
+  const createdIds: string[] = [];
+  let firstEvent: (typeof calendarEvents.$inferSelect) | null = null;
+
+  for (let i = 0; i < occurrenceStarts.length; i++) {
+    const startsAt = occurrenceStarts[i]!;
+    const endsAt =
+      durationMs > 0 ? new Date(startsAt.getTime() + durationMs) : input.endsAt;
+    const rows = await db
+      .insert(calendarEvents)
+      .values({
+        firmId,
+        matterId: input.matterId,
+        clientId: input.clientId,
+        eventType: input.eventType,
+        title: input.title,
+        description: input.description,
+        location: input.location,
+        startsAt,
+        endsAt,
+        allDay: input.allDay,
+        visibility,
+        recurrenceRule: i === 0 ? recurrenceRule : recurrenceRule,
+        recurrenceUntil: i === 0 ? recurrenceUntil : null,
+        seriesId,
+        notifyClient,
+        createdBy: userId,
+        updatedAt: new Date(),
+      })
+      .returning();
+    const event = rows[0]!;
+    createdIds.push(event.id);
+    if (!firstEvent) firstEvent = event;
+
+    if (visibility === "people") {
+      await replaceEventShares(firmId, event.id, input.sharedUserIds ?? []);
+    }
+    await replaceEventGuests(firmId, event.id, guests);
   }
 
+  const primary = firstEvent!;
   try {
     const { notifyCalendarEventCreated } = await import(
       "@/lib/calendar/calendar-event-emails"
     );
     await notifyCalendarEventCreated({
       firmId,
-      eventId: event.id,
+      eventId: primary.id,
       createdByUserId: userId,
       sharedUserIds: visibility === "people" ? (input.sharedUserIds ?? []) : [],
     });
@@ -687,7 +770,100 @@ export async function createCalendarEvent(
     // SMTP / notify must never roll back event create
   }
 
-  return event;
+  return primary;
+}
+
+function buildRecurrenceStarts(
+  start: Date,
+  rule: string | null,
+  until: Date | null,
+): Date[] {
+  if (!rule || !until) return [start];
+  const out: Date[] = [start];
+  const max = rule === "weekly" ? 26 : 12;
+  let cursor = new Date(start);
+  while (out.length < max) {
+    const next = new Date(cursor);
+    if (rule === "weekly") next.setDate(next.getDate() + 7);
+    else next.setMonth(next.getMonth() + 1);
+    if (next > until) break;
+    out.push(next);
+    cursor = next;
+  }
+  return out;
+}
+
+async function replaceEventGuests(
+  firmId: string,
+  eventId: string,
+  guests: CalendarGuestInput[],
+) {
+  const db = getDb();
+  await db
+    .delete(calendarEventGuests)
+    .where(
+      and(eq(calendarEventGuests.firmId, firmId), eq(calendarEventGuests.eventId, eventId)),
+    );
+  if (!guests.length) return;
+  await db.insert(calendarEventGuests).values(
+    guests.map((g) => ({
+      firmId,
+      eventId,
+      email: g.email,
+      displayName: g.displayName,
+      source: g.source,
+      notify: g.notify,
+    })),
+  );
+}
+
+export async function listGuestsForEvent(firmId: string, eventId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(calendarEventGuests)
+    .where(
+      and(eq(calendarEventGuests.firmId, firmId), eq(calendarEventGuests.eventId, eventId)),
+    );
+}
+
+export async function postponeCalendarEvent(
+  firmId: string,
+  id: string,
+  input: { startsAt: Date; endsAt: Date | null; allDay: boolean },
+) {
+  const db = getDb();
+  const existing = await getCalendarEvent(firmId, id);
+  if (!existing) return null;
+
+  const rows = await db
+    .update(calendarEvents)
+    .set({
+      postponedFrom: existing.event.startsAt,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      allDay: input.allDay,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
+    .returning();
+  const event = rows[0] ?? null;
+  if (!event) return null;
+
+  try {
+    const { notifyCalendarEventPostponed } = await import(
+      "@/lib/calendar/calendar-event-emails"
+    );
+    await notifyCalendarEventPostponed({
+      firmId,
+      eventId: id,
+      previousStartsAt: existing.event.startsAt,
+    });
+  } catch {
+    // best-effort
+  }
+
+  return getCalendarEvent(firmId, id);
 }
 
 export async function updateCalendarEvent(
@@ -697,6 +873,31 @@ export async function updateCalendarEvent(
 ) {
   const db = getDb();
   const visibility = input.visibility ?? "private";
+  const notifyClient = Boolean(input.notifyClient);
+  const guests = [...(input.guests ?? [])];
+  if (notifyClient && input.clientId) {
+    const clientRows = await db
+      .select({
+        email: clients.email,
+        fullName: clients.fullName,
+        legalName: clients.legalName,
+        tradingName: clients.tradingName,
+      })
+      .from(clients)
+      .where(and(eq(clients.firmId, firmId), eq(clients.id, input.clientId)))
+      .limit(1);
+    const client = clientRows[0];
+    const email = client?.email?.trim().toLowerCase();
+    if (email && EMAIL_RE_SIMPLE.test(email) && !guests.some((g) => g.email === email)) {
+      guests.push({
+        email,
+        displayName:
+          client.fullName || client.legalName || client.tradingName || null,
+        source: "client",
+        notify: true,
+      });
+    }
+  }
   const rows = await db
     .update(calendarEvents)
     .set({
@@ -710,6 +911,7 @@ export async function updateCalendarEvent(
       endsAt: input.endsAt,
       allDay: input.allDay,
       visibility,
+      notifyClient,
       updatedAt: new Date(),
     })
     .where(and(eq(calendarEvents.firmId, firmId), eq(calendarEvents.id, id)))
@@ -721,6 +923,7 @@ export async function updateCalendarEvent(
   } else {
     await replaceEventShares(firmId, id, []);
   }
+  await replaceEventGuests(firmId, id, guests);
   return event;
 }
 

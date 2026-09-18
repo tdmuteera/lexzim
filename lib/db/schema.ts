@@ -741,6 +741,12 @@ export const calendarEvents = pgTable(
     allDay: boolean("all_day").notNull().default(false),
     /** private | firm | people (P10-12). Default private for new rows. */
     visibility: text("visibility").notNull().default("private"),
+    /** weekly | monthly | null */
+    recurrenceRule: text("recurrence_rule"),
+    recurrenceUntil: timestamp("recurrence_until", { withTimezone: true }),
+    seriesId: uuid("series_id"),
+    postponedFrom: timestamp("postponed_from", { withTimezone: true }),
+    notifyClient: boolean("notify_client").notNull().default(false),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -751,6 +757,7 @@ export const calendarEvents = pgTable(
     index("calendar_events_matter_id_idx").on(t.matterId),
     index("calendar_events_client_id_idx").on(t.firmId, t.clientId),
     index("calendar_events_firm_visibility_idx").on(t.firmId, t.visibility),
+    index("calendar_events_firm_series_idx").on(t.firmId, t.seriesId),
   ],
 );
 
@@ -776,6 +783,29 @@ export const calendarEventShares = pgTable(
     index("calendar_event_shares_event_user_uidx").on(t.eventId, t.userId),
     index("calendar_event_shares_firm_user_idx").on(t.firmId, t.userId),
     index("calendar_event_shares_event_idx").on(t.eventId),
+  ],
+);
+
+/** External / client email guests for calendar notify (not LexZim staff). */
+export const calendarEventGuests = pgTable(
+  "calendar_event_guests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => calendarEvents.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    displayName: text("display_name"),
+    /** client | external */
+    source: text("source").notNull().default("external"),
+    notify: boolean("notify").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("calendar_event_guests_firm_event_idx").on(t.firmId, t.eventId),
   ],
 );
 
@@ -2632,6 +2662,7 @@ export const schema = {
   aiUsageEvents,
   calendarEvents,
   calendarEventShares,
+  calendarEventGuests,
   deadlineTemplates,
   matterDeadlines,
   timeEntries,

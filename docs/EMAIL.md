@@ -11,14 +11,20 @@ LexZim sends transactional documents (quotations, invoices, receipts) and generi
 Endpoint: `GET`/`POST` `/api/cron/calendar-event-emails`  
 Auth: `Authorization: Bearer $CRON_SECRET`
 
-Timezone: **Africa/Harare**. Sends at **17:00** (day before) and **08:00** (day of) for **all** calendar event types to the **creator + shared people**. Email **subject = event title**.
+Timezone: **Africa/Harare**. Sends:
+- **17:00** day before
+- **08:00** day of
+- **~30 minutes before** (window scanned on every cron hit)
 
-Railway: add `CRON_SECRET`, then schedule two HTTP jobs:
+Recipients: creator + shared staff (LexZim staff emails). Optional external/client guests get firm-branded emails (no LexZim CTA) with **Created by**.
+
+Railway: add `CRON_SECRET`, then schedule HTTP jobs about **every 15 minutes** so the 30-minute reminder can fire. Day-before / day-of still only send in their Harare hours.
 
 | UTC time | Harare | Slot |
 |---|---|---|
-| 15:00 daily | 17:00 | day before |
-| 06:00 daily | 08:00 | day of |
+| 15:00 | 17:00 | day before |
+| 06:00 | 08:00 | day of |
+| every ~15 min | — | 30 minutes before |
 
 Production URL (T Pfigu pilot): `https://lexzim-production.up.railway.app/api/cron/calendar-event-emails`  
 Header: `Authorization: Bearer $CRON_SECRET`
@@ -27,7 +33,7 @@ Local helpers (secrets stay out of git):
 - `.env.railway` + `ops-calendar-cron-handoff.md` (generated secret + copy-paste)
 - `powershell -File scripts/push-cron-secret.ps1` after `npx @railway/cli login` and `link`
 
-Manual test: `?forceSlot=day_before` or `?forceSlot=day_of` with the same Bearer token.
+Manual test: `?forceSlot=day_before`, `?forceSlot=day_of`, or `?forceSlot=thirty_before` with the same Bearer token.
 
 ## Email transport: firm BYO vs server env
 

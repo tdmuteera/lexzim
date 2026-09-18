@@ -9,11 +9,14 @@ import {
  * Cron endpoint for calendar event reminder emails.
  * Secure with CRON_SECRET header: Authorization: Bearer <CRON_SECRET>
  *
- * Railway: schedule two HTTP crons (Africa/Harare = UTC+2):
- * - 15:00 UTC daily → 17:00 Harare (day-before emails)
- * - 06:00 UTC daily → 08:00 Harare (day-of emails)
+ * Railway: prefer every 15 minutes so 30-minute-before reminders fire.
+ * Day-before (17:00 Harare) and day-of (08:00 Harare) still only send in those hours.
+ * Africa/Harare = UTC+2:
+ * - 15:00 UTC → 17:00 Harare (day-before emails)
+ * - 06:00 UTC → 08:00 Harare (day-of emails)
+ * - every ~15 min → 30-minute-before scan
  *
- * Optional query: ?forceSlot=day_before|day_of for manual tests.
+ * Optional query: ?forceSlot=day_before|day_of|thirty_before for manual tests.
  */
 export async function GET(request: Request) {
   try {
@@ -29,7 +32,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const forceRaw = url.searchParams.get("forceSlot");
     const forceSlot =
-      forceRaw === "day_before" || forceRaw === "day_of"
+      forceRaw === "day_before" || forceRaw === "day_of" || forceRaw === "thirty_before"
         ? (forceRaw as CalendarEmailSlot)
         : undefined;
 
@@ -41,7 +44,7 @@ export async function GET(request: Request) {
       results,
       note: forceSlot
         ? `Forced slot ${forceSlot}`
-        : "Runs only during Harare hours 17:00 (day before) or 08:00 (day of) unless forceSlot is set.",
+        : "Day slots run at Harare 17:00 / 08:00. Thirty-minute reminders scan on every call (schedule every ~15 minutes).",
     });
   } catch (err) {
     return jsonError(err, request);

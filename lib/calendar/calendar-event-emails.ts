@@ -10,6 +10,7 @@ import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import { clientDisplayName } from "@/lib/clients/display";
 import { getDb } from "@/lib/db";
 import {
+  calendarEventGuests,
   calendarEventShares,
   calendarEvents,
   clients,
@@ -19,14 +20,16 @@ import {
   staffNotifications,
   users,
 } from "@/lib/db/schema";
+import { sendFirmEmail } from "@/lib/email/mailer";
 import { getAppPublicUrl } from "@/lib/env";
 import { notifyStaffEvent } from "@/lib/notifications/notify-staff-event";
+import { writeAuditLog } from "@/lib/auth/audit";
 
 export const CALENDAR_EVENT_EMAIL_TYPE = "calendar_event_email";
 export const CALENDAR_HOLIDAY_EMAIL_TYPE = "calendar_holiday_email";
 export const CALENDAR_TZ = "Africa/Harare";
 
-export type CalendarEmailSlot = "day_before" | "day_of";
+export type CalendarEmailSlot = "day_before" | "day_of" | "thirty_before";
 
 function escapeHtml(value: string): string {
   return value
@@ -74,28 +77,48 @@ function calendarAppLink(): string {
   return base ? `${base}/calendar` : "/calendar";
 }
 
-function buildCalendarEventCreatedBodies(input: {
+function buildCalendarEventBodies(input: {
   title: string;
   when: string;
   location?: string | null;
   client?: string | null;
   matter?: string | null;
   notes?: string | null;
+  createdBy?: string | null;
+  previousWhen?: string | null;
   headline?: string;
   intro?: string;
+  /** staff: LexZim branded with app link. guest: firm-facing, no LexZim. */
+  audience?: "staff" | "guest";
+  firmName?: string | null;
 }): { text: string; html: string } {
+  const audience = input.audience ?? "staff";
   const rows: Array<{ label: string; value: string }> = [
     { label: "Title", value: input.title },
     { label: "When", value: input.when },
   ];
+  if (input.previousWhen?.trim()) {
+    rows.push({ label: "Was", value: input.previousWhen.trim() });
+  }
+  if (input.createdBy?.trim()) {
+    rows.push({ label: "Created by", value: input.createdBy.trim() });
+  }
   if (input.location?.trim()) rows.push({ label: "Location", value: input.location.trim() });
   if (input.client?.trim()) rows.push({ label: "Client", value: input.client.trim() });
   if (input.matter?.trim()) rows.push({ label: "Matter", value: input.matter.trim() });
   if (input.notes?.trim()) rows.push({ label: "Notes", value: input.notes.trim() });
 
-  const link = calendarAppLink();
-  const intro = input.intro ?? "A calendar event was created.";
-  const headline = input.headline ?? "Event created";
+  const intro =
+    input.intro ??
+    (audience === "guest"
+      ? "An event was created."
+      : "A calendar event was created.");
+  const headline =
+    input.headline ?? (audience === "guest" ? "Event created" : "Event created");
+  const brandLabel =
+    audience === "guest"
+      ? (input.firmName?.trim() || "Calendar")
+      : "LexZim Calendar";
   const text = [intro, "", ...rows.map((r) => `${r.label}: ${r.value}`)].join("\n");
 
   const detailRowsHtml = rows
@@ -112,6 +135,22 @@ function buildCalendarEventCreatedBodies(input: {
     )
     .join("");
 
+  const link = calendarAppLink();
+  const cta =
+    audience === "staff"
+      ? `<tr>
+            <td style="padding:20px 24px 24px 24px;">
+              <a href="${escapeHtml(link)}" style="display:inline-block;background:#1b6f6d;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:6px;">
+                Open in LexZim
+              </a>
+            </td>
+          </tr>`
+      : `<tr>
+            <td style="padding:16px 24px 24px 24px;color:#5b6b7c;font-size:12px;line-height:1.4;">
+              Please reply to the firm contact if you have questions about this event.
+            </td>
+          </tr>`;
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
@@ -122,7 +161,7 @@ function buildCalendarEventCreatedBodies(input: {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #d9e2ec;border-radius:10px;overflow:hidden;">
           <tr>
             <td style="background:#0e2f4a;padding:18px 24px;">
-              <div style="color:#9fb4c7;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">LexZim Calendar</div>
+              <div style="color:#9fb4c7;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">${escapeHtml(brandLabel)}</div>
               <div style="margin-top:6px;color:#ffffff;font-size:18px;font-weight:700;line-height:1.3;">${escapeHtml(headline)}</div>
             </td>
           </tr>
@@ -138,13 +177,7 @@ function buildCalendarEventCreatedBodies(input: {
               </table>
             </td>
           </tr>
-          <tr>
-            <td style="padding:20px 24px 24px 24px;">
-              <a href="${escapeHtml(link)}" style="display:inline-block;background:#1b6f6d;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:6px;">
-                Open in LexZim
-              </a>
-            </td>
-          </tr>
+          ${cta}
         </table>
       </td>
     </tr>
@@ -153,6 +186,13 @@ function buildCalendarEventCreatedBodies(input: {
 </html>`;
 
   return { text, html };
+}
+
+/** @deprecated alias kept for holiday emails */
+function buildCalendarEventCreatedBodies(
+  input: Parameters<typeof buildCalendarEventBodies>[0],
+) {
+  return buildCalendarEventBodies(input);
 }
 
 function harareParts(d: Date): { y: number; m: number; day: number; hour: number } {
@@ -255,11 +295,39 @@ export async function sendCalendarEventEmailsForFirm(
 ): Promise<{ slot: CalendarEmailSlot | null; emailed: number; skipped: number }> {
   const now = opts?.now ?? new Date();
   const resolved = resolveCalendarEmailSlot(now);
-  const slot = opts?.forceSlot ?? resolved.slot;
-  if (!slot) {
-    return { slot: null, emailed: 0, skipped: 0 };
+  const daySlot =
+    opts?.forceSlot === "day_before" || opts?.forceSlot === "day_of"
+      ? opts.forceSlot
+      : opts?.forceSlot === "thirty_before"
+        ? null
+        : resolved.slot;
+
+  let emailed = 0;
+  let skipped = 0;
+
+  if (daySlot === "day_before" || daySlot === "day_of") {
+    const dayResult = await sendDaySlotEmails(firmId, daySlot, now);
+    emailed += dayResult.emailed;
+    skipped += dayResult.skipped;
   }
 
+  // Always scan for 30-minute reminders (needs a frequent cron, e.g. every 15 min).
+  const thirty = await sendThirtyMinuteReminders(firmId, now);
+  emailed += thirty.emailed;
+  skipped += thirty.skipped;
+
+  return {
+    slot: opts?.forceSlot ?? resolved.slot,
+    emailed,
+    skipped,
+  };
+}
+
+async function sendDaySlotEmails(
+  firmId: string,
+  slot: "day_before" | "day_of",
+  now: Date,
+): Promise<{ emailed: number; skipped: number }> {
   const { y, m, day } = harareParts(now);
   const dayTarget =
     slot === "day_before" ? addHarareCalendarDays(y, m, day, 1) : { y, m, day };
@@ -275,10 +343,14 @@ export async function sendCalendarEventEmailsForFirm(
       clientTradingName: clients.tradingName,
       matterTitle: matters.title,
       matterNumber: matters.matterNumber,
+      creatorName: users.fullName,
+      firmName: firms.name,
     })
     .from(calendarEvents)
     .leftJoin(clients, and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)))
     .leftJoin(matters, and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, firmId)))
+    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
+    .innerJoin(firms, eq(firms.id, calendarEvents.firmId))
     .where(
       and(
         eq(calendarEvents.firmId, firmId),
@@ -286,10 +358,6 @@ export async function sendCalendarEventEmailsForFirm(
         lt(calendarEvents.startsAt, end),
       ),
     );
-
-  if (!events.length) {
-    // still process public holidays below
-  }
 
   const eventIds = events.map((e) => e.event.id);
   const sharesByEvent = new Map<string, string[]>();
@@ -320,14 +388,10 @@ export async function sendCalendarEventEmailsForFirm(
     for (const uid of sharesByEvent.get(row.event.id) ?? []) recipients.add(uid);
     if (!recipients.size) continue;
 
-    const when = row.event.startsAt.toLocaleString("en-GB", {
-      timeZone: CALENDAR_TZ,
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    const when = formatEventWhen({
+      startsAt: row.event.startsAt,
+      endsAt: row.event.endsAt,
+      allDay: Boolean(row.event.allDay),
     });
     const clientLabel =
       row.clientType != null
@@ -338,16 +402,25 @@ export async function sendCalendarEventEmailsForFirm(
             tradingName: row.clientTradingName,
           })
         : null;
-    const detailParts = [
-      slot === "day_before" ? "Tomorrow" : "Today",
+    const createdByName = row.creatorName?.trim() || "A colleague";
+    const matterLabel = row.matterNumber
+      ? `Matter ${row.matterNumber}`
+      : row.matterTitle;
+    const { text, html } = buildCalendarEventBodies({
+      title: row.event.title,
       when,
-      clientLabel,
-      row.matterNumber ? `Matter ${row.matterNumber}` : row.matterTitle,
-      row.event.location,
-    ].filter(Boolean);
-
+      location: row.event.location,
+      client: clientLabel,
+      matter: matterLabel,
+      createdBy: createdByName,
+      headline: slot === "day_before" ? "Reminder: tomorrow" : "Reminder: today",
+      intro:
+        slot === "day_before"
+          ? "Reminder: this calendar event is tomorrow."
+          : "Reminder: this calendar event is today.",
+      audience: "staff",
+    });
     const subject = row.event.title;
-    const body = detailParts.join(" · ");
 
     for (const userId of recipients) {
       const key = `${row.event.id}:${slot}:${userId}`;
@@ -359,11 +432,12 @@ export async function sendCalendarEventEmailsForFirm(
         firmId,
         userIds: [userId],
         subject,
-        body,
+        body: text,
+        html,
         inApp: {
           type: CALENDAR_EVENT_EMAIL_TYPE,
           title: subject,
-          body,
+          body: `${slot === "day_before" ? "Tomorrow" : "Today"} · ${when}`,
           href: "/calendar",
           metadata: {
             calendarEventId: row.event.id,
@@ -375,6 +449,20 @@ export async function sendCalendarEventEmailsForFirm(
       emailed += result.emailed;
       sentKeys.add(key);
     }
+
+    const guestResult = await notifyEventGuests({
+      firmId,
+      eventId: row.event.id,
+      firmName: row.firmName,
+      createdByName,
+      title: row.event.title,
+      when,
+      location: row.event.location,
+      client: clientLabel,
+      matter: matterLabel,
+      kind: "reminder",
+    });
+    emailed += guestResult.emailed;
   }
 
   const holidays = await db
@@ -442,7 +530,146 @@ export async function sendCalendarEventEmailsForFirm(
     }
   }
 
-  return { slot, emailed, skipped };
+  return { emailed, skipped };
+}
+
+async function sendThirtyMinuteReminders(
+  firmId: string,
+  now: Date,
+): Promise<{ emailed: number; skipped: number }> {
+  const windowStart = new Date(now.getTime() + 25 * 60 * 1000);
+  const windowEnd = new Date(now.getTime() + 40 * 60 * 1000);
+  const db = getDb();
+  const events = await db
+    .select({
+      event: calendarEvents,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      matterTitle: matters.title,
+      matterNumber: matters.matterNumber,
+      creatorName: users.fullName,
+      firmName: firms.name,
+    })
+    .from(calendarEvents)
+    .leftJoin(clients, and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)))
+    .leftJoin(matters, and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, firmId)))
+    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
+    .innerJoin(firms, eq(firms.id, calendarEvents.firmId))
+    .where(
+      and(
+        eq(calendarEvents.firmId, firmId),
+        eq(calendarEvents.allDay, false),
+        gte(calendarEvents.startsAt, windowStart),
+        lt(calendarEvents.startsAt, windowEnd),
+      ),
+    );
+
+  if (!events.length) return { emailed: 0, skipped: 0 };
+
+  const eventIds = events.map((e) => e.event.id);
+  const sharesByEvent = new Map<string, string[]>();
+  const shareRows = await db
+    .select({
+      eventId: calendarEventShares.eventId,
+      userId: calendarEventShares.userId,
+    })
+    .from(calendarEventShares)
+    .where(
+      and(eq(calendarEventShares.firmId, firmId), inArray(calendarEventShares.eventId, eventIds)),
+    );
+  for (const row of shareRows) {
+    const list = sharesByEvent.get(row.eventId) ?? [];
+    list.push(row.userId);
+    sharesByEvent.set(row.eventId, list);
+  }
+
+  const sentKeys = await loadAlreadySentKeys(firmId);
+  const slot = "thirty_before";
+  let emailed = 0;
+  let skipped = 0;
+
+  for (const row of events) {
+    const recipients = new Set<string>();
+    if (row.event.createdBy) recipients.add(row.event.createdBy);
+    for (const uid of sharesByEvent.get(row.event.id) ?? []) recipients.add(uid);
+
+    const when = formatEventWhen({
+      startsAt: row.event.startsAt,
+      endsAt: row.event.endsAt,
+      allDay: false,
+    });
+    const createdByName = row.creatorName?.trim() || "A colleague";
+    const clientLabel =
+      row.clientType != null
+        ? clientDisplayName({
+            clientType: row.clientType,
+            fullName: row.clientFullName,
+            legalName: row.clientLegalName,
+            tradingName: row.clientTradingName,
+          })
+        : null;
+    const matterLabel = row.matterNumber
+      ? `Matter ${row.matterNumber}`
+      : row.matterTitle;
+    const { text, html } = buildCalendarEventBodies({
+      title: row.event.title,
+      when,
+      location: row.event.location,
+      client: clientLabel,
+      matter: matterLabel,
+      createdBy: createdByName,
+      headline: "Starting in 30 minutes",
+      intro: "Reminder: this calendar event starts in about 30 minutes.",
+      audience: "staff",
+    });
+    const subject = `In 30 minutes: ${row.event.title}`;
+
+    for (const userId of recipients) {
+      const key = `${row.event.id}:${slot}:${userId}`;
+      if (sentKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      const result = await notifyStaffEvent({
+        firmId,
+        userIds: [userId],
+        subject,
+        body: text,
+        html,
+        inApp: {
+          type: CALENDAR_EVENT_EMAIL_TYPE,
+          title: subject,
+          body: `In ~30 minutes · ${when}`,
+          href: "/calendar",
+          metadata: {
+            calendarEventId: row.event.id,
+            slot,
+            userId,
+          },
+        },
+      });
+      emailed += result.emailed;
+      sentKeys.add(key);
+    }
+
+    const guestResult = await notifyEventGuests({
+      firmId,
+      eventId: row.event.id,
+      firmName: row.firmName,
+      createdByName,
+      title: row.event.title,
+      when,
+      location: row.event.location,
+      client: clientLabel,
+      matter: matterLabel,
+      kind: "reminder",
+    });
+    emailed += guestResult.emailed;
+  }
+
+  return { emailed, skipped };
 }
 
 /**
@@ -455,6 +682,44 @@ export async function notifyCalendarEventCreated(input: {
   createdByUserId: string;
   sharedUserIds?: string[];
 }): Promise<{ emailed: number; emailFailed: number }> {
+  return notifyCalendarEventLifecycle({
+    ...input,
+    kind: "created",
+  });
+}
+
+export async function notifyCalendarEventPostponed(input: {
+  firmId: string;
+  eventId: string;
+  previousStartsAt: Date;
+}): Promise<{ emailed: number; emailFailed: number }> {
+  const db = getDb();
+  const rows = await db
+    .select({ createdBy: calendarEvents.createdBy })
+    .from(calendarEvents)
+    .where(
+      and(eq(calendarEvents.firmId, input.firmId), eq(calendarEvents.id, input.eventId)),
+    )
+    .limit(1);
+  const createdBy = rows[0]?.createdBy;
+  if (!createdBy) return { emailed: 0, emailFailed: 0 };
+  return notifyCalendarEventLifecycle({
+    firmId: input.firmId,
+    eventId: input.eventId,
+    createdByUserId: createdBy,
+    kind: "postponed",
+    previousStartsAt: input.previousStartsAt,
+  });
+}
+
+async function notifyCalendarEventLifecycle(input: {
+  firmId: string;
+  eventId: string;
+  createdByUserId: string;
+  sharedUserIds?: string[];
+  kind: "created" | "postponed";
+  previousStartsAt?: Date;
+}): Promise<{ emailed: number; emailFailed: number }> {
   const db = getDb();
   const rows = await db
     .select({
@@ -465,6 +730,8 @@ export async function notifyCalendarEventCreated(input: {
       clientTradingName: clients.tradingName,
       matterTitle: matters.title,
       matterNumber: matters.matterNumber,
+      creatorName: users.fullName,
+      firmName: firms.name,
     })
     .from(calendarEvents)
     .leftJoin(
@@ -475,6 +742,8 @@ export async function notifyCalendarEventCreated(input: {
       matters,
       and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, input.firmId)),
     )
+    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
+    .innerJoin(firms, eq(firms.id, calendarEvents.firmId))
     .where(
       and(eq(calendarEvents.firmId, input.firmId), eq(calendarEvents.id, input.eventId)),
     )
@@ -502,13 +771,19 @@ export async function notifyCalendarEventCreated(input: {
   for (const uid of shareIds) {
     if (uid) recipients.add(uid);
   }
-  if (!recipients.size) return { emailed: 0, emailFailed: 0 };
 
   const when = formatEventWhen({
     startsAt: row.event.startsAt,
     endsAt: row.event.endsAt,
     allDay: Boolean(row.event.allDay),
   });
+  const previousWhen = input.previousStartsAt
+    ? formatEventWhen({
+        startsAt: input.previousStartsAt,
+        endsAt: null,
+        allDay: Boolean(row.event.allDay),
+      })
+    : null;
   const clientLabel =
     row.clientType != null
       ? clientDisplayName({
@@ -521,37 +796,174 @@ export async function notifyCalendarEventCreated(input: {
   const matterLabel = row.matterNumber
     ? `${row.matterNumber}${row.matterTitle ? ` · ${row.matterTitle}` : ""}`
     : row.matterTitle;
+  const createdByName = row.creatorName?.trim() || "A colleague";
 
-  const { text, html } = buildCalendarEventCreatedBodies({
+  const staffBodies = buildCalendarEventBodies({
     title: row.event.title,
     when,
+    previousWhen,
     location: row.event.location,
     client: clientLabel,
     matter: matterLabel,
     notes: row.event.description?.trim() || null,
+    createdBy: createdByName,
+    headline: input.kind === "postponed" ? "Event postponed" : "Event created",
+    intro:
+      input.kind === "postponed"
+        ? "A calendar event was postponed."
+        : "A calendar event was created.",
+    audience: "staff",
   });
 
-  const subject = `Event created: ${row.event.title}`;
+  const subject =
+    input.kind === "postponed"
+      ? `Event postponed: ${row.event.title}`
+      : `Event created: ${row.event.title}`;
 
-  const result = await notifyStaffEvent({
-    firmId: input.firmId,
-    userIds: [...recipients],
-    subject,
-    body: text,
-    html,
-    inApp: {
-      type: "calendar_event_created",
-      title: subject,
-      body: `${row.event.title} · ${when}`,
-      href: "/calendar",
-      metadata: {
-        calendarEventId: row.event.id,
-        slot: "created",
+  let emailed = 0;
+  let emailFailed = 0;
+
+  if (recipients.size) {
+    const result = await notifyStaffEvent({
+      firmId: input.firmId,
+      userIds: [...recipients],
+      subject,
+      body: staffBodies.text,
+      html: staffBodies.html,
+      inApp: {
+        type:
+          input.kind === "postponed"
+            ? "calendar_event_postponed"
+            : "calendar_event_created",
+        title: subject,
+        body: `${row.event.title} · ${when}`,
+        href: "/calendar",
+        metadata: {
+          calendarEventId: row.event.id,
+          slot: input.kind,
+        },
       },
-    },
+    });
+    emailed += result.emailed;
+    emailFailed += result.emailFailed;
+  }
+
+  const guestResult = await notifyEventGuests({
+    firmId: input.firmId,
+    eventId: input.eventId,
+    firmName: row.firmName,
+    createdByName,
+    title: row.event.title,
+    when,
+    previousWhen,
+    location: row.event.location,
+    client: clientLabel,
+    matter: matterLabel,
+    notes: row.event.description?.trim() || null,
+    kind: input.kind,
+  });
+  emailed += guestResult.emailed;
+  emailFailed += guestResult.emailFailed;
+
+  return { emailed, emailFailed };
+}
+
+async function notifyEventGuests(input: {
+  firmId: string;
+  eventId: string;
+  firmName: string;
+  createdByName: string;
+  title: string;
+  when: string;
+  previousWhen?: string | null;
+  location?: string | null;
+  client?: string | null;
+  matter?: string | null;
+  notes?: string | null;
+  kind: "created" | "postponed" | "reminder";
+}): Promise<{ emailed: number; emailFailed: number }> {
+  const db = getDb();
+  const guests = await db
+    .select()
+    .from(calendarEventGuests)
+    .where(
+      and(
+        eq(calendarEventGuests.firmId, input.firmId),
+        eq(calendarEventGuests.eventId, input.eventId),
+        eq(calendarEventGuests.notify, true),
+      ),
+    );
+  if (!guests.length) return { emailed: 0, emailFailed: 0 };
+
+  const headline =
+    input.kind === "postponed"
+      ? "Event postponed"
+      : input.kind === "reminder"
+        ? "Event reminder"
+        : "Event created";
+  const intro =
+    input.kind === "postponed"
+      ? "An event was postponed."
+      : input.kind === "reminder"
+        ? "This is a reminder for an upcoming event."
+        : "An event was created.";
+
+  const { text, html } = buildCalendarEventBodies({
+    title: input.title,
+    when: input.when,
+    previousWhen: input.previousWhen,
+    location: input.location,
+    client: input.client,
+    matter: input.matter,
+    notes: input.notes,
+    createdBy: input.createdByName,
+    headline,
+    intro,
+    audience: "guest",
+    firmName: input.firmName,
   });
 
-  return { emailed: result.emailed, emailFailed: result.emailFailed };
+  const subject = `${headline}: ${input.title}`;
+  let emailed = 0;
+  let emailFailed = 0;
+
+  for (const guest of guests) {
+    try {
+      const result = await sendFirmEmail(input.firmId, {
+        to: guest.email,
+        subject,
+        text,
+        html,
+      });
+      emailed += 1;
+      await writeAuditLog({
+        action: "calendar.guest_email_sent",
+        firmId: input.firmId,
+        entityType: "calendar_event",
+        entityId: input.eventId,
+        metadata: {
+          to: guest.email,
+          kind: input.kind,
+          messageId: result.messageId,
+        },
+      });
+    } catch (err) {
+      emailFailed += 1;
+      await writeAuditLog({
+        action: "calendar.guest_email_failed",
+        firmId: input.firmId,
+        entityType: "calendar_event",
+        entityId: input.eventId,
+        metadata: {
+          to: guest.email,
+          kind: input.kind,
+          error: err instanceof Error ? err.message.slice(0, 300) : "failed",
+        },
+      }).catch(() => undefined);
+    }
+  }
+
+  return { emailed, emailFailed };
 }
 
 export async function sendCalendarEventEmailsForAllFirms(opts?: {

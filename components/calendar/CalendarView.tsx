@@ -12,10 +12,19 @@ import { Modal } from "@/components/ui/Modal";
 import type { CalendarEventType } from "@/lib/db/ops-types";
 import {
   CALENDAR_EVENT_TYPES,
+  CALENDAR_RECURRENCE_RULES,
   CALENDAR_VISIBILITIES,
   DEFAULT_CALENDAR_COLOR,
+  type CalendarRecurrenceRule,
   type CalendarVisibility,
 } from "@/lib/calendar/validation";
+
+type GuestDraft = {
+  email: string;
+  displayName: string;
+  source: "client" | "external";
+  notify: boolean;
+};
 
 type SerializedEvent = {
   id: string;
@@ -33,6 +42,11 @@ type SerializedEvent = {
   allDay: boolean;
   visibility?: string;
   sharedUserIds?: string[];
+  guests?: GuestDraft[];
+  notifyClient?: boolean;
+  recurrenceRule?: string | null;
+  recurrenceUntil?: string | null;
+  postponedFrom?: string | null;
   creatorCalendarColor?: string | null;
   creatorFullName?: string | null;
   canEdit?: boolean;
@@ -80,6 +94,11 @@ type FormState = {
   allDay: boolean;
   visibility: CalendarVisibility;
   sharedUserIds: string[];
+  notifyClient: boolean;
+  clientEmail: string;
+  guestEmailsText: string;
+  recurrenceRule: "" | CalendarRecurrenceRule;
+  recurrenceUntil: string;
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -99,7 +118,34 @@ const VISIBILITY_LABELS: Record<CalendarVisibility, string> = {
   people: "Specific people",
 };
 
+const RECURRENCE_LABELS: Record<CalendarRecurrenceRule, string> = {
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
 const DEFAULT_MY_COLOUR = DEFAULT_CALENDAR_COLOR;
+
+function guestsToText(guests: GuestDraft[] | undefined): string {
+  if (!guests?.length) return "";
+  return guests
+    .filter((g) => g.source !== "client")
+    .map((g) => g.email)
+    .join(", ");
+}
+
+function parseGuestEmailsText(text: string): GuestDraft[] {
+  const parts = text
+    .split(/[,;\n]+/)
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean);
+  const out: GuestDraft[] = [];
+  for (const email of parts) {
+    if (!email.includes("@")) continue;
+    if (out.some((g) => g.email === email)) continue;
+    out.push({ email, displayName: "", source: "external", notify: true });
+  }
+  return out;
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -144,6 +190,11 @@ function emptyForm(defaults?: Partial<FormState>): FormState {
     allDay: false,
     visibility: "private",
     sharedUserIds: [],
+    notifyClient: false,
+    clientEmail: "",
+    guestEmailsText: "",
+    recurrenceRule: "",
+    recurrenceUntil: "",
     ...defaults,
   };
 }
@@ -152,6 +203,11 @@ function formFromEvent(ev: SerializedEvent): FormState {
   const visibility = (CALENDAR_VISIBILITIES as readonly string[]).includes(ev.visibility ?? "")
     ? (ev.visibility as CalendarVisibility)
     : "private";
+  const recurrenceRule =
+    ev.recurrenceRule === "weekly" || ev.recurrenceRule === "monthly"
+      ? ev.recurrenceRule
+      : "";
+  const clientGuest = (ev.guests ?? []).find((g) => g.source === "client");
   return {
     eventType: (CALENDAR_EVENT_TYPES.includes(ev.eventType as CalendarEventType)
       ? ev.eventType
@@ -166,6 +222,11 @@ function formFromEvent(ev: SerializedEvent): FormState {
     allDay: ev.allDay,
     visibility,
     sharedUserIds: ev.sharedUserIds ?? [],
+    notifyClient: Boolean(ev.notifyClient),
+    clientEmail: clientGuest?.email ?? "",
+    guestEmailsText: guestsToText(ev.guests),
+    recurrenceRule,
+    recurrenceUntil: ev.recurrenceUntil ? toLocalInputValue(ev.recurrenceUntil).slice(0, 10) : "",
   };
 }
 
@@ -240,6 +301,11 @@ export function CalendarView() {
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [colourSaving, setColourSaving] = useState(false);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [postponeOpen, setPostponeOpen] = useState(false);
+  const [postponeStartsAt, setPostponeStartsAt] = useState("");
+  const [postponeEndsAt, setPostponeEndsAt] = useState("");
+  const [postponeAllDay, setPostponeAllDay] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const range = useMemo(() => {
@@ -382,6 +448,8 @@ export function CalendarView() {
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
+    setShowMoreOptions(false);
+    setPostponeOpen(false);
   }
 
   function openCreate(opts?: { day?: Date; eventType?: CalendarEventType }) {
@@ -408,6 +476,7 @@ export function CalendarView() {
     setEditingId(null);
     setForm(emptyForm(defaults));
     setFormError(null);
+    setShowMoreOptions(false);
     setFormOpen(true);
   }
 
@@ -442,9 +511,57 @@ export function CalendarView() {
     setEditingId(ev.id);
     setForm(formFromEvent(ev));
     setFormError(null);
+    setShowMoreOptions(
+      Boolean(ev.notifyClient || (ev.guests && ev.guests.length) || ev.recurrenceRule),
+    );
     setFormOpen(true);
     setSelectedId(ev.id);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/calendar/${ev.id}`, { credentials: "include" });
+        const body = (await res.json()) as EventResponse;
+        if (res.ok && body.ok && body.data?.event) {
+          const full = body.data.event;
+          setForm(formFromEvent(full));
+          setShowMoreOptions(
+            Boolean(
+              full.notifyClient || (full.guests && full.guests.length) || full.recurrenceRule,
+            ),
+          );
+        }
+      } catch {
+        /* keep list snapshot */
+      }
+    })();
   }
+
+  useEffect(() => {
+    if (!formOpen || !form.clientId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/clients/${form.clientId}`, {
+          credentials: "include",
+        });
+        const body = (await res.json()) as {
+          ok?: boolean;
+          data?: { client?: { email?: string | null } };
+        };
+        if (cancelled || !body.ok) return;
+        const email = body.data?.client?.email?.trim() ?? "";
+        setForm((f) => {
+          if (f.clientId !== form.clientId) return f;
+          return { ...f, clientEmail: email };
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.clientId, formOpen]);
 
   async function saveEvent() {
     if (!formValid) {
@@ -458,6 +575,7 @@ export function CalendarView() {
     setSaving(true);
     setFormError(null);
     try {
+      const guests = parseGuestEmailsText(form.guestEmailsText);
       const payload = {
         eventType: form.eventType,
         title: form.title,
@@ -470,6 +588,13 @@ export function CalendarView() {
         allDay: form.allDay,
         visibility: form.visibility,
         sharedUserIds: form.visibility === "people" ? form.sharedUserIds : [],
+        notifyClient: Boolean(form.notifyClient && form.clientId),
+        guests,
+        recurrenceRule: editingId ? undefined : form.recurrenceRule || null,
+        recurrenceUntil:
+          !editingId && form.recurrenceRule && form.recurrenceUntil
+            ? new Date(`${form.recurrenceUntil}T23:59:59`).toISOString()
+            : undefined,
       };
       const url = editingId ? `/api/calendar/${editingId}` : "/api/calendar";
       const method = editingId ? "PATCH" : "POST";
@@ -489,6 +614,47 @@ export function CalendarView() {
       await load();
     } catch {
       setFormError("Could not save event. Check your connection.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openPostpone() {
+    if (!editingId) return;
+    setPostponeStartsAt(form.startsAt);
+    setPostponeEndsAt(form.endsAt);
+    setPostponeAllDay(form.allDay);
+    setPostponeOpen(true);
+  }
+
+  async function submitPostpone() {
+    if (!editingId || !postponeStartsAt) {
+      setFormError("Choose a new start time to postpone.");
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/calendar/${editingId}/postpone`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startsAt: new Date(postponeStartsAt).toISOString(),
+          endsAt: postponeEndsAt ? new Date(postponeEndsAt).toISOString() : null,
+          allDay: postponeAllDay,
+        }),
+      });
+      const body = (await res.json()) as EventResponse;
+      if (!res.ok || !body.ok) {
+        setFormError(body.error?.message ?? "Could not postpone event.");
+        return;
+      }
+      closeForm();
+      if (body.data?.event) setSelectedId(body.data.event.id);
+      await load();
+    } catch {
+      setFormError("Could not postpone event. Check your connection.");
     } finally {
       setSaving(false);
     }
@@ -883,6 +1049,16 @@ export function CalendarView() {
                   <strong>When:</strong> {formatWhen(selected)}
                   {selected.allDay ? " (all day)" : ""}
                 </p>
+                {selected.postponedFrom ? (
+                  <p>
+                    <strong>Postponed from:</strong>{" "}
+                    {formatWhen({
+                      ...selected,
+                      startsAt: selected.postponedFrom,
+                      endsAt: null,
+                    })}
+                  </p>
+                ) : null}
                 {selected.location ? (
                   <p>
                     <strong>Location:</strong> {selected.location}
@@ -1011,6 +1187,8 @@ export function CalendarView() {
                           matters.find((m) => m.id === f.matterId)?.clientId !== id
                             ? ""
                             : f.matterId,
+                        notifyClient: id ? f.notifyClient : false,
+                        clientEmail: id ? f.clientEmail : "",
                       }))
                     }
                     label="Client (optional)"
@@ -1022,6 +1200,34 @@ export function CalendarView() {
                           : "Search client for this event…"
                     }
                   />
+                  {form.clientId ? (
+                    <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                      {form.clientEmail ? (
+                        <>
+                          <p style={{ margin: "0 0 0.35rem" }}>
+                            Client email: <strong>{form.clientEmail}</strong>
+                          </p>
+                          <label
+                            style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.notifyClient}
+                              onChange={(e) =>
+                                setForm((f) => ({ ...f, notifyClient: e.target.checked }))
+                              }
+                            />
+                            Also email this client the event notifications
+                          </label>
+                        </>
+                      ) : (
+                        <p style={{ margin: 0, color: "var(--muted, #667)" }}>
+                          Client is in the system but has no email on file yet (not onboarded for
+                          email). Add other recipients below if needed.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="form-group">
@@ -1087,6 +1293,155 @@ export function CalendarView() {
                   rows={3}
                 />
               </div>
+              <div className="form-group">
+                <button
+                  type="button"
+                  className="btn-link"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--accent, #1b6f6d)",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                  }}
+                  onClick={() => setShowMoreOptions((v) => !v)}
+                >
+                  {showMoreOptions ? "Hide optional extras" : "Optional: guests, repeat…"}
+                </button>
+              </div>
+              {showMoreOptions ? (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="cal-guests">Other recipients (optional)</label>
+                    <textarea
+                      id="cal-guests"
+                      value={form.guestEmailsText}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, guestEmailsText: e.target.value }))
+                      }
+                      rows={2}
+                      placeholder="External emails, comma-separated (other lawyers, parties…)"
+                    />
+                    <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "var(--muted, #667)" }}>
+                      Non-staff recipients get a firm-branded notice (no LexZim branding), with who
+                      created the event.
+                    </p>
+                  </div>
+                  {!editingId ? (
+                    <div
+                      style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}
+                    >
+                      <div className="form-group">
+                        <label htmlFor="cal-recur">Repeat (optional)</label>
+                        <select
+                          id="cal-recur"
+                          value={form.recurrenceRule}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              recurrenceRule: e.target.value as FormState["recurrenceRule"],
+                            }))
+                          }
+                        >
+                          <option value="">Does not repeat</option>
+                          {CALENDAR_RECURRENCE_RULES.map((r) => (
+                            <option key={r} value={r}>
+                              {RECURRENCE_LABELS[r]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {form.recurrenceRule ? (
+                        <div className="form-group">
+                          <label htmlFor="cal-recur-until">Until (optional)</label>
+                          <input
+                            id="cal-recur-until"
+                            type="date"
+                            value={form.recurrenceUntil}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, recurrenceUntil: e.target.value }))
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {editingId ? (
+                    <div className="form-group">
+                      {!postponeOpen ? (
+                        <Button variant="ghost" disabled={saving} onClick={openPostpone}>
+                          Postpone event…
+                        </Button>
+                      ) : (
+                        <div
+                          style={{
+                            border: "1px solid var(--border, #d9e2ec)",
+                            borderRadius: 8,
+                            padding: "0.75rem",
+                          }}
+                        >
+                          <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>Postpone</p>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "0.75rem",
+                            }}
+                          >
+                            <div className="form-group">
+                              <label htmlFor="cal-postpone-start">New start</label>
+                              <input
+                                id="cal-postpone-start"
+                                type="datetime-local"
+                                value={postponeStartsAt}
+                                onChange={(e) => setPostponeStartsAt(e.target.value)}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label htmlFor="cal-postpone-end">New end</label>
+                              <input
+                                id="cal-postpone-end"
+                                type="datetime-local"
+                                value={postponeEndsAt}
+                                onChange={(e) => setPostponeEndsAt(e.target.value)}
+                                disabled={postponeAllDay}
+                              />
+                            </div>
+                          </div>
+                          <label
+                            style={{
+                              display: "flex",
+                              gap: "0.5rem",
+                              alignItems: "center",
+                              marginBottom: "0.75rem",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={postponeAllDay}
+                              onChange={(e) => setPostponeAllDay(e.target.checked)}
+                            />
+                            All day
+                          </label>
+                          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <Button onClick={submitPostpone} disabled={saving}>
+                              {saving ? "Postponing…" : "Confirm postpone"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              disabled={saving}
+                              onClick={() => setPostponeOpen(false)}
+                            >
+                              Cancel postpone
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <Button onClick={saveEvent} disabled={saving || !formValid}>
                   {saving
