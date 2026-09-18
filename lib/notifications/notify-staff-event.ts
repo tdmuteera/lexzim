@@ -153,6 +153,7 @@ export async function notifyStaffEvent(
         entityId: target.userId,
         metadata: {
           type: input.inApp.type,
+          subject: input.subject,
           to: target.email,
           messageId: result.messageId,
           transport: result.transport,
@@ -177,6 +178,7 @@ export async function notifyStaffEvent(
         entityId: target.userId,
         metadata: {
           type: input.inApp.type,
+          subject: input.subject,
           to: target.email,
           error: message.slice(0, 300),
         },

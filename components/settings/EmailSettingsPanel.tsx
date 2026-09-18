@@ -8,6 +8,7 @@ import {
   diagnosticJson,
   errorMessageWithRef,
 } from "@/lib/diagnostics/client";
+import { formatDateTime } from "@/lib/format/dates";
 
 type EmailConfig = {
   host: string;
@@ -76,6 +77,20 @@ export function EmailSettingsPanel() {
   const [passwordReadable, setPasswordReadable] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [staffNotifyError, setStaffNotifyError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [history, setHistory] = useState<
+    Array<{
+      id: string;
+      kind: string;
+      status: "sent" | "failed";
+      to: string | null;
+      from: string | null;
+      subject: string | null;
+      error: string | null;
+      createdAt: string;
+    }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,6 +132,45 @@ export function EmailSettingsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const result = await diagnosticJson<{
+        items: Array<{
+          id: string;
+          kind: string;
+          status: "sent" | "failed";
+          to: string | null;
+          from: string | null;
+          subject: string | null;
+          error: string | null;
+          createdAt: string;
+        }>;
+      }>("/api/settings/email/history?limit=50");
+      if (!result.ok || !result.data) {
+        setHistoryError(
+          errorMessageWithRef(
+            result.error?.message ?? "Could not load email history.",
+            result.requestId,
+          ),
+        );
+        setHistory([]);
+        return;
+      }
+      setHistory(result.data.items);
+    } catch {
+      setHistoryError("Could not load email history.");
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   async function save() {
     setSaving(true);
@@ -193,6 +247,7 @@ export function EmailSettingsPanel() {
       const recipient = result.data?.to ?? (testTo.trim() || fromEmail);
       setTestFeedback(`Test email sent to ${recipient}. Check inbox and spam.`);
       toast(`Test email sent to ${recipient}.`);
+      void loadHistory();
     } catch {
       setTestFeedback("Test send failed. Check your connection and SMTP settings.");
     } finally {
@@ -407,6 +462,100 @@ export function EmailSettingsPanel() {
                   {testing ? "Sending…" : "Send test email"}
                 </Button>
               </div>
+            </section>
+
+            <section
+              className="settings-section"
+              style={{ display: "grid", gap: "0.65rem", maxWidth: "42rem" }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <h3 className="settings-section-title" style={{ margin: 0 }}>
+                  Email history
+                </h3>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void loadHistory()}
+                  disabled={historyLoading}
+                >
+                  {historyLoading ? "Loading…" : "Refresh"}
+                </Button>
+              </div>
+              <p className="muted" style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>
+                Recent outbound mail from this firm: staff notifications, SMTP tests, and client
+                document emails. Changing a person&apos;s notification address under Staff
+                notifications applies on the next send (no Railway change needed).
+              </p>
+              {historyError ? <StatusBanner tone="error">{historyError}</StatusBanner> : null}
+              {!historyLoading && !historyError && history.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  No email activity recorded yet.
+                </p>
+              ) : null}
+              {history.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.65rem" }}>
+                  {history.map((row) => (
+                    <div
+                      key={row.id}
+                      style={{
+                        paddingBottom: "0.65rem",
+                        borderBottom: "1px solid var(--border, rgba(0,0,0,0.08))",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.35rem 0.75rem",
+                          alignItems: "baseline",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <strong style={{ fontSize: "0.9rem" }}>{row.kind}</strong>
+                        <span
+                          style={{
+                            fontSize: "0.78rem",
+                            color: row.status === "failed" ? "var(--danger)" : "var(--success, #2e7d5a)",
+                          }}
+                        >
+                          {row.status === "failed" ? "Failed" : "Sent"}
+                        </span>
+                      </div>
+                      <div className="muted" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                        {formatDateTime(row.createdAt)}
+                      </div>
+                      {row.to ? (
+                        <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                          To: {row.to}
+                        </div>
+                      ) : null}
+                      {row.subject ? (
+                        <div className="muted" style={{ fontSize: "0.82rem", marginTop: "0.15rem" }}>
+                          {row.subject}
+                        </div>
+                      ) : null}
+                      {row.from ? (
+                        <div className="muted" style={{ fontSize: "0.75rem", marginTop: "0.15rem" }}>
+                          From: {row.from}
+                        </div>
+                      ) : null}
+                      {row.error ? (
+                        <div style={{ fontSize: "0.78rem", color: "var(--danger)", marginTop: "0.25rem" }}>
+                          {row.error}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </section>
           </>
         )}
