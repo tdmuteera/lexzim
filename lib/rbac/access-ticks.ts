@@ -53,7 +53,7 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
   ],
   "finance.commission.view": ["finance.commission.view", "finance.commission.configure"],
   "hr.view": ["hr.view", "hr.manage"],
-  "users.manage": ["users.manage"],
+  "users.manage": ["users.manage", "users.activity.view"],
   "users.activity.view": ["users.activity.view"],
   "reports.view": ["reports.view"],
   "ai.use": ["ai.use"],

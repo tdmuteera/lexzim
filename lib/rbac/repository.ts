@@ -63,6 +63,7 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   set.add("finance.requisitions.pay");
   set.add("finance.commission.view");
   set.add("finance.commission.configure");
+  set.add("users.activity.view");
   return [...set];
 }
 
@@ -169,6 +170,9 @@ export async function replaceUserPermissionCodes(input: {
   }
   if (isProtectedMp && !unique.includes("finance.view_all_client_accounts")) {
     unique.push("finance.view_all_client_accounts");
+  }
+  if (isProtectedMp && !unique.includes("users.activity.view")) {
+    unique.push("users.activity.view");
   }
 
   const db = getDb();

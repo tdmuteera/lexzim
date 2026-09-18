@@ -2,13 +2,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { jsonError, jsonOk } from "@/lib/auth/http";
 import { getDb } from "@/lib/db";
 import { auditLogs, users } from "@/lib/db/schema";
-import { requirePermission } from "@/lib/rbac/guards";
+import { requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
-/** Firm audit events for the User activity tab (users.activity.view). */
+/** Firm audit events for the User activity tab (users.activity.view or users.manage). */
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("users.activity.view");
+    const session = await requireAny(["users.activity.view", "users.manage"]);
     const firmId = tenantFirmId(session);
     const params = new URL(request.url).searchParams;
     const userId = params.get("userId")?.trim() || null;

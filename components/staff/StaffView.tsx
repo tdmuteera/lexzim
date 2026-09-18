@@ -470,7 +470,7 @@ export function StaffView() {
           >
             Delegations
           </button>
-          {can("users.activity.view") ? (
+          {can("users.activity.view") || can("users.manage") ? (
             <button
               type="button"
               className={["tab", tab === "activity" ? "active" : ""].filter(Boolean).join(" ")}
