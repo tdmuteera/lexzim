@@ -6,7 +6,7 @@ import { parseLeaveDecisionInput } from "@/lib/hr/validation";
 import { createStaffNotification } from "@/lib/notifications/staff";
 import { getStaffProfileByUserId } from "@/lib/repos/hr";
 import { decideLeaveRequest, getLeaveRequest } from "@/lib/repos/hr-leave";
-import { hasAnyPermission, hasPermission, requirePermission } from "@/lib/rbac/guards";
+import { hasAnyPermission, hasPermission, requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -34,15 +34,36 @@ function serializeRequest(row: NonNullable<Awaited<ReturnType<typeof getLeaveReq
   };
 }
 
+async function assertCanViewLeaveRequest(
+  session: Awaited<ReturnType<typeof requireAny>>,
+  firmId: string,
+  row: NonNullable<Awaited<ReturnType<typeof getLeaveRequest>>>,
+) {
+  if (hasAnyPermission(session, ["hr.view", "leave.approve", "hr.manage"])) {
+    return;
+  }
+  const self = await getStaffProfileByUserId(firmId, session.id);
+  const isOwner = row.request.createdBy === session.id;
+  const isSelfStaff = self?.profile.id === row.request.staffProfileId;
+  if (!isOwner && !isSelfStaff) {
+    throw new AuthError("forbidden", "You cannot view this leave request.");
+  }
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny([
+      "hr.view",
+      "hr.leave.request",
+      "leave.approve",
+    ]);
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
     const row = await getLeaveRequest(firmId, id);
     if (!row) {
       throw new AuthError("not_found", "Leave request not found.");
     }
+    await assertCanViewLeaveRequest(session, firmId, row);
     return jsonOk({ request: serializeRequest(row) });
   } catch (err) {
     return jsonError(err, request);
@@ -51,7 +72,12 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny([
+      "hr.view",
+      "hr.leave.request",
+      "leave.approve",
+      "hr.manage",
+    ]);
     const firmId = tenantFirmId(session);
     const canManage = hasPermission(session, "hr.manage");
     const { id } = await context.params;
@@ -79,6 +105,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (!canManage && !isOwner && !isSelfStaff) {
         throw new AuthError("forbidden", "You cannot cancel this leave request.");
       }
+    } else {
+      throw new AuthError("forbidden", "Unsupported leave status update.");
     }
 
     const updated = await decideLeaveRequest(firmId, id, session.id, input);

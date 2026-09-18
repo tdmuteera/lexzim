@@ -13,7 +13,8 @@ import {
   notifyAdvanceApprovers,
   notifyAdvanceCreator,
 } from "@/lib/repos/hr-salary-advances";
-import { hasAnyPermission, hasPermission, requirePermission } from "@/lib/rbac/guards";
+import { getStaffProfileByUserId } from "@/lib/repos/hr";
+import { hasAnyPermission, hasPermission, requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -61,15 +62,42 @@ function serializeAdvance(
   };
 }
 
+async function assertCanViewAdvance(
+  session: Awaited<ReturnType<typeof requireAny>>,
+  firmId: string,
+  row: NonNullable<Awaited<ReturnType<typeof getSalaryAdvance>>>,
+) {
+  if (
+    hasAnyPermission(session, [
+      "hr.view",
+      "hr.manage",
+      "payroll.advance.approve",
+    ])
+  ) {
+    return;
+  }
+  const self = await getStaffProfileByUserId(firmId, session.id);
+  const isOwner = row.advance.createdBy === session.id;
+  const isSelfStaff = self?.profile.id === row.advance.staffProfileId;
+  if (!isOwner && !isSelfStaff) {
+    throw new AuthError("forbidden", "You cannot view this salary advance.");
+  }
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny([
+      "hr.view",
+      "hr.advances.request",
+      "payroll.advance.approve",
+    ]);
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
     const row = await getSalaryAdvance(firmId, id);
     if (!row) {
       throw new AuthError("not_found", "Salary advance not found.");
     }
+    await assertCanViewAdvance(session, firmId, row);
     return jsonOk({ advance: serializeAdvance(row) });
   } catch (err) {
     return jsonError(err, request);
@@ -78,7 +106,11 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny([
+      "hr.view",
+      "hr.manage",
+      "payroll.advance.approve",
+    ]);
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
     const existing = await getSalaryAdvance(firmId, id);
