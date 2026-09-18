@@ -169,3 +169,25 @@ export async function editUserMessageAndTruncate(input: {
 
   return getMessage(input.firmId, input.conversationId, input.messageId);
 }
+
+/** Hard-delete a conversation owned by the user (messages cascade). */
+export async function deleteConversation(input: {
+  firmId: string;
+  userId: string;
+  conversationId: string;
+}): Promise<boolean> {
+  const db = getDb();
+  const existing = await getConversation(input.firmId, input.conversationId);
+  if (!existing || existing.userId !== input.userId) return false;
+
+  await db
+    .delete(aiConversations)
+    .where(
+      and(
+        eq(aiConversations.firmId, input.firmId),
+        eq(aiConversations.id, input.conversationId),
+        eq(aiConversations.userId, input.userId),
+      ),
+    );
+  return true;
+}

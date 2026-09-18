@@ -65,10 +65,13 @@ export async function getDashboardStats(input: {
   firmId: string;
   userId: string;
   viewAll: boolean;
+  /** When false, new-clients count is limited to allocated clients. */
+  clientViewAll?: boolean;
 }) {
   const db = getDb();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const clientViewAll = input.clientViewAll ?? input.viewAll;
 
   const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
 
@@ -82,9 +85,12 @@ export async function getDashboardStats(input: {
     .from(matters)
     .where(and(matterAccess, inArray(matters.status, [...CLOSED_MATTER_STATUSES])));
 
-  // Clients: firm-wide for view_all; otherwise still firm-wide if user can view clients
-  // Dashboard shows firm client count when viewAll; assigned users see firm clients too if they have clients.view
-  // Prompt: "new clients this month" — firm scoped always (clients are firm registry)
+  let clientIds: string[] | null = null;
+  if (!clientViewAll) {
+    const { listAccessibleClientIds } = await import("@/lib/repos/clients");
+    clientIds = await listAccessibleClientIds(input.firmId, input.userId);
+  }
+
   const newClientsRows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clients)
@@ -92,6 +98,12 @@ export async function getDashboardStats(input: {
       and(
         eq(clients.firmId, input.firmId),
         gte(clients.createdAt, monthStart),
+        clientIds
+          ? inArray(
+              clients.id,
+              clientIds.length ? clientIds : ["00000000-0000-0000-0000-000000000000"],
+            )
+          : undefined,
       ),
     );
 

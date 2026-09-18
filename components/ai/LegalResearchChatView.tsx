@@ -659,6 +659,38 @@ export function LegalResearchChatView() {
     setEditDraft("");
   }
 
+  async function deleteConversationById(id: string, e?: { stopPropagation: () => void }) {
+    e?.stopPropagation();
+    if (
+      !window.confirm(
+        "Permanently delete this conversation? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(`/api/ai/conversations/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { message: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not delete conversation.");
+        return;
+      }
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (conversationIdRef.current === id) {
+        onNewChat();
+      }
+    } catch {
+      setError("Could not delete conversation.");
+    }
+  }
+
   async function openConversation(id: string) {
     setLoadingThread(true);
     setError(null);
@@ -1270,15 +1302,28 @@ export function LegalResearchChatView() {
               </p>
             ) : (
               conversations.map((c) => (
-                <button
+                <div
                   key={c.id}
-                  type="button"
-                  className={`ai-conv-item${conversationId === c.id ? " active" : ""}`}
-                  onClick={() => void openConversation(c.id)}
+                  className={`ai-conv-row${conversationId === c.id ? " active" : ""}`}
                 >
-                  <div className="title">{c.title?.trim() || "Untitled chat"}</div>
-                  <div className="meta">{formatDateTime(c.updatedAt)}</div>
-                </button>
+                  <button
+                    type="button"
+                    className={`ai-conv-item${conversationId === c.id ? " active" : ""}`}
+                    onClick={() => void openConversation(c.id)}
+                  >
+                    <div className="title">{c.title?.trim() || "Untitled chat"}</div>
+                    <div className="meta">{formatDateTime(c.updatedAt)}</div>
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-conv-delete"
+                    title="Delete conversation"
+                    aria-label="Delete conversation"
+                    onClick={(e) => void deleteConversationById(c.id, e)}
+                  >
+                    ×
+                  </button>
+                </div>
               ))
             )}
           </div>

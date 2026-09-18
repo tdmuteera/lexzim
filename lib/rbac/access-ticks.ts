@@ -14,12 +14,17 @@ export type AccessTick = {
  * if they are not in this map.
  */
 export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
-  "dashboard.view": ["dashboard.view"],
+  "dashboard.view": [
+    "dashboard.view",
+    "knowledge.reports.view",
+    "knowledge.reports.manage",
+  ],
   "clients.view": ["clients.view", "clients.create", "clients.edit"],
   "clients.view_all": ["clients.view_all"],
   "clients.kyc.manage": ["clients.kyc.manage"],
   "clients.delete": ["clients.delete"],
-  "matters.view": ["matters.view", "matters.create", "matters.edit", "matters.view_all"],
+  "matters.view": ["matters.view", "matters.create", "matters.edit"],
+  "matters.view_all": ["matters.view_all"],
   "documents.view": [
     "documents.view",
     "documents.manage",
@@ -67,6 +72,12 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     section: "Practice",
     label: "View all clients",
     hint: "See every firm client. Without this tick, users only see clients they are responsible for or linked to via a matter team.",
+  },
+  {
+    code: "matters.view_all",
+    section: "Practice",
+    label: "View all matters",
+    hint: "See every firm matter and firm-wide caseload. Without this tick, lawyers only see matters they are responsible for or on the matter team.",
   },
   {
     code: "clients.delete",

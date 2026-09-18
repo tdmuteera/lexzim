@@ -151,7 +151,8 @@ export function KnowledgeReportsView() {
           <div>
             <h3>Knowledge reports</h3>
             <p className="panel-subtitle muted">
-              Event, training, and business-development reports. Separate from AI knowledge packs.
+              Event, training, and business-development reports for the whole firm.
+              Anyone can upload a PDF or file so colleagues can learn from it.
             </p>
           </div>
           <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>

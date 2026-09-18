@@ -125,28 +125,37 @@ export async function getDashboardCommandKpis(input: {
   firmId: string;
   userId: string;
   viewAll: boolean;
+  /** When false, active/new client counts are limited to allocated clients. */
+  clientViewAll?: boolean;
 }) {
   const db = getDb();
   const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+  const clientViewAll = input.clientViewAll ?? input.viewAll;
   const now = new Date();
   const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  let clientIds: string[] | null = null;
+  if (!clientViewAll) {
+    const { listAccessibleClientIds } = await import("@/lib/repos/clients");
+    clientIds = await listAccessibleClientIds(input.firmId, input.userId);
+  }
+
+  const clientBase = and(
+    eq(clients.firmId, input.firmId),
+    isNull(clients.archivedAt),
+    clientIds ? inArray(clients.id, clientIds.length ? clientIds : ["00000000-0000-0000-0000-000000000000"]) : undefined,
+  );
+
   const [clientCount] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clients)
-    .where(and(eq(clients.firmId, input.firmId), isNull(clients.archivedAt)));
+    .where(clientBase);
 
   const [newClients] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clients)
-    .where(
-      and(
-        eq(clients.firmId, input.firmId),
-        isNull(clients.archivedAt),
-        gte(clients.createdAt, monthStart),
-      ),
-    );
+    .where(and(clientBase, gte(clients.createdAt, monthStart)));
 
   const [highPriority] = await db
     .select({ count: sql<number>`count(*)::int` })

@@ -240,6 +240,8 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
   managing_partner: allCodes,
   senior_associate: except(allCodes, [
     "users.manage",
+    "matters.view_all",
+    "clients.view_all",
     "trust.manage",
     "settings.manage",
     "ai.manage_settings",
@@ -262,6 +264,7 @@ export const ROLE_PERMISSION_MATRIX: Record<RoleCode, PermissionCode[]> = {
     "crm.view",
     "ai.use",
     "knowledge.reports.view",
+    "knowledge.reports.manage",
     "finance.requisitions.view",
     "finance.requisitions.request",
   ],

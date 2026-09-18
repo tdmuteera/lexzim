@@ -54,6 +54,9 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   set.add("dashboard.view");
   set.add("clients.delete");
   set.add("clients.view_all");
+  set.add("matters.view_all");
+  set.add("knowledge.reports.view");
+  set.add("knowledge.reports.manage");
   set.add("finance.view_all_client_accounts");
   set.add("finance.payments.view");
   set.add("finance.payments.create");
@@ -84,6 +87,17 @@ function withFinanceDeskPhase11(codes: string[]): string[] {
   set.add("finance.requisitions.approve");
   set.add("finance.requisitions.pay");
   set.add("finance.commission.view");
+  return [...set];
+}
+
+/** Training / event reports: anyone with a dashboard can view and upload. */
+function withKnowledgeReportsForEveryone(codes: string[]): string[] {
+  const set = new Set(codes);
+  if (!set.has("dashboard.view") && !set.has("knowledge.reports.view")) {
+    return codes;
+  }
+  set.add("knowledge.reports.view");
+  set.add("knowledge.reports.manage");
   return [...set];
 }
 
@@ -131,14 +145,16 @@ export async function getEffectivePermissionCodes(input: {
     }
   }
 
-  base = withFinanceDeskPhase11(base);
+  base = withKnowledgeReportsForEveryone(withFinanceDeskPhase11(base));
 
   if (input.includeDelegations === false) return base;
 
   const { listActiveDelegationCapabilities } = await import("@/lib/rbac/delegation");
   const delegated = await listActiveDelegationCapabilities(input.firmId, input.userId);
   if (delegated.length === 0) return base;
-  return withFinanceDeskPhase11([...new Set([...base, ...delegated])]);
+  return withKnowledgeReportsForEveryone(
+    withFinanceDeskPhase11([...new Set([...base, ...delegated])]),
+  );
 }
 
 export async function replaceUserPermissionCodes(input: {
@@ -167,6 +183,9 @@ export async function replaceUserPermissionCodes(input: {
   }
   if (isProtectedMp && !unique.includes("clients.view_all")) {
     unique.push("clients.view_all");
+  }
+  if (isProtectedMp && !unique.includes("matters.view_all")) {
+    unique.push("matters.view_all");
   }
   if (isProtectedMp && !unique.includes("finance.view_all_client_accounts")) {
     unique.push("finance.view_all_client_accounts");

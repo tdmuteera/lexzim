@@ -22,6 +22,7 @@ import { syncMeetingRemindersForFirm } from "@/lib/calendar/meeting-notification
 import { getFinanceKpis } from "@/lib/repos/finance-kpis";
 import { getReminders } from "@/lib/repos/reminders";
 import {
+  canViewAllClients,
   canViewAllLawyerPerformance,
   canViewAllMatters,
   canViewFirmRevenue,
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     const session = await requirePermission("dashboard.view");
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
+    const clientViewAll = canViewAllClients(session);
     const isManagingPartner = session.role.code === "managing_partner";
 
     const canClients = hasPermission(session, "clients.view");
@@ -69,7 +71,12 @@ export async function GET(request: Request) {
       taskCounts,
     ] = await Promise.all([
       canMatters
-        ? getDashboardStats({ firmId, userId: session.id, viewAll })
+        ? getDashboardStats({
+            firmId,
+            userId: session.id,
+            viewAll,
+            clientViewAll,
+          })
         : Promise.resolve({
             openMatters: 0,
             closedMatters: 0,
@@ -121,7 +128,12 @@ export async function GET(request: Request) {
       canMatters
         ? getDashboardMatterStatusMix({ firmId, userId: session.id, viewAll })
         : Promise.resolve({ byStatus: {}, total: 0 }),
-      getDashboardCommandKpis({ firmId, userId: session.id, viewAll }),
+      getDashboardCommandKpis({
+        firmId,
+        userId: session.id,
+        viewAll,
+        clientViewAll,
+      }),
       countFirmTasks(firmId, session.id),
     ]);
 
