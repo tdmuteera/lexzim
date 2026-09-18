@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -17,12 +17,6 @@ const API_WARM: Record<string, string> = {
   "/matters": "/api/matters?bucket=open&includeLawyers=1",
   "/clients": "/api/clients",
 };
-
-const ALWAYS_OPEN_SECTIONS = new Set(["Overview"]);
-
-function storageKey(userId: string) {
-  return `lz_nav_sections_${userId}`;
-}
 
 function warmModule(href: string) {
   const api = API_WARM[href];
@@ -60,40 +54,73 @@ export function AppSidebar() {
   const showMenu = Boolean(user) || !isLoading;
   const visibleSections = showMenu ? filterNavSections(can) : [];
   const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useUiStore();
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(
-    {},
-  );
+
+  /** Firm-wide pins: stay expanded for everyone. */
+  const [pinnedSections, setPinnedSections] = useState<string[]>([]);
+  const [canEditPins, setCanEditPins] = useState(false);
+  const [pinBusy, setPinBusy] = useState<string | null>(null);
+
+  /** Session-only opens: expand on click until collapsed again (not persisted). */
+  const [sessionOpen, setSessionOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!user?.id || typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(storageKey(user.id));
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, boolean>;
-      if (parsed && typeof parsed === "object") setCollapsedSections(parsed);
-    } catch {
-      /* ignore */
-    }
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings/nav-pins", { credentials: "include" });
+        const body = (await res.json()) as {
+          ok?: boolean;
+          data?: { pinnedSections?: string[]; canEdit?: boolean };
+        };
+        if (cancelled || !res.ok || !body.ok) return;
+        setPinnedSections(body.data?.pinnedSections ?? []);
+        setCanEditPins(Boolean(body.data?.canEdit));
+      } catch {
+        /* keep defaults: all collapsed */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
-  const persist = useCallback(
-    (next: Record<string, boolean>) => {
-      setCollapsedSections(next);
-      if (!user?.id || typeof window === "undefined") return;
+  // Fresh login / user change: start with modules collapsed (pins still open).
+  useEffect(() => {
+    setSessionOpen({});
+  }, [user?.id]);
+
+  const pinnedSet = useMemo(() => new Set(pinnedSections), [pinnedSections]);
+
+  const togglePin = useCallback(
+    async (title: string, currentlyPinned: boolean) => {
+      if (!canEditPins || pinBusy) return;
+      setPinBusy(title);
       try {
-        window.localStorage.setItem(storageKey(user.id), JSON.stringify(next));
+        const res = await fetch("/api/settings/nav-pins", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section: title, pinned: !currentlyPinned }),
+        });
+        const body = (await res.json()) as {
+          ok?: boolean;
+          data?: { pinnedSections?: string[] };
+        };
+        if (res.ok && body.ok && body.data?.pinnedSections) {
+          setPinnedSections(body.data.pinnedSections);
+          if (!currentlyPinned) {
+            setSessionOpen((prev) => ({ ...prev, [title]: true }));
+          }
+        }
       } catch {
         /* ignore */
+      } finally {
+        setPinBusy(null);
       }
     },
-    [user?.id],
+    [canEditPins, pinBusy],
   );
-
-  function toggleSection(title: string) {
-    if (ALWAYS_OPEN_SECTIONS.has(title)) return;
-    const next = { ...collapsedSections, [title]: !collapsedSections[title] };
-    persist(next);
-  }
 
   const sidebarClass = [
     "sidebar",
@@ -120,15 +147,19 @@ export function AppSidebar() {
           </div>
         ) : (
           visibleSections.map((section) => {
-            const lockedOpen = ALWAYS_OPEN_SECTIONS.has(section.title);
-            const isCollapsed =
-              !sidebarCollapsed &&
-              !lockedOpen &&
-              Boolean(collapsedSections[section.title]);
+            const isPinned = pinnedSet.has(section.title);
             const hasActiveChild = section.items.some((item) =>
               isNavItemActive(pathname, item.href),
             );
+            // Default collapsed. Open if: firm pin, session expand, or current route (unless user closed it).
+            const explicitlyClosed = sessionOpen[section.title] === false;
+            const open =
+              isPinned ||
+              sessionOpen[section.title] === true ||
+              (hasActiveChild && !explicitlyClosed);
+            const isCollapsed = !sidebarCollapsed && !open;
             const showItems = !isCollapsed || sidebarCollapsed;
+
             return (
               <div
                 key={section.title}
@@ -136,20 +167,33 @@ export function AppSidebar() {
                   .filter(Boolean)
                   .join(" ")}
               >
-                {lockedOpen ? (
-                  <div className="nav-section">{section.title}</div>
-                ) : (
+                <div className="nav-section-row">
                   <button
                     type="button"
                     className={[
                       "nav-section",
                       "nav-section-toggle",
                       hasActiveChild ? "has-active" : "",
+                      isPinned ? "is-pinned" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                     aria-expanded={!isCollapsed}
-                    onClick={() => toggleSection(section.title)}
+                    onClick={() => {
+                      if (isPinned) return;
+                      if (open) {
+                        setSessionOpen((prev) => ({ ...prev, [section.title]: false }));
+                      } else {
+                        setSessionOpen((prev) => ({ ...prev, [section.title]: true }));
+                      }
+                    }}
+                    title={
+                      isPinned
+                        ? `${section.title} (pinned open for the firm)`
+                        : open
+                          ? `Collapse ${section.title}`
+                          : `Expand ${section.title}`
+                    }
                   >
                     <span>{section.title}</span>
                     <Icon
@@ -157,7 +201,45 @@ export function AppSidebar() {
                       className={isCollapsed ? "nav-section-chevron" : "nav-section-chevron open"}
                     />
                   </button>
-                )}
+                  {canEditPins ? (
+                    <button
+                      type="button"
+                      className={[
+                        "nav-section-pin",
+                        isPinned ? "is-pinned" : "",
+                        pinBusy === section.title ? "is-busy" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-label={
+                        isPinned
+                          ? `Unpin ${section.title} for the firm`
+                          : `Pin ${section.title} open for the firm`
+                      }
+                      title={
+                        isPinned
+                          ? "Unpin (firm-wide)"
+                          : "Pin open for everyone in the firm"
+                      }
+                      disabled={pinBusy === section.title}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void togglePin(section.title, isPinned);
+                      }}
+                    >
+                      <Icon name="pin" />
+                    </button>
+                  ) : isPinned ? (
+                    <span
+                      className="nav-section-pin is-pinned is-readonly"
+                      title="Pinned open for the firm"
+                      aria-hidden="true"
+                    >
+                      <Icon name="pin" />
+                    </span>
+                  ) : null}
+                </div>
                 {showItems
                   ? section.items.map((item) => {
                       const active = isNavItemActive(pathname, item.href);

@@ -46,6 +46,9 @@ export const BLOCK_DISBURSEMENT_IF_TRUST_SHORT_KEY =
 /** Phase 10: when not "false", matter status open requires latest client conflict = clear. Default ON. */
 export const REQUIRE_CLEAR_CONFLICT_KEY = "require_clear_conflict";
 
+/** Firm-wide sidebar modules pinned open (JSON string array of section titles). */
+export const NAV_PINNED_SECTIONS_KEY = "nav_pinned_sections";
+
 export const PHASE3_FIRM_SETTING_KEYS = [
   DEFAULT_CURRENCY_KEY,
   INVOICE_PREFIX_KEY,
@@ -99,6 +102,36 @@ export async function deleteFirmSetting(firmId: string, key: string): Promise<vo
   await db
     .delete(firmSettings)
     .where(and(eq(firmSettings.firmId, firmId), eq(firmSettings.key, key)));
+}
+
+/** Parse firm-wide pinned sidebar section titles. Empty = all modules start collapsed. */
+export async function getFirmNavPinnedSections(firmId: string): Promise<string[]> {
+  const raw = await getFirmSetting(firmId, NAV_PINNED_SECTIONS_KEY);
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+      .map((s) => s.trim());
+  } catch {
+    return [];
+  }
+}
+
+export async function setFirmNavPinnedSections(
+  firmId: string,
+  sections: string[],
+): Promise<void> {
+  const seen = new Set<string>();
+  const unique = sections
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (!s || seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+  await upsertFirmSetting(firmId, NAV_PINNED_SECTIONS_KEY, JSON.stringify(unique));
 }
 
 export async function listFirmSettingsForExport(

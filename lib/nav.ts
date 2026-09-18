@@ -24,7 +24,8 @@ export type NavIcon =
   | "lock"
   | "scale"
   | "login"
-  | "check";
+  | "check"
+  | "pin";
 
 export type NavItem = {
   href: string;
