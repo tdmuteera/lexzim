@@ -18,6 +18,7 @@ type StaffRow = {
 type DraftRow = {
   communicationEmail: string;
   saving: boolean;
+  testing: boolean;
 };
 
 /**
@@ -54,6 +55,7 @@ export function StaffNotificationEmailsPanel() {
         next[u.id] = {
           communicationEmail: (u.communicationEmail ?? u.email ?? "").trim(),
           saving: false,
+          testing: false,
         };
       }
       setDrafts(next);
@@ -98,7 +100,7 @@ export function StaffNotificationEmailsPanel() {
       const saved = body.data?.communicationEmail ?? draft.communicationEmail.trim();
       setDrafts((prev) => ({
         ...prev,
-        [userId]: { communicationEmail: saved, saving: false },
+        [userId]: { ...prev[userId]!, communicationEmail: saved, saving: false },
       }));
       setRows((prev) =>
         prev.map((r) => (r.id === userId ? { ...r, communicationEmail: saved } : r)),
@@ -110,6 +112,44 @@ export function StaffNotificationEmailsPanel() {
       setDrafts((prev) => ({
         ...prev,
         [userId]: { ...prev[userId]!, saving: false },
+      }));
+    }
+  }
+
+  async function testOne(userId: string) {
+    const draft = drafts[userId];
+    const email = draft?.communicationEmail.trim();
+    if (!email) {
+      toast("Enter a notification email before sending a test.");
+      return;
+    }
+    setDrafts((prev) => ({
+      ...prev,
+      [userId]: { ...prev[userId]!, testing: true },
+    }));
+    try {
+      const res = await fetch(`/api/users/${userId}/communication-email/test`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        data?: { to?: string; from?: string };
+        error?: { message?: string };
+      };
+      if (!res.ok || !body.ok) {
+        toast(body.error?.message ?? "Could not send test email.");
+        return;
+      }
+      toast(`Test email sent to ${body.data?.to ?? email}.`);
+    } catch {
+      toast("Could not send test email.");
+    } finally {
+      setDrafts((prev) => ({
+        ...prev,
+        [userId]: { ...prev[userId]!, testing: false },
       }));
     }
   }
@@ -127,9 +167,10 @@ export function StaffNotificationEmailsPanel() {
         <div className="settings-form-head">
           <p className="settings-lede">
             Set the address LexZim uses for each person&apos;s task assignments, invoice approvals,
-            requisitions, and calendar reminders. This can differ from their login email. Outbound
+            requisitions, and calendar notices. This can differ from their login email. Outbound
             mail is sent through Settings → Email and shows the firm as sender (for example{" "}
-            <strong>T Pfigu Attorneys</strong>).
+            <strong>T Pfigu Attorneys</strong>). Use <strong>Send test mail</strong> to confirm how
+            it looks on their phone.
           </p>
           <aside className="settings-hint settings-callout" style={{ marginTop: "0.75rem" }}>
             There is no separate webhook. Recipients are these notification emails. People can also
@@ -153,6 +194,7 @@ export function StaffNotificationEmailsPanel() {
           <div style={{ display: "grid", gap: "0.85rem" }}>
             {rows.map((u) => {
               const draft = drafts[u.id];
+              const busy = Boolean(draft?.saving || draft?.testing);
               return (
                 <div
                   key={u.id}
@@ -189,6 +231,7 @@ export function StaffNotificationEmailsPanel() {
                           [u.id]: {
                             communicationEmail: e.target.value,
                             saving: prev[u.id]?.saving ?? false,
+                            testing: prev[u.id]?.testing ?? false,
                           },
                         }))
                       }
@@ -196,14 +239,22 @@ export function StaffNotificationEmailsPanel() {
                       style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
                     />
                   </label>
-                  <div className="settings-actions">
+                  <div className="settings-actions" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={draft?.saving}
+                      disabled={busy}
                       onClick={() => void saveOne(u.id)}
                     >
                       {draft?.saving ? "Saving…" : "Save"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void testOne(u.id)}
+                    >
+                      {draft?.testing ? "Sending…" : "Send test mail"}
                     </Button>
                   </div>
                 </div>

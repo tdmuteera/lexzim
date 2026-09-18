@@ -672,6 +672,21 @@ export async function createCalendarEvent(
   if (visibility === "people") {
     await replaceEventShares(firmId, event.id, input.sharedUserIds ?? []);
   }
+
+  try {
+    const { notifyCalendarEventCreated } = await import(
+      "@/lib/calendar/calendar-event-emails"
+    );
+    await notifyCalendarEventCreated({
+      firmId,
+      eventId: event.id,
+      createdByUserId: userId,
+      sharedUserIds: visibility === "people" ? (input.sharedUserIds ?? []) : [],
+    });
+  } catch {
+    // SMTP / notify must never roll back event create
+  }
+
   return event;
 }
 

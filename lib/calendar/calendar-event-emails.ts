@@ -224,6 +224,132 @@ export async function sendCalendarEventEmailsForFirm(
   return { slot, emailed, skipped };
 }
 
+/**
+ * On event create: email the creator and everyone shared on the event
+ * with the title and key details. Best-effort (does not throw to callers).
+ */
+export async function notifyCalendarEventCreated(input: {
+  firmId: string;
+  eventId: string;
+  createdByUserId: string;
+  sharedUserIds?: string[];
+}): Promise<{ emailed: number; emailFailed: number }> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      event: calendarEvents,
+      clientType: clients.clientType,
+      clientFullName: clients.fullName,
+      clientLegalName: clients.legalName,
+      clientTradingName: clients.tradingName,
+      matterTitle: matters.title,
+      matterNumber: matters.matterNumber,
+    })
+    .from(calendarEvents)
+    .leftJoin(
+      clients,
+      and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, input.firmId)),
+    )
+    .leftJoin(
+      matters,
+      and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, input.firmId)),
+    )
+    .where(
+      and(eq(calendarEvents.firmId, input.firmId), eq(calendarEvents.id, input.eventId)),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return { emailed: 0, emailFailed: 0 };
+
+  const shareIds =
+    input.sharedUserIds ??
+    (
+      await db
+        .select({ userId: calendarEventShares.userId })
+        .from(calendarEventShares)
+        .where(
+          and(
+            eq(calendarEventShares.firmId, input.firmId),
+            eq(calendarEventShares.eventId, input.eventId),
+          ),
+        )
+    ).map((r) => r.userId);
+
+  const recipients = new Set<string>();
+  if (input.createdByUserId) recipients.add(input.createdByUserId);
+  for (const uid of shareIds) {
+    if (uid) recipients.add(uid);
+  }
+  if (!recipients.size) return { emailed: 0, emailFailed: 0 };
+
+  const when = row.event.startsAt.toLocaleString("en-GB", {
+    timeZone: CALENDAR_TZ,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const endWhen = row.event.endsAt
+    ? row.event.endsAt.toLocaleString("en-GB", {
+        timeZone: CALENDAR_TZ,
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+  const clientLabel =
+    row.clientType != null
+      ? clientDisplayName({
+          clientType: row.clientType,
+          fullName: row.clientFullName,
+          legalName: row.clientLegalName,
+          tradingName: row.clientTradingName,
+        })
+      : null;
+
+  const detailLines = [
+    `A calendar event was created.`,
+    `Title: ${row.event.title}`,
+    `When: ${when}${endWhen ? ` to ${endWhen}` : ""}${row.event.allDay ? " (all day)" : ""}`,
+    row.event.location ? `Location: ${row.event.location}` : null,
+    clientLabel ? `Client: ${clientLabel}` : null,
+    row.matterNumber
+      ? `Matter: ${row.matterNumber}${row.matterTitle ? ` · ${row.matterTitle}` : ""}`
+      : row.matterTitle
+        ? `Matter: ${row.matterTitle}`
+        : null,
+    row.event.description?.trim() ? `Notes: ${row.event.description.trim()}` : null,
+  ].filter(Boolean) as string[];
+
+  const subject = `Event created: ${row.event.title}`;
+  const body = detailLines.join("\n");
+
+  const result = await notifyStaffEvent({
+    firmId: input.firmId,
+    userIds: [...recipients],
+    subject,
+    body,
+    inApp: {
+      type: "calendar_event_created",
+      title: subject,
+      body: detailLines.slice(0, 3).join(" · "),
+      href: "/calendar",
+      metadata: {
+        calendarEventId: row.event.id,
+        slot: "created",
+      },
+    },
+  });
+
+  return { emailed: result.emailed, emailFailed: result.emailFailed };
+}
+
 export async function sendCalendarEventEmailsForAllFirms(opts?: {
   now?: Date;
   forceSlot?: CalendarEmailSlot;
