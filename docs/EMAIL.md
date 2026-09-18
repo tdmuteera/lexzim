@@ -20,6 +20,13 @@ Railway: add `CRON_SECRET`, then schedule two HTTP jobs:
 | 15:00 daily | 17:00 | day before |
 | 06:00 daily | 08:00 | day of |
 
+Production URL (T Pfigu pilot): `https://lexzim-production.up.railway.app/api/cron/calendar-event-emails`  
+Header: `Authorization: Bearer $CRON_SECRET`
+
+Local helpers (secrets stay out of git):
+- `.env.railway` + `ops-calendar-cron-handoff.md` (generated secret + copy-paste)
+- `powershell -File scripts/push-cron-secret.ps1` after `npx @railway/cli login` and `link`
+
 Manual test: `?forceSlot=day_before` or `?forceSlot=day_of` with the same Bearer token.
 
 ## Email transport: firm BYO vs server env

@@ -53,3 +53,7 @@ cookies.txt
 
 # Local DB diagnostics (may contain secrets)
 scripts/find-pooler.ts
+
+# Local cron secret handoff
+ops-calendar-cron-handoff.md
+
