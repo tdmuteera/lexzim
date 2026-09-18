@@ -6,6 +6,7 @@ import "server-only";
 
 import { writeAuditLog } from "@/lib/auth/audit";
 import { sendFirmEmail } from "@/lib/email/mailer";
+import { getAppPublicUrl } from "@/lib/env";
 import { createStaffNotification } from "@/lib/notifications/staff";
 import { logError } from "@/lib/ops/log";
 import {
@@ -22,6 +23,8 @@ export type NotifyStaffEventInput = {
   userIds: string[];
   subject: string;
   body: string;
+  /** Optional HTML alternative; plain `body` remains the text fallback. */
+  html?: string;
   inApp: {
     type: string;
     title: string;
@@ -130,12 +133,20 @@ export async function notifyStaffEvent(
   let emailFailed = 0;
   let lastEmailError: string | null = null;
 
-  const textBody = [
-    input.body.trim(),
-    input.inApp.href ? `Open in LexZim: ${input.inApp.href}` : null,
-  ]
+  const openHref = input.inApp.href
+    ? (() => {
+        const href = input.inApp.href!;
+        if (/^https?:\/\//i.test(href)) return href;
+        const base = getAppPublicUrl();
+        return base ? `${base}${href.startsWith("/") ? href : `/${href}`}` : href;
+      })()
+    : null;
+
+  const textBody = [input.body.trim(), openHref ? `Open in LexZim: ${openHref}` : null]
     .filter(Boolean)
     .join("\n\n");
+
+  const htmlBody = input.html?.trim() ? input.html.trim() : undefined;
 
   for (const target of targets) {
     try {
@@ -143,6 +154,7 @@ export async function notifyStaffEvent(
         to: target.email,
         subject: input.subject,
         text: textBody,
+        html: htmlBody,
       });
       emailed += 1;
       await writeAuditLog({

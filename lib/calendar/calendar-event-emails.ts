@@ -17,12 +17,140 @@ import {
   matters,
   staffNotifications,
 } from "@/lib/db/schema";
+import { getAppPublicUrl } from "@/lib/env";
 import { notifyStaffEvent } from "@/lib/notifications/notify-staff-event";
 
 export const CALENDAR_EVENT_EMAIL_TYPE = "calendar_event_email";
 export const CALENDAR_TZ = "Africa/Harare";
 
 export type CalendarEmailSlot = "day_before" | "day_of";
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatEventWhen(opts: {
+  startsAt: Date;
+  endsAt: Date | null;
+  allDay: boolean;
+}): string {
+  const dateOpts: Intl.DateTimeFormatOptions = {
+    timeZone: CALENDAR_TZ,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  };
+  const timeOpts: Intl.DateTimeFormatOptions = {
+    timeZone: CALENDAR_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+
+  if (opts.allDay) {
+    const day = opts.startsAt.toLocaleDateString("en-GB", dateOpts);
+    return `${day} · All day`;
+  }
+
+  const startDay = opts.startsAt.toLocaleDateString("en-GB", dateOpts);
+  const startTime = opts.startsAt.toLocaleTimeString("en-GB", timeOpts);
+  if (!opts.endsAt) return `${startDay}, ${startTime}`;
+
+  const endDay = opts.endsAt.toLocaleDateString("en-GB", dateOpts);
+  const endTime = opts.endsAt.toLocaleTimeString("en-GB", timeOpts);
+  if (startDay === endDay) return `${startDay}, ${startTime} to ${endTime}`;
+  return `${startDay}, ${startTime} to ${endDay}, ${endTime}`;
+}
+
+function calendarAppLink(): string {
+  const base = getAppPublicUrl();
+  return base ? `${base}/calendar` : "/calendar";
+}
+
+function buildCalendarEventCreatedBodies(input: {
+  title: string;
+  when: string;
+  location?: string | null;
+  client?: string | null;
+  matter?: string | null;
+  notes?: string | null;
+}): { text: string; html: string } {
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "Title", value: input.title },
+    { label: "When", value: input.when },
+  ];
+  if (input.location?.trim()) rows.push({ label: "Location", value: input.location.trim() });
+  if (input.client?.trim()) rows.push({ label: "Client", value: input.client.trim() });
+  if (input.matter?.trim()) rows.push({ label: "Matter", value: input.matter.trim() });
+  if (input.notes?.trim()) rows.push({ label: "Notes", value: input.notes.trim() });
+
+  const link = calendarAppLink();
+  const text = [
+    "A calendar event was created.",
+    "",
+    ...rows.map((r) => `${r.label}: ${r.value}`),
+  ].join("\n");
+
+  const detailRowsHtml = rows
+    .map(
+      (r) => `
+      <tr>
+        <td style="padding:8px 16px 8px 0;vertical-align:top;width:96px;color:#5b6b7c;font-size:13px;font-weight:700;letter-spacing:0.02em;">
+          ${escapeHtml(r.label)}
+        </td>
+        <td style="padding:8px 0;vertical-align:top;color:#122433;font-size:14px;line-height:1.45;">
+          ${escapeHtml(r.value).replace(/\n/g, "<br/>")}
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f6f9;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6f9;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #d9e2ec;border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="background:#0e2f4a;padding:18px 24px;">
+              <div style="color:#9fb4c7;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">LexZim Calendar</div>
+              <div style="margin-top:6px;color:#ffffff;font-size:18px;font-weight:700;line-height:1.3;">Event created</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 24px 8px 24px;color:#122433;font-size:15px;line-height:1.5;">
+              A calendar event was created.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 24px 8px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e6edf3;border-bottom:1px solid #e6edf3;">
+                ${detailRowsHtml}
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 24px 24px 24px;">
+              <a href="${escapeHtml(link)}" style="display:inline-block;background:#1b6f6d;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:6px;">
+                Open in LexZim
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { text, html };
+}
 
 function harareParts(d: Date): { y: number; m: number; day: number; hour: number } {
   const fmt = new Intl.DateTimeFormat("en-GB", {
@@ -283,26 +411,11 @@ export async function notifyCalendarEventCreated(input: {
   }
   if (!recipients.size) return { emailed: 0, emailFailed: 0 };
 
-  const when = row.event.startsAt.toLocaleString("en-GB", {
-    timeZone: CALENDAR_TZ,
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+  const when = formatEventWhen({
+    startsAt: row.event.startsAt,
+    endsAt: row.event.endsAt,
+    allDay: Boolean(row.event.allDay),
   });
-  const endWhen = row.event.endsAt
-    ? row.event.endsAt.toLocaleString("en-GB", {
-        timeZone: CALENDAR_TZ,
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
   const clientLabel =
     row.clientType != null
       ? clientDisplayName({
@@ -312,33 +425,31 @@ export async function notifyCalendarEventCreated(input: {
           tradingName: row.clientTradingName,
         })
       : null;
+  const matterLabel = row.matterNumber
+    ? `${row.matterNumber}${row.matterTitle ? ` · ${row.matterTitle}` : ""}`
+    : row.matterTitle;
 
-  const detailLines = [
-    `A calendar event was created.`,
-    `Title: ${row.event.title}`,
-    `When: ${when}${endWhen ? ` to ${endWhen}` : ""}${row.event.allDay ? " (all day)" : ""}`,
-    row.event.location ? `Location: ${row.event.location}` : null,
-    clientLabel ? `Client: ${clientLabel}` : null,
-    row.matterNumber
-      ? `Matter: ${row.matterNumber}${row.matterTitle ? ` · ${row.matterTitle}` : ""}`
-      : row.matterTitle
-        ? `Matter: ${row.matterTitle}`
-        : null,
-    row.event.description?.trim() ? `Notes: ${row.event.description.trim()}` : null,
-  ].filter(Boolean) as string[];
+  const { text, html } = buildCalendarEventCreatedBodies({
+    title: row.event.title,
+    when,
+    location: row.event.location,
+    client: clientLabel,
+    matter: matterLabel,
+    notes: row.event.description?.trim() || null,
+  });
 
   const subject = `Event created: ${row.event.title}`;
-  const body = detailLines.join("\n");
 
   const result = await notifyStaffEvent({
     firmId: input.firmId,
     userIds: [...recipients],
     subject,
-    body,
+    body: text,
+    html,
     inApp: {
       type: "calendar_event_created",
       title: subject,
-      body: detailLines.slice(0, 3).join(" · "),
+      body: `${row.event.title} · ${when}`,
       href: "/calendar",
       metadata: {
         calendarEventId: row.event.id,
