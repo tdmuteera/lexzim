@@ -13,7 +13,8 @@ import {
   createPaymentIntake,
   listPaymentIntakes,
 } from "@/lib/repos/payment-intakes";
-import { requirePermission } from "@/lib/rbac/guards";
+import { listAccessibleClientIds } from "@/lib/repos/clients";
+import { hasPermission, requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 const MIGRATION_HINT =
@@ -43,8 +44,12 @@ function serializeIntakeListItem(row: Awaited<ReturnType<typeof listPaymentIntak
 
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("finance.payments.view");
+    const session = await requireAny([
+      "finance.payments.view",
+      "billing.my_clients.view",
+    ]);
     const firmId = tenantFirmId(session);
+    const fullDesk = hasPermission(session, "finance.payments.view");
     const url = new URL(request.url);
 
     const fromRaw = url.searchParams.get("from");
@@ -64,6 +69,10 @@ export async function GET(request: Request) {
         minAmountCents: minRaw ? dollarsToCents(minRaw) ?? undefined : undefined,
         maxAmountCents: maxRaw ? dollarsToCents(maxRaw) ?? undefined : undefined,
       });
+      if (!fullDesk) {
+        const allowed = new Set(await listAccessibleClientIds(firmId, session.id));
+        items = items.filter((row) => allowed.has(row.intake.clientId));
+      }
     } catch (err) {
       if (isMissingRelationError(err)) {
         migrationNeeded = true;
@@ -81,6 +90,7 @@ export async function GET(request: Request) {
       items: items.map(serializeIntakeListItem),
       migrationNeeded,
       migrationHint: migrationNeeded ? MIGRATION_HINT : null,
+      readOnly: !fullDesk,
     });
   } catch (err) {
     if (isMissingRelationError(err)) {

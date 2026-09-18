@@ -8,7 +8,7 @@ import {
   type DebtorsFilters,
 } from "@/lib/repos/debtors";
 import { assertInvoiceMatterAccess } from "@/lib/billing/access";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import { canViewAllMatters, hasPermission, requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 function parseDate(value: string | null): Date | undefined {
@@ -40,13 +40,14 @@ function filtersFromUrl(url: URL): DebtorsFilters {
 
 /**
  * GET /api/finance/debtors?format=json|csv&matterId=&clientId=&bucket=&from=&to=
- * Permission: billing.view (Finance → Debtors desk).
+ * Permission: billing.view or billing.my_clients.view.
  */
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("billing.view");
+    const session = await requireAny(["billing.view", "billing.my_clients.view"]);
     const firmId = tenantFirmId(session);
-    const viewAll = canViewAllMatters(session);
+    const viewAll =
+      canViewAllMatters(session) && hasPermission(session, "billing.view");
     const url = new URL(request.url);
     const filters = filtersFromUrl(url);
     const format = url.searchParams.get("format") === "csv" ? "csv" : "json";

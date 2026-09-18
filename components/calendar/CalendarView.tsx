@@ -36,6 +36,7 @@ type SerializedEvent = {
   creatorCalendarColor?: string | null;
   creatorFullName?: string | null;
   canEdit?: boolean;
+  isPublicHoliday?: boolean;
   createdBy?: string | null;
 };
 
@@ -83,12 +84,13 @@ type FormState = {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
+const EVENT_TYPE_LABELS: Record<string, string> = {
   hearing: "Hearing",
   appointment: "Appointment",
   filing: "Filing",
   deadline: "Deadline",
   other: "Other",
+  holiday: "Public holiday",
 };
 
 const VISIBILITY_LABELS: Record<CalendarVisibility, string> = {
@@ -429,6 +431,10 @@ export function CalendarView() {
       window.location.href = `/matters/${ev.matterId}`;
       return;
     }
+    if (ev.isPublicHoliday || ev.id.startsWith("holiday:")) {
+      setSelectedId(ev.id);
+      return;
+    }
     if (!canManage || ev.canEdit === false) {
       setSelectedId(ev.id);
       return;
@@ -566,7 +572,11 @@ export function CalendarView() {
       : "New event";
 
   const canEditSelected = selected
-    ? selected.canEdit !== false && canManage && !selected.id.startsWith("matter-hearing:")
+    ? selected.canEdit !== false &&
+      canManage &&
+      !selected.id.startsWith("matter-hearing:") &&
+      !selected.isPublicHoliday &&
+      !selected.id.startsWith("holiday:")
     : false;
 
   return (

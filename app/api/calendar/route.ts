@@ -18,6 +18,7 @@ import {
   listCalendarEvents,
   type CalendarListScope,
 } from "@/lib/repos/calendar";
+import { listFirmHolidaysInRange } from "@/lib/repos/crm";
 import { userCanAccessMatter } from "@/lib/repos/matters";
 import { canViewAllMatters, hasPermission, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
@@ -36,6 +37,48 @@ function parseScope(value: string | null): CalendarListScope {
     return value;
   }
   return "all";
+}
+
+function serializePublicHoliday(row: {
+  id: string;
+  firmId: string;
+  holidayDate: Date;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const day = new Date(row.holidayDate);
+  const start = new Date(
+    Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 0, 0, 0),
+  );
+  const end = new Date(
+    Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59),
+  );
+  return {
+    id: `holiday:${row.id}`,
+    firmId: row.firmId,
+    matterId: null,
+    clientId: null,
+    clientDisplayName: null,
+    matterNumber: null,
+    matterTitle: null,
+    eventType: "holiday",
+    title: row.name,
+    description: "Public holiday (firm-wide)",
+    location: null,
+    startsAt: start.toISOString(),
+    endsAt: end.toISOString(),
+    allDay: true,
+    visibility: "firm",
+    sharedUserIds: [],
+    creatorCalendarColor: "#b45309",
+    creatorFullName: null,
+    canEdit: false,
+    isPublicHoliday: true,
+    createdBy: null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export async function GET(request: Request) {
@@ -80,20 +123,28 @@ export async function GET(request: Request) {
 
     void syncMeetingRemindersForFirm(firmId).catch(() => undefined);
 
+    const eventItems = rows.map((r) => {
+      const creatorCalendarColor =
+        r.creatorCalendarColor ??
+        (r.event.createdBy === session.id ? effectiveMyColor : DEFAULT_CALENDAR_COLOR);
+      return serializeCalendarEventRow({
+        ...r,
+        creatorCalendarColor,
+        canEdit: canEditCalendarEvent(r.event, session.id, {
+          canManage,
+          sharedUserIds: r.sharedUserIds ?? [],
+        }),
+      });
+    });
+
+    let holidayItems: ReturnType<typeof serializePublicHoliday>[] = [];
+    if (!eventType && !matterId && from && to) {
+      const holidays = await listFirmHolidaysInRange(firmId, from, to);
+      holidayItems = holidays.map(serializePublicHoliday);
+    }
+
     return jsonOk({
-      items: rows.map((r) => {
-        const creatorCalendarColor =
-          r.creatorCalendarColor ??
-          (r.event.createdBy === session.id ? effectiveMyColor : DEFAULT_CALENDAR_COLOR);
-        return serializeCalendarEventRow({
-          ...r,
-          creatorCalendarColor,
-          canEdit: canEditCalendarEvent(r.event, session.id, {
-            canManage,
-            sharedUserIds: r.sharedUserIds ?? [],
-          }),
-        });
-      }),
+      items: [...eventItems, ...holidayItems],
       myCalendarColor: effectiveMyColor,
     });
   } catch (err) {

@@ -98,6 +98,10 @@ export function StaffView() {
     "",
     "",
   ]);
+  const [copiedAccess, setCopiedAccess] = useState<{
+    ticks: string[];
+    fromName: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -836,12 +840,58 @@ export function StaffView() {
                         </span>
                       </label>
                       {editing.isSystemUser ? (
-                        <AccessChecklist
-                          selected={editTicks}
-                          onChange={setEditTicks}
-                          disabled={saving}
-                          lockUsersManage={u.isProtectedMp || u.id === me?.id}
-                        />
+                        <>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.4rem",
+                              marginBottom: "0.5rem",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saving || editTicks.length === 0}
+                              onClick={() => {
+                                setCopiedAccess({
+                                  ticks: [...editTicks],
+                                  fromName: u.fullName,
+                                });
+                                toast(`Copied access from ${u.fullName}.`);
+                              }}
+                            >
+                              Copy access
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saving || !copiedAccess}
+                              onClick={() => {
+                                if (!copiedAccess) return;
+                                setEditTicks([...copiedAccess.ticks]);
+                                toast(
+                                  `Pasted access from ${copiedAccess.fromName}. Save to apply.`,
+                                );
+                              }}
+                            >
+                              Paste access
+                            </Button>
+                            {copiedAccess ? (
+                              <span className="muted" style={{ fontSize: "0.75rem" }}>
+                                Clipboard: {copiedAccess.fromName} (
+                                {copiedAccess.ticks.length} ticks)
+                              </span>
+                            ) : null}
+                          </div>
+                          <AccessChecklist
+                            selected={editTicks}
+                            onChange={setEditTicks}
+                            disabled={saving}
+                            lockUsersManage={u.isProtectedMp || u.id === me?.id}
+                          />
+                        </>
                       ) : null}
                       <div className="hr-form-actions">
                         <Button size="sm" onClick={() => void onSaveAccess()} disabled={saving}>

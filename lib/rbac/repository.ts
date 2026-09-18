@@ -102,6 +102,31 @@ function withKnowledgeReportsForEveryone(codes: string[]): string[] {
 }
 
 /**
+ * Practice staff get self-service leave/advances without full HR.
+ * Lawyers also get my-clients finance (invoices / payments / debtors).
+ */
+function withPracticeSelfService(roleCode: string, codes: string[]): string[] {
+  const practice = new Set([
+    "senior_associate",
+    "junior_associate",
+    "secretary",
+  ]);
+  if (!practice.has(roleCode)) return codes;
+  const set = new Set(codes);
+  if (set.has("dashboard.view")) {
+    set.add("hr.leave.request");
+    set.add("hr.advances.request");
+  }
+  if (
+    (roleCode === "senior_associate" || roleCode === "junior_associate") &&
+    set.has("matters.view")
+  ) {
+    set.add("billing.my_clients.view");
+  }
+  return [...set];
+}
+
+/**
  * Per-person grants if any rows exist; otherwise the role matrix.
  * Managing Partner role always keeps users.manage and dashboard.view.
  */
@@ -145,15 +170,21 @@ export async function getEffectivePermissionCodes(input: {
     }
   }
 
-  base = withKnowledgeReportsForEveryone(withFinanceDeskPhase11(base));
+  base = withPracticeSelfService(
+    input.roleCode,
+    withKnowledgeReportsForEveryone(withFinanceDeskPhase11(base)),
+  );
 
   if (input.includeDelegations === false) return base;
 
   const { listActiveDelegationCapabilities } = await import("@/lib/rbac/delegation");
   const delegated = await listActiveDelegationCapabilities(input.firmId, input.userId);
   if (delegated.length === 0) return base;
-  return withKnowledgeReportsForEveryone(
-    withFinanceDeskPhase11([...new Set([...base, ...delegated])]),
+  return withPracticeSelfService(
+    input.roleCode,
+    withKnowledgeReportsForEveryone(
+      withFinanceDeskPhase11([...new Set([...base, ...delegated])]),
+    ),
   );
 }
 

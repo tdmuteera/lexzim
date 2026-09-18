@@ -5,9 +5,20 @@
 export type ModuleTab = {
   href: string;
   label: string;
+  /** Primary permission (also used for access-tick labelling when present). */
   permission?: string;
+  /** If set, any one of these permissions grants access to the tab. */
+  anyOf?: string[];
   /** Legacy paths that should highlight this tab (e.g. /billing for Invoicing). */
   aliases?: string[];
+};
+
+export type RoutePermissionRule = {
+  prefix: string;
+  /** Single required permission (legacy). */
+  permission?: string;
+  /** Any one of these is enough. */
+  anyOf?: string[];
 };
 
 export const FINANCE_TABS: ModuleTab[] = [
@@ -15,12 +26,14 @@ export const FINANCE_TABS: ModuleTab[] = [
     href: "/finance/invoicing",
     label: "Invoicing",
     permission: "billing.view",
+    anyOf: ["billing.view", "billing.my_clients.view"],
     aliases: ["/billing"],
   },
   {
     href: "/finance/debtors",
     label: "Debtors",
     permission: "billing.view",
+    anyOf: ["billing.view", "billing.my_clients.view"],
   },
   {
     href: "/finance/trust",
@@ -32,6 +45,7 @@ export const FINANCE_TABS: ModuleTab[] = [
     href: "/finance/payments",
     label: "Payments",
     permission: "finance.payments.view",
+    anyOf: ["finance.payments.view", "billing.my_clients.view"],
   },
   {
     href: "/finance/client-accounts",
@@ -63,33 +77,23 @@ export const FINANCE_TABS: ModuleTab[] = [
     label: "Commission",
     permission: "finance.commission.view",
   },
-  {
-    href: "/finance/quotations",
-    label: "Quotations",
-    permission: "billing.view",
-  },
-  {
-    href: "/finance/petty-cash",
-    label: "Petty cash",
-    permission: "finance.view",
-  },
-  {
-    href: "/finance/creditors",
-    label: "Creditors",
-    permission: "finance.view",
-  },
-  {
-    href: "/finance/accounting",
-    label: "Accounting",
-    permission: "finance.gl.view",
-  },
 ];
 
 export const HR_TABS: ModuleTab[] = [
   { href: "/hr/staff", label: "Staff records", permission: "hr.view" },
   { href: "/hr/contracts", label: "Contracts", permission: "hr.view" },
-  { href: "/hr/leave", label: "Leave", permission: "hr.view" },
-  { href: "/hr/advances", label: "Salary advances", permission: "hr.view" },
+  {
+    href: "/hr/leave",
+    label: "Leave",
+    permission: "hr.leave.request",
+    anyOf: ["hr.leave.request", "hr.view"],
+  },
+  {
+    href: "/hr/advances",
+    label: "Salary advances",
+    permission: "hr.advances.request",
+    anyOf: ["hr.advances.request", "hr.view"],
+  },
   { href: "/hr/payroll", label: "Payroll", permission: "hr.view" },
 ];
 
@@ -99,13 +103,22 @@ export const WORKFLOW_TABS: ModuleTab[] = [
 ];
 
 /** Longest-prefix wins; order from most specific to least. */
-export const ROUTE_PERMISSION_RULES: { prefix: string; permission: string }[] = [
-  { prefix: "/finance/invoicing", permission: "billing.view" },
-  { prefix: "/billing", permission: "billing.view" },
-  { prefix: "/finance/debtors", permission: "billing.view" },
+export const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
+  {
+    prefix: "/finance/invoicing",
+    anyOf: ["billing.view", "billing.my_clients.view"],
+  },
+  { prefix: "/billing", anyOf: ["billing.view", "billing.my_clients.view"] },
+  {
+    prefix: "/finance/debtors",
+    anyOf: ["billing.view", "billing.my_clients.view"],
+  },
   { prefix: "/finance/trust", permission: "trust.view" },
   { prefix: "/trust", permission: "trust.view" },
-  { prefix: "/finance/payments", permission: "finance.payments.view" },
+  {
+    prefix: "/finance/payments",
+    anyOf: ["finance.payments.view", "billing.my_clients.view"],
+  },
   { prefix: "/finance/client-accounts", permission: "finance.view" },
   { prefix: "/finance/requisitions", permission: "finance.requisitions.view" },
   { prefix: "/finance/commission", permission: "finance.commission.view" },
@@ -119,10 +132,13 @@ export const ROUTE_PERMISSION_RULES: { prefix: string; permission: string }[] = 
   { prefix: "/finance", permission: "finance.view" },
   { prefix: "/hr/staff", permission: "hr.view" },
   { prefix: "/hr/contracts", permission: "hr.view" },
-  { prefix: "/hr/leave", permission: "hr.view" },
-  { prefix: "/hr/advances", permission: "hr.view" },
+  { prefix: "/hr/leave", anyOf: ["hr.leave.request", "hr.view"] },
+  { prefix: "/hr/advances", anyOf: ["hr.advances.request", "hr.view"] },
   { prefix: "/hr/payroll", permission: "hr.view" },
-  { prefix: "/hr", permission: "hr.view" },
+  {
+    prefix: "/hr",
+    anyOf: ["hr.view", "hr.leave.request", "hr.advances.request"],
+  },
   { prefix: "/workflow/tasks", permission: "dashboard.view" },
   { prefix: "/workflow/approvals", permission: "dashboard.view" },
   { prefix: "/workflow", permission: "dashboard.view" },
@@ -135,13 +151,25 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
-export function getRoutePermissionFromRules(pathname: string): string | undefined {
+function rulePermissions(rule: RoutePermissionRule): string[] {
+  if (rule.anyOf?.length) return rule.anyOf;
+  if (rule.permission) return [rule.permission];
+  return [];
+}
+
+/** Permissions that grant a route (any one is enough). */
+export function getRoutePermissionsFromRules(pathname: string): string[] {
   for (const rule of ROUTE_PERMISSION_RULES) {
     if (matchesPrefix(pathname, rule.prefix)) {
-      return rule.permission;
+      return rulePermissions(rule);
     }
   }
-  return undefined;
+  return [];
+}
+
+/** @deprecated Prefer getRoutePermissionsFromRules; returns first code for display. */
+export function getRoutePermissionFromRules(pathname: string): string | undefined {
+  return getRoutePermissionsFromRules(pathname)[0];
 }
 
 export function isModuleTabActive(pathname: string, tab: ModuleTab): boolean {
@@ -149,9 +177,15 @@ export function isModuleTabActive(pathname: string, tab: ModuleTab): boolean {
   return (tab.aliases ?? []).some((alias) => matchesPrefix(pathname, alias));
 }
 
+export function tabIsAllowed(tab: ModuleTab, can: (code: string) => boolean): boolean {
+  if (tab.anyOf?.length) return tab.anyOf.some((code) => can(code));
+  if (tab.permission) return can(tab.permission);
+  return true;
+}
+
 export function filterModuleTabs(
   tabs: ModuleTab[],
   can: (code: string) => boolean,
 ): ModuleTab[] {
-  return tabs.filter((tab) => !tab.permission || can(tab.permission));
+  return tabs.filter((tab) => tabIsAllowed(tab, can));
 }

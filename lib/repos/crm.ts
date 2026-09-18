@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, exists, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { clientDisplayLabel, clientDisplayName } from "@/lib/clients/display";
 import { zwHolidayDatesForYear } from "@/lib/crm/zw-holidays";
 import { getDb } from "@/lib/db";
@@ -236,6 +236,27 @@ export async function listFirmHolidays(firmId: string, year?: number) {
     .select()
     .from(firmHolidays)
     .where(and(...conditions))
+    .orderBy(asc(firmHolidays.holidayDate));
+}
+
+/** Inclusive UTC range filter on holiday_date (for calendar month/agenda). */
+export async function listFirmHolidaysInRange(
+  firmId: string,
+  from: Date,
+  to: Date,
+) {
+  await ensureFirmHolidaysSeeded(firmId);
+  const db = getDb();
+  return db
+    .select()
+    .from(firmHolidays)
+    .where(
+      and(
+        eq(firmHolidays.firmId, firmId),
+        gte(firmHolidays.holidayDate, from),
+        lte(firmHolidays.holidayDate, to),
+      ),
+    )
     .orderBy(asc(firmHolidays.holidayDate));
 }
 

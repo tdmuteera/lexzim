@@ -9,7 +9,7 @@ import {
   listSalaryAdvances,
   notifyAdvanceApprovers,
 } from "@/lib/repos/hr-salary-advances";
-import { hasPermission, requirePermission } from "@/lib/rbac/guards";
+import { hasPermission, requireAny } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 function serializeAdvance(
@@ -61,13 +61,20 @@ function serializeAdvance(
  */
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny(["hr.advances.request", "hr.view"]);
     const firmId = tenantFirmId(session);
+    const canViewAll = hasPermission(session, "hr.view");
     const url = new URL(request.url);
-    const staffProfileId = url.searchParams.get("staffProfileId")?.trim() || undefined;
+    const self = await getStaffProfileByUserId(firmId, session.id);
+    let staffProfileId = url.searchParams.get("staffProfileId")?.trim() || undefined;
+    if (!canViewAll) {
+      if (!self) {
+        throw new AuthError("forbidden", "No HR staff profile is linked to your login.");
+      }
+      staffProfileId = self.profile.id;
+    }
     const status = url.searchParams.get("status")?.trim() || undefined;
     const rows = await listSalaryAdvances(firmId, { staffProfileId, status });
-    const self = await getStaffProfileByUserId(firmId, session.id);
     return jsonOk({
       items: rows.map((r) =>
         serializeAdvance({
@@ -86,7 +93,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny(["hr.advances.request", "hr.view", "hr.manage"]);
     const firmId = tenantFirmId(session);
     const canManage = hasPermission(session, "hr.manage");
     const body = await request.json();

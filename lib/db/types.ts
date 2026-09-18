@@ -116,6 +116,8 @@ export type PermissionCode =
   | "finance.commission.configure"
   | "hr.view"
   | "hr.manage"
+  | "hr.leave.request"
+  | "hr.advances.request"
   | "crm.view"
   | "crm.manage"
   | "ai.use"
@@ -129,4 +131,5 @@ export type PermissionCode =
   | "knowledge.reports.manage"
   | "invoice.approve"
   | "leave.approve"
-  | "payroll.advance.approve";
+  | "payroll.advance.approve"
+  | "billing.my_clients.view";

@@ -1,7 +1,7 @@
 import { jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { listLeaveTypes, createLeaveType } from "@/lib/repos/hr-leave";
-import { requirePermission } from "@/lib/rbac/guards";
+import { hasPermission, requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /**
@@ -10,9 +10,11 @@ import { tenantFirmId } from "@/lib/tenant/scope";
  */
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("hr.view");
+    const session = await requireAny(["hr.leave.request", "hr.view"]);
     const firmId = tenantFirmId(session);
-    const types = await listLeaveTypes(firmId, { activeOnly: false });
+    const types = await listLeaveTypes(firmId, {
+      activeOnly: !hasPermission(session, "hr.view"),
+    });
     return jsonOk({
       items: types.map((t) => ({
         id: t.id,

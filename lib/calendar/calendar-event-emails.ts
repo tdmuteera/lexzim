@@ -13,14 +13,17 @@ import {
   calendarEventShares,
   calendarEvents,
   clients,
+  firmHolidays,
   firms,
   matters,
   staffNotifications,
+  users,
 } from "@/lib/db/schema";
 import { getAppPublicUrl } from "@/lib/env";
 import { notifyStaffEvent } from "@/lib/notifications/notify-staff-event";
 
 export const CALENDAR_EVENT_EMAIL_TYPE = "calendar_event_email";
+export const CALENDAR_HOLIDAY_EMAIL_TYPE = "calendar_holiday_email";
 export const CALENDAR_TZ = "Africa/Harare";
 
 export type CalendarEmailSlot = "day_before" | "day_of";
@@ -78,6 +81,8 @@ function buildCalendarEventCreatedBodies(input: {
   client?: string | null;
   matter?: string | null;
   notes?: string | null;
+  headline?: string;
+  intro?: string;
 }): { text: string; html: string } {
   const rows: Array<{ label: string; value: string }> = [
     { label: "Title", value: input.title },
@@ -89,11 +94,9 @@ function buildCalendarEventCreatedBodies(input: {
   if (input.notes?.trim()) rows.push({ label: "Notes", value: input.notes.trim() });
 
   const link = calendarAppLink();
-  const text = [
-    "A calendar event was created.",
-    "",
-    ...rows.map((r) => `${r.label}: ${r.value}`),
-  ].join("\n");
+  const intro = input.intro ?? "A calendar event was created.";
+  const headline = input.headline ?? "Event created";
+  const text = [intro, "", ...rows.map((r) => `${r.label}: ${r.value}`)].join("\n");
 
   const detailRowsHtml = rows
     .map(
@@ -120,12 +123,12 @@ function buildCalendarEventCreatedBodies(input: {
           <tr>
             <td style="background:#0e2f4a;padding:18px 24px;">
               <div style="color:#9fb4c7;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">LexZim Calendar</div>
-              <div style="margin-top:6px;color:#ffffff;font-size:18px;font-weight:700;line-height:1.3;">Event created</div>
+              <div style="margin-top:6px;color:#ffffff;font-size:18px;font-weight:700;line-height:1.3;">${escapeHtml(headline)}</div>
             </td>
           </tr>
           <tr>
             <td style="padding:22px 24px 8px 24px;color:#122433;font-size:15px;line-height:1.5;">
-              A calendar event was created.
+              ${escapeHtml(intro)}
             </td>
           </tr>
           <tr>
@@ -202,27 +205,48 @@ async function loadAlreadySentKeys(firmId: string): Promise<Set<string>> {
   const rows = await db
     .select({
       userId: staffNotifications.userId,
+      type: staffNotifications.type,
       metadataJson: staffNotifications.metadataJson,
     })
     .from(staffNotifications)
     .where(
       and(
         eq(staffNotifications.firmId, firmId),
-        eq(staffNotifications.type, CALENDAR_EVENT_EMAIL_TYPE),
+        inArray(staffNotifications.type, [
+          CALENDAR_EVENT_EMAIL_TYPE,
+          CALENDAR_HOLIDAY_EMAIL_TYPE,
+        ]),
       ),
     );
   const keys = new Set<string>();
   for (const row of rows) {
     const meta = row.metadataJson as {
       calendarEventId?: string;
+      holidayId?: string;
       slot?: string;
       userId?: string;
     } | null;
-    if (!meta?.calendarEventId || !meta.slot) continue;
+    const entityId = meta?.calendarEventId ?? meta?.holidayId;
+    if (!entityId || !meta?.slot) continue;
     const uid = meta.userId ?? row.userId ?? "";
-    keys.add(`${meta.calendarEventId}:${meta.slot}:${uid}`);
+    keys.add(`${entityId}:${meta.slot}:${uid}`);
   }
   return keys;
+}
+
+async function listActiveLoginUserIds(firmId: string): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.firmId, firmId),
+        eq(users.isActive, true),
+        eq(users.isSystemUser, true),
+      ),
+    );
+  return rows.map((r) => r.id);
 }
 
 export async function sendCalendarEventEmailsForFirm(
@@ -263,23 +287,27 @@ export async function sendCalendarEventEmailsForFirm(
       ),
     );
 
-  if (!events.length) return { slot, emailed: 0, skipped: 0 };
+  if (!events.length) {
+    // still process public holidays below
+  }
 
   const eventIds = events.map((e) => e.event.id);
   const sharesByEvent = new Map<string, string[]>();
-  const shareRows = await db
-    .select({
-      eventId: calendarEventShares.eventId,
-      userId: calendarEventShares.userId,
-    })
-    .from(calendarEventShares)
-    .where(
-      and(eq(calendarEventShares.firmId, firmId), inArray(calendarEventShares.eventId, eventIds)),
-    );
-  for (const row of shareRows) {
-    const list = sharesByEvent.get(row.eventId) ?? [];
-    list.push(row.userId);
-    sharesByEvent.set(row.eventId, list);
+  if (eventIds.length) {
+    const shareRows = await db
+      .select({
+        eventId: calendarEventShares.eventId,
+        userId: calendarEventShares.userId,
+      })
+      .from(calendarEventShares)
+      .where(
+        and(eq(calendarEventShares.firmId, firmId), inArray(calendarEventShares.eventId, eventIds)),
+      );
+    for (const row of shareRows) {
+      const list = sharesByEvent.get(row.eventId) ?? [];
+      list.push(row.userId);
+      sharesByEvent.set(row.eventId, list);
+    }
   }
 
   const sentKeys = await loadAlreadySentKeys(firmId);
@@ -346,6 +374,71 @@ export async function sendCalendarEventEmailsForFirm(
       });
       emailed += result.emailed;
       sentKeys.add(key);
+    }
+  }
+
+  const holidays = await db
+    .select()
+    .from(firmHolidays)
+    .where(
+      and(
+        eq(firmHolidays.firmId, firmId),
+        gte(firmHolidays.holidayDate, start),
+        lt(firmHolidays.holidayDate, end),
+      ),
+    );
+
+  if (holidays.length) {
+    const firmUsers = await listActiveLoginUserIds(firmId);
+    for (const holiday of holidays) {
+      const whenLabel = holiday.holidayDate.toLocaleDateString("en-GB", {
+        timeZone: CALENDAR_TZ,
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      const subject = `Public holiday: ${holiday.name}`;
+      const intro =
+        slot === "day_before"
+          ? "Reminder: a public holiday is tomorrow."
+          : "Reminder: today is a public holiday.";
+      const { text, html } = buildCalendarEventCreatedBodies({
+        title: holiday.name,
+        when: `${whenLabel} · All day`,
+        notes: "This applies firm-wide.",
+        headline: "Public holiday",
+        intro,
+      });
+      const holidayKey = `holiday:${holiday.id}`;
+
+      for (const userId of firmUsers) {
+        const key = `${holidayKey}:${slot}:${userId}`;
+        if (sentKeys.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        const result = await notifyStaffEvent({
+          firmId,
+          userIds: [userId],
+          subject,
+          body: text,
+          html,
+          inApp: {
+            type: CALENDAR_HOLIDAY_EMAIL_TYPE,
+            title: subject,
+            body: `${holiday.name} · ${whenLabel}`,
+            href: "/calendar",
+            metadata: {
+              holidayId: holidayKey,
+              slot,
+              userId,
+            },
+          },
+        });
+        emailed += result.emailed;
+        sentKeys.add(key);
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { getRoutePermissionFromRules } from "@/lib/module-nav";
+import { getRoutePermissionsFromRules } from "@/lib/module-nav";
 
 export type NavIcon =
   | "dashboard"
@@ -32,6 +32,8 @@ export type NavItem = {
   icon: NavIcon;
   /** Required permission to see nav item and access route (P0-10). */
   permission?: string;
+  /** If set, any one of these permissions shows the item. */
+  anyOf?: string[];
 };
 
 export type NavSection = {
@@ -90,12 +92,14 @@ export const navSections: NavSection[] = [
         label: "Invoicing",
         icon: "invoice",
         permission: "billing.view",
+        anyOf: ["billing.view", "billing.my_clients.view"],
       },
       {
         href: "/finance/debtors",
         label: "Debtors",
         icon: "list",
         permission: "billing.view",
+        anyOf: ["billing.view", "billing.my_clients.view"],
       },
       {
         href: "/finance/trust",
@@ -108,6 +112,7 @@ export const navSections: NavSection[] = [
         label: "Payments",
         icon: "invoice",
         permission: "finance.payments.view",
+        anyOf: ["finance.payments.view", "billing.my_clients.view"],
       },
       {
         href: "/finance/client-accounts",
@@ -152,8 +157,20 @@ export const navSections: NavSection[] = [
     items: [
       { href: "/hr/staff", label: "Staff records", icon: "user", permission: "hr.view" },
       { href: "/hr/contracts", label: "Contracts", icon: "folder", permission: "hr.view" },
-      { href: "/hr/leave", label: "Leave", icon: "calendar", permission: "hr.view" },
-      { href: "/hr/advances", label: "Salary advances", icon: "invoice", permission: "hr.view" },
+      {
+        href: "/hr/leave",
+        label: "Leave",
+        icon: "calendar",
+        permission: "hr.leave.request",
+        anyOf: ["hr.leave.request", "hr.view"],
+      },
+      {
+        href: "/hr/advances",
+        label: "Salary advances",
+        icon: "invoice",
+        permission: "hr.advances.request",
+        anyOf: ["hr.advances.request", "hr.view"],
+      },
       { href: "/hr/payroll", label: "Payroll", icon: "clipboard", permission: "hr.view" },
     ],
   },
@@ -453,19 +470,26 @@ export function getRouteMeta(pathname: string): RouteMeta {
   );
 }
 
-/** Permission required to access a platform route (nav config + Phase 6 module rules). */
-export function getRoutePermission(pathname: string): string | undefined {
-  const fromRules = getRoutePermissionFromRules(pathname);
-  if (fromRules) return fromRules;
+/** Permissions that grant a platform route (any one is enough). */
+export function getRoutePermissions(pathname: string): string[] {
+  const fromRules = getRoutePermissionsFromRules(pathname);
+  if (fromRules.length) return fromRules;
 
   for (const section of navSections) {
     for (const item of section.items) {
       if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
-        return item.permission;
+        if (item.anyOf?.length) return item.anyOf;
+        if (item.permission) return [item.permission];
+        return [];
       }
     }
   }
-  return undefined;
+  return [];
+}
+
+/** Permission required to access a platform route (first code; for AccessDenied display). */
+export function getRoutePermission(pathname: string): string | undefined {
+  return getRoutePermissions(pathname)[0];
 }
 
 /** Filter nav sections/items by permission checker (sidebar P0-10). */
@@ -473,7 +497,11 @@ export function filterNavSections(can: (code: string) => boolean): NavSection[] 
   return navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => !item.permission || can(item.permission)),
+      items: section.items.filter((item) => {
+        if (item.anyOf?.length) return item.anyOf.some((code) => can(code));
+        if (item.permission) return can(item.permission);
+        return true;
+      }),
     }))
     .filter((section) => section.items.length > 0);
 }

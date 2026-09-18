@@ -18,12 +18,12 @@ import {
   sumFeePaymentsByInvoice,
 } from "@/lib/repos/billing";
 import { getMatterById, listAccessibleMatterIds, userCanAccessMatter } from "@/lib/repos/matters";
-import { canViewAllMatters, requirePermission } from "@/lib/rbac/guards";
+import { canViewAllMatters, hasPermission, requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 export async function GET(request: Request) {
   try {
-    const session = await requirePermission("billing.view");
+    const session = await requireAny(["billing.view", "billing.my_clients.view"]);
     const firmId = tenantFirmId(session);
     const viewAll = canViewAllMatters(session);
     const url = new URL(request.url);
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     }
 
     let rows = await listInvoices(firmId, { matterId, status });
-    if (!viewAll) {
+    if (!viewAll || !hasPermission(session, "billing.view")) {
       const allowed = new Set(
         await listAccessibleMatterIds(firmId, session.id),
       );
