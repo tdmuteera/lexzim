@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
 import {
   getPrimaryCommunicationEmail,
+  listNotifyEmailsForUser,
+  setCommunicationEmails,
   setPrimaryCommunicationEmail,
 } from "@/lib/repos/staff-communication-emails";
 import { requirePermission } from "@/lib/rbac/guards";
@@ -45,6 +47,7 @@ export async function PATCH(
       isLawyer?: boolean;
       email?: string;
       communicationEmail?: string | null;
+      communicationEmails?: unknown;
     };
 
     const db = getDb();
@@ -122,9 +125,31 @@ export async function PATCH(
         .where(and(eq(users.id, id), eq(users.firmId, firmId)));
     }
 
+    let communicationEmails = target.isSystemUser
+      ? await listNotifyEmailsForUser(firmId, id)
+      : [];
     let communicationEmail =
-      (await getPrimaryCommunicationEmail(firmId, id)) || nextEmail;
-    if (typeof body.communicationEmail === "string") {
+      communicationEmails[0] ||
+      (await getPrimaryCommunicationEmail(firmId, id)) ||
+      nextEmail;
+
+    const emailsFromBody = Array.isArray(body.communicationEmails)
+      ? body.communicationEmails.filter(
+          (e): e is string => typeof e === "string" && e.trim().length > 0,
+        )
+      : null;
+
+    if (emailsFromBody) {
+      if (!target.isSystemUser) {
+        throw new AuthError(
+          "validation",
+          "Directory people (no login) do not receive system notification emails.",
+        );
+      }
+      const saved = await setCommunicationEmails(firmId, id, emailsFromBody);
+      communicationEmails = saved.emails;
+      communicationEmail = saved.primary;
+    } else if (typeof body.communicationEmail === "string") {
       if (!target.isSystemUser) {
         throw new AuthError(
           "validation",
@@ -138,6 +163,7 @@ export async function PATCH(
           body.communicationEmail,
         );
         communicationEmail = row.email;
+        communicationEmails = await listNotifyEmailsForUser(firmId, id);
       }
     }
 
@@ -202,7 +228,11 @@ export async function PATCH(
       });
     }
 
-    if (patch.email || typeof body.communicationEmail === "string") {
+    if (
+      patch.email ||
+      typeof body.communicationEmail === "string" ||
+      emailsFromBody
+    ) {
       await writeAuditLog({
         action: "users.email_update",
         firmId,
@@ -212,6 +242,7 @@ export async function PATCH(
         metadata: {
           email: nextEmail,
           communicationEmail,
+          communicationEmails,
           byAdmin: true,
         },
         ipOrUserAgent: clientInfo(request),
@@ -223,6 +254,7 @@ export async function PATCH(
         id: target.id,
         email: nextEmail,
         communicationEmail,
+        communicationEmails,
         permissionCodes: savedTicks ?? tickCodes,
         isLawyer:
           typeof body.isLawyer === "boolean" ? body.isLawyer : target.isLawyer,

@@ -375,7 +375,7 @@ Smoke: `npx tsx scripts/check-trust-shortfall-policy.ts`.
 
 ## 19. Staff communication email + notify (P11-09)
 
-**Table:** `staff_communication_emails` (primary per user; login email is fallback).
+**Table:** `staff_communication_emails` (up to three addresses per user; first is primary; login email is fallback when none are set). `resolveStaffNotifyEmails` expands each user to all of their addresses so business and personal inboxes get the same staff SMTP notice.
 
 **Settings:** Account profile → Communication email. MP/admin: `PUT /api/users/[id]/communication-email`.
 

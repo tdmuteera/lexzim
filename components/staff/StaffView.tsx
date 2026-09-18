@@ -93,7 +93,11 @@ export function StaffView() {
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editIsLawyer, setEditIsLawyer] = useState(false);
   const [editEmail, setEditEmail] = useState("");
-  const [editCommunicationEmail, setEditCommunicationEmail] = useState("");
+  const [editCommunicationEmails, setEditCommunicationEmails] = useState<string[]>([
+    "",
+    "",
+    "",
+  ]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,18 +161,35 @@ export function StaffView() {
     setEditJobTitle(u.jobTitle ?? "");
     setEditIsLawyer(u.isLawyer);
     setEditEmail(u.email ?? "");
-    setEditCommunicationEmail("");
+    setEditCommunicationEmails(["", "", ""]);
     if (u.isSystemUser) {
       void fetch(`/api/users/${u.id}/communication-email`, { credentials: "include" })
         .then((res) => res.json())
-        .then((body: { ok?: boolean; data?: { communicationEmail?: string | null } }) => {
-          if (body.ok && body.data) {
-            setEditCommunicationEmail(body.data.communicationEmail ?? u.email ?? "");
-          } else {
-            setEditCommunicationEmail(u.email ?? "");
-          }
-        })
-        .catch(() => setEditCommunicationEmail(u.email ?? ""));
+        .then(
+          (body: {
+            ok?: boolean;
+            data?: {
+              communicationEmail?: string | null;
+              communicationEmails?: string[];
+            };
+          }) => {
+            if (body.ok && body.data) {
+              const list =
+                Array.isArray(body.data.communicationEmails) &&
+                body.data.communicationEmails.length > 0
+                  ? body.data.communicationEmails
+                  : [
+                      body.data.communicationEmail ?? u.email ?? "",
+                    ].filter(Boolean);
+              const padded = [...list.slice(0, 3)];
+              while (padded.length < 3) padded.push("");
+              setEditCommunicationEmails(padded);
+            } else {
+              setEditCommunicationEmails([u.email ?? "", "", ""]);
+            }
+          },
+        )
+        .catch(() => setEditCommunicationEmails([u.email ?? "", "", ""]));
     }
   }
 
@@ -280,7 +301,10 @@ export function StaffView() {
       if (editing?.isSystemUser) {
         payload.permissionCodes = editTicks;
         payload.email = editEmail.trim();
-        payload.communicationEmail = editCommunicationEmail.trim() || null;
+        const emails = editCommunicationEmails.map((e) => e.trim()).filter(Boolean);
+        if (emails.length > 0) {
+          payload.communicationEmails = emails;
+        }
       }
       const res = await fetch(`/api/staff/${editingId}`, {
         method: "PATCH",
@@ -760,21 +784,44 @@ export function StaffView() {
                               onChange={(e) => setEditEmail(e.target.value)}
                             />
                           </label>
-                          <label style={{ display: "block", marginBottom: "0.65rem", maxWidth: "22rem" }}>
-                            <div className="muted" style={{ fontSize: "0.8rem" }}>
-                              Notification email
-                            </div>
-                            <input
-                              className="filter-input"
-                              type="email"
-                              value={editCommunicationEmail}
-                              onChange={(e) => setEditCommunicationEmail(e.target.value)}
-                              placeholder="Personal or work email for system notices"
-                            />
-                          </label>
+                          {(
+                            [
+                              "Primary notification email",
+                              "Second notification email",
+                              "Third notification email",
+                            ] as const
+                          ).map((label, index) => (
+                            <label
+                              key={label}
+                              style={{ display: "block", marginBottom: "0.65rem", maxWidth: "22rem" }}
+                            >
+                              <div className="muted" style={{ fontSize: "0.8rem" }}>
+                                {label}
+                                {index === 0 ? "" : " (optional)"}
+                              </div>
+                              <input
+                                className="filter-input"
+                                type="email"
+                                value={editCommunicationEmails[index] ?? ""}
+                                onChange={(e) => {
+                                  const next = [...editCommunicationEmails];
+                                  next[index] = e.target.value;
+                                  setEditCommunicationEmails(next);
+                                }}
+                                placeholder={
+                                  index === 0
+                                    ? "Business email for system notices"
+                                    : index === 1
+                                      ? "Personal email (same notices)"
+                                      : "Optional backup inbox"
+                                }
+                              />
+                            </label>
+                          ))}
                           <p className="muted" style={{ margin: "0 0 0.65rem", fontSize: "0.8rem" }}>
-                            Notification email can be their personal or work address for tasks and
-                            approvals. Login email is what they use to sign in.
+                            Up to three notification emails receive the same staff notices (tasks,
+                            approvals, calendar). Use a personal inbox when the work laptop is away.
+                            Login email is only for signing in.
                           </p>
                         </>
                       ) : null}

@@ -18,7 +18,9 @@ import {
   listStaffWithoutSystemLogin,
 } from "@/lib/repos/hr";
 import { jobCategoryImpliesLawyer } from "@/lib/hr/job-categories";
-import { getPrimaryCommunicationEmail } from "@/lib/repos/staff-communication-emails";
+import {
+  listNotifyEmailsForUser,
+} from "@/lib/repos/staff-communication-emails";
 import { requirePermission } from "@/lib/rbac/guards";
 import {
   copyRolePermissionsToUser,
@@ -95,8 +97,11 @@ export async function GET(request: Request) {
               includeDelegations: false,
             })
           : [];
+        const communicationEmails = row.isSystemUser
+          ? await listNotifyEmailsForUser(firmId, row.id)
+          : [];
         const communicationEmail = row.isSystemUser
-          ? (await getPrimaryCommunicationEmail(firmId, row.id)) || row.email
+          ? communicationEmails[0] || row.email
           : null;
         return {
           id: row.id,
@@ -113,6 +118,7 @@ export async function GET(request: Request) {
           permissionCodes: row.isSystemUser ? navTicksFromGrants(grants) : [],
           isProtectedMp: row.roleCode === "managing_partner",
           communicationEmail,
+          communicationEmails: row.isSystemUser ? communicationEmails : [],
         };
       }),
     );

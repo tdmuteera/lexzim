@@ -55,7 +55,7 @@ Split of an intake. Sum of line amounts must equal intake amount (enforced in ap
 
 ### `staff_communication_emails`
 
-Per-user outbound notify address (may differ from login email). Unique on `(firm_id, user_id, email)`.
+Per-user outbound notify addresses (may differ from login email). Up to three rows per user; first marked `is_primary`. Unique on `(firm_id, user_id, email)`. All addresses for a person receive the same staff SMTP notification.
 
 ### `finance_commission_settings`
 

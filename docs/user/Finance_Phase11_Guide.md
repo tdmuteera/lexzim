@@ -81,7 +81,7 @@ Configure: `finance.commission.configure`. View: `finance.commission.view`. Lawy
 
 ## Staff email on tasks and approvals
 
-Set a **communication email** on Account profile (login email is the fallback). Managing Partners can set another user’s address under user management when permitted.
+Set a **communication email** on Account profile (login email is the fallback). System admins can assign up to **three** notification addresses per person (business + personal + backup) under Settings → Staff notification emails or Staff edit. All listed addresses receive the same staff notice via firm SMTP.
 
 Assigning a firm task or requesting approval sends an in-app notification and attempts firm SMTP email. Client documents stay **manual send only**. If SMTP fails (for example Railway Hobby blocking outbound mail), the task or approval still saves; Settings → Email may show the last staff-notify error.
 

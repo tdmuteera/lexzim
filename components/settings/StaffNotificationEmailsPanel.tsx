@@ -5,6 +5,8 @@ import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 
+const MAX_EMAILS = 3;
+
 type StaffRow = {
   id: string;
   fullName: string;
@@ -13,18 +15,25 @@ type StaffRow = {
   isActive: boolean;
   isSystemUser: boolean;
   communicationEmail?: string | null;
+  communicationEmails?: string[];
 };
 
 type DraftRow = {
-  communicationEmail: string;
+  emails: string[];
   saving: boolean;
   testing: boolean;
 };
 
+function padEmails(emails: string[]): string[] {
+  const next = emails.slice(0, MAX_EMAILS);
+  while (next.length < MAX_EMAILS) next.push("");
+  return next;
+}
+
 /**
- * Firm-wide allocator: which address each login receives for tasks, approvals,
- * calendar reminders, and requisitions. There is no separate webhook; LexZim
- * emails these addresses via firm SMTP (Settings → Email).
+ * Firm-wide allocator: up to three addresses per person for tasks, approvals,
+ * calendar reminders, and requisitions (e.g. business + personal). LexZim
+ * emails these via firm SMTP (Settings → Email). Requires users.manage.
  */
 export function StaffNotificationEmailsPanel() {
   const { toast } = useToast();
@@ -52,8 +61,12 @@ export function StaffNotificationEmailsPanel() {
       setRows(items);
       const next: Record<string, DraftRow> = {};
       for (const u of items) {
+        const fromList =
+          Array.isArray(u.communicationEmails) && u.communicationEmails.length > 0
+            ? u.communicationEmails
+            : [(u.communicationEmail ?? u.email ?? "").trim()].filter(Boolean);
         next[u.id] = {
-          communicationEmail: (u.communicationEmail ?? u.email ?? "").trim(),
+          emails: padEmails(fromList),
           saving: false,
           testing: false,
         };
@@ -71,10 +84,26 @@ export function StaffNotificationEmailsPanel() {
     void load();
   }, [load]);
 
+  function setEmailSlot(userId: string, index: number, value: string) {
+    setDrafts((prev) => {
+      const draft = prev[userId];
+      if (!draft) return prev;
+      const emails = [...draft.emails];
+      emails[index] = value;
+      return {
+        ...prev,
+        [userId]: { ...draft, emails },
+      };
+    });
+  }
+
   async function saveOne(userId: string) {
     const draft = drafts[userId];
-    if (!draft?.communicationEmail.trim()) {
-      toast("Enter a notification email before saving.");
+    const emails = (draft?.emails ?? [])
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (emails.length === 0) {
+      toast("Enter at least one notification email before saving.");
       return;
     }
     setDrafts((prev) => ({
@@ -86,28 +115,49 @@ export function StaffNotificationEmailsPanel() {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: draft.communicationEmail.trim() }),
+        body: JSON.stringify({ emails }),
       });
       const body = (await res.json()) as {
         ok?: boolean;
-        data?: { communicationEmail?: string };
+        data?: {
+          communicationEmail?: string;
+          communicationEmails?: string[];
+        };
         error?: { message?: string };
       };
       if (!res.ok || !body.ok) {
-        toast(body.error?.message ?? "Could not save notification email.");
+        toast(body.error?.message ?? "Could not save notification emails.");
         return;
       }
-      const saved = body.data?.communicationEmail ?? draft.communicationEmail.trim();
+      const saved =
+        body.data?.communicationEmails ??
+        (body.data?.communicationEmail ? [body.data.communicationEmail] : emails);
       setDrafts((prev) => ({
         ...prev,
-        [userId]: { ...prev[userId]!, communicationEmail: saved, saving: false },
+        [userId]: {
+          ...prev[userId]!,
+          emails: padEmails(saved),
+          saving: false,
+        },
       }));
       setRows((prev) =>
-        prev.map((r) => (r.id === userId ? { ...r, communicationEmail: saved } : r)),
+        prev.map((r) =>
+          r.id === userId
+            ? {
+                ...r,
+                communicationEmail: saved[0] ?? null,
+                communicationEmails: saved,
+              }
+            : r,
+        ),
       );
-      toast("Notification email saved.");
+      toast(
+        saved.length === 1
+          ? "Notification email saved."
+          : `${saved.length} notification emails saved. Each will get the same staff notices.`,
+      );
     } catch {
-      toast("Could not save notification email.");
+      toast("Could not save notification emails.");
     } finally {
       setDrafts((prev) => ({
         ...prev,
@@ -118,9 +168,11 @@ export function StaffNotificationEmailsPanel() {
 
   async function testOne(userId: string) {
     const draft = drafts[userId];
-    const email = draft?.communicationEmail.trim();
-    if (!email) {
-      toast("Enter a notification email before sending a test.");
+    const emails = (draft?.emails ?? [])
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (emails.length === 0) {
+      toast("Enter at least one notification email before sending a test.");
       return;
     }
     setDrafts((prev) => ({
@@ -132,18 +184,22 @@ export function StaffNotificationEmailsPanel() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ emails }),
       });
       const body = (await res.json()) as {
         ok?: boolean;
-        data?: { to?: string; from?: string };
+        data?: { to?: string; recipients?: string[]; from?: string };
         error?: { message?: string };
       };
       if (!res.ok || !body.ok) {
         toast(body.error?.message ?? "Could not send test email.");
         return;
       }
-      toast(`Test email sent to ${body.data?.to ?? email}.`);
+      const sentTo =
+        body.data?.recipients?.join(", ") ??
+        body.data?.to ??
+        emails.join(", ");
+      toast(`Test email sent to ${sentTo}.`);
     } catch {
       toast("Could not send test email.");
     } finally {
@@ -154,27 +210,32 @@ export function StaffNotificationEmailsPanel() {
     }
   }
 
+  const labels = [
+    "Primary notification email (usually business)",
+    "Second email (e.g. personal inbox)",
+    "Third email (optional backup)",
+  ];
+
   return (
     <Can
       permission="users.manage"
       fallback={
         <p className="muted" style={{ margin: 0 }}>
-          Only users with User access can allocate staff notification emails.
+          Only system admins with User access can assign staff notification emails.
         </p>
       }
     >
       <div className="settings-form">
         <div className="settings-form-head">
           <p className="settings-lede">
-            Set the address LexZim uses for each person&apos;s task assignments, invoice approvals,
-            requisitions, and calendar notices. This can differ from their login email. Outbound
-            mail is sent through Settings → Email and shows the firm as sender (for example{" "}
-            <strong>T Pfigu Attorneys</strong>). Use <strong>Send test mail</strong> to confirm how
-            it looks on their phone.
+            Assign up to three addresses per person for task assignments, invoice approvals,
+            requisitions, and calendar notices. Use a firm domain address plus a personal
+            inbox when the work laptop is unavailable. Every listed address receives the same
+            staff notification. Outbound mail uses Settings → Email (firm SMTP on Railway).
           </p>
           <aside className="settings-hint settings-callout" style={{ marginTop: "0.75rem" }}>
-            There is no separate webhook. Recipients are these notification emails. People can also
-            update their own address under Settings → Account profile.
+            Only admins with <strong>users.manage</strong> can set second and third emails.
+            Staff can still update their primary address under Settings → Account profile.
           </aside>
         </div>
 
@@ -218,28 +279,30 @@ export function StaffNotificationEmailsPanel() {
                       Login: {u.email}
                     </div>
                   </div>
-                  <label>
-                    <div className="muted" style={{ fontSize: "0.8rem" }}>
-                      Notification email (tasks / approvals / calendar)
-                    </div>
-                    <input
-                      type="email"
-                      value={draft?.communicationEmail ?? ""}
-                      onChange={(e) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [u.id]: {
-                            communicationEmail: e.target.value,
-                            saving: prev[u.id]?.saving ?? false,
-                            testing: prev[u.id]?.testing ?? false,
-                          },
-                        }))
-                      }
-                      placeholder="name@example.com"
-                      style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
-                    />
-                  </label>
-                  <div className="settings-actions" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {(draft?.emails ?? padEmails([])).map((value, index) => (
+                    <label key={`${u.id}-email-${index}`}>
+                      <div className="muted" style={{ fontSize: "0.8rem" }}>
+                        {labels[index]}
+                      </div>
+                      <input
+                        type="email"
+                        value={value}
+                        onChange={(e) => setEmailSlot(u.id, index, e.target.value)}
+                        placeholder={
+                          index === 0
+                            ? "name@yourfirm.co.zw"
+                            : index === 1
+                              ? "personal@example.com"
+                              : "optional@example.com"
+                        }
+                        style={{ width: "100%", marginTop: "0.25rem", padding: "0.45rem 0.6rem" }}
+                      />
+                    </label>
+                  ))}
+                  <div
+                    className="settings-actions"
+                    style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                  >
                     <Button
                       size="sm"
                       variant="outline"
