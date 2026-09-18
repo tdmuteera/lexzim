@@ -17,7 +17,10 @@ import { LicencePanel } from "@/components/settings/LicencePanel";
 import { RemindersSettingsPanel } from "@/components/settings/RemindersSettingsPanel";
 import { RetrievalDiagnosticPanel } from "@/components/settings/RetrievalDiagnosticPanel";
 import { SecurityPanel } from "@/components/settings/SecurityPanel";
+import { StaffNotificationEmailsPanel } from "@/components/settings/StaffNotificationEmailsPanel";
 import { UserProfilePanel } from "@/components/settings/UserProfilePanel";
+import { UserActivityPanel } from "@/components/staff/UserActivityPanel";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 type Section =
   | "profile"
@@ -31,10 +34,18 @@ type Section =
   | "deadlines"
   | "reminders"
   | "email"
+  | "staff-notifications"
+  | "user-activity"
   | "security"
   | "backup";
 
-const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
+const NAV: Array<{
+  id: Section;
+  label: string;
+  icon: NavIcon;
+  /** Hide unless the viewer has at least one of these permissions. */
+  anyOf?: string[];
+}> = [
   { id: "profile", label: "Account profile", icon: "user" },
   { id: "about", label: "About", icon: "shield" },
   { id: "firm", label: "Firm profile", icon: "briefcase" },
@@ -46,6 +57,18 @@ const NAV: Array<{ id: Section; label: string; icon: NavIcon }> = [
   { id: "deadlines", label: "Deadline templates", icon: "calendar" },
   { id: "reminders", label: "Reminders", icon: "bell" },
   { id: "email", label: "Email", icon: "clipboard" },
+  {
+    id: "staff-notifications",
+    label: "Staff notifications",
+    icon: "bell",
+    anyOf: ["users.manage"],
+  },
+  {
+    id: "user-activity",
+    label: "User activity",
+    icon: "chart",
+    anyOf: ["users.activity.view", "users.manage"],
+  },
   { id: "security", label: "Security", icon: "lock" },
   { id: "backup", label: "Backup & Export", icon: "clipboard" },
 ];
@@ -57,6 +80,7 @@ function parseSection(raw: string | null): Section {
 
 export function SettingsView() {
   const searchParams = useSearchParams();
+  const { canAny } = useAuth();
   const [section, setSection] = useState<Section>(() =>
     parseSection(searchParams.get("section")),
   );
@@ -65,7 +89,10 @@ export function SettingsView() {
     setSection(parseSection(searchParams.get("section")));
   }, [searchParams]);
 
-  const activeLabel = NAV.find((n) => n.id === section)?.label ?? "Settings";
+  const visibleNav = NAV.filter(
+    (item) => !item.anyOf || canAny(item.anyOf),
+  );
+  const activeLabel = visibleNav.find((n) => n.id === section)?.label ?? "Settings";
 
   function selectSection(id: Section) {
     setSection(id);
@@ -97,7 +124,7 @@ export function SettingsView() {
             <h3>Sections</h3>
           </div>
           <nav className="panel-body settings-nav">
-            {NAV.map((item) => (
+            {visibleNav.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -141,6 +168,10 @@ export function SettingsView() {
               <RemindersSettingsPanel />
             ) : section === "email" ? (
               <EmailSettingsPanel />
+            ) : section === "staff-notifications" ? (
+              <StaffNotificationEmailsPanel />
+            ) : section === "user-activity" ? (
+              <UserActivityPanel />
             ) : section === "security" ? (
               <SecurityPanel />
             ) : (

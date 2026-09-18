@@ -1,11 +1,24 @@
 import "server-only";
 
+import { eq } from "drizzle-orm";
 import { decryptByoKey, encryptByoKey } from "@/lib/ai/secrets";
+import { getDb } from "@/lib/db";
+import { firms } from "@/lib/db/schema";
 import {
   deleteFirmSetting,
   getFirmSetting,
   upsertFirmSetting,
 } from "@/lib/repos/firm-settings";
+
+async function firmDisplayName(firmId: string): Promise<string> {
+  const db = getDb();
+  const rows = await db
+    .select({ name: firms.name })
+    .from(firms)
+    .where(eq(firms.id, firmId))
+    .limit(1);
+  return rows[0]?.name?.trim() || "LexZim";
+}
 
 /**
  * Firm SMTP configuration (P7-11). Stored per firm in firm_settings.
@@ -71,6 +84,7 @@ export async function getFirmEmailConfig(firmId: string): Promise<FirmEmailConfi
 
   const passwordStored = Boolean(passwordEnc?.trim());
   const password = passwordStored ? decryptByoKey(passwordEnc!) ?? "" : "";
+  const resolvedFromName = fromName?.trim() || (await firmDisplayName(firmId));
 
   return {
     host: host.trim(),
@@ -79,7 +93,7 @@ export async function getFirmEmailConfig(firmId: string): Promise<FirmEmailConfi
     user: user?.trim() ?? "",
     password,
     passwordStored,
-    fromName: fromName?.trim() || "LexZim",
+    fromName: resolvedFromName,
     fromEmail: fromEmail.trim(),
     replyTo: replyTo?.trim() ?? "",
   };
@@ -103,12 +117,14 @@ export async function getFirmEmailConfigPublic(
   const passwordSet = Boolean(passwordEnc?.trim());
   const passwordReadable =
     !passwordSet || Boolean(passwordEnc?.trim() && decryptByoKey(passwordEnc));
+  const resolvedFromName =
+    fromName?.trim() || (host?.trim() ? await firmDisplayName(firmId) : "");
   return {
     host: host?.trim() ?? "",
     port: parsePort(portRaw),
     secure: secureRaw === "true",
     user: user?.trim() ?? "",
-    fromName: fromName?.trim() ?? "",
+    fromName: resolvedFromName,
     fromEmail: fromEmail?.trim() ?? "",
     replyTo: replyTo?.trim() ?? "",
     passwordSet,

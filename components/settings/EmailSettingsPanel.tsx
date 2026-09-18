@@ -209,7 +209,8 @@ export function EmailSettingsPanel() {
           Outbound email uses your firm SMTP server (host, port, credentials). Secrets are stored
           encrypted and never sent to the browser. Leave blank to fall back to a managed relay if
           the deployment provides one. Client document email is always manual: review To, Subject,
-          note, and attachment, then click Send. LexZim does not auto-email clients.
+          note, and attachment, then click Send. LexZim does not auto-email clients. Allocate which
+          staff address receives tasks and approvals under Settings → Staff notifications.
         </p>
         <aside
           className="settings-hint settings-callout"
@@ -333,9 +334,13 @@ export function EmailSettingsPanel() {
               style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
             >
               <h3 className="settings-section-title">Sender identity</h3>
+              <p className="muted" style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>
+                Recipients see this firm name as the sender (not the individual mailbox user). Use
+                the firm period name, for example <strong>T Pfigu Attorneys</strong>.
+              </p>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  From name
+                  From name (firm)
                 </div>
                 <input
                   value={fromName}

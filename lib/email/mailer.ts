@@ -113,8 +113,9 @@ async function resolveTransport(firmId: string): Promise<{
         password: firmCfg.password,
       }),
     );
-    const from = firmCfg.fromName
-      ? `${firmCfg.fromName} <${firmCfg.fromEmail}>`
+    const fromName = firmCfg.fromName.trim();
+    const from = fromName
+      ? `"${fromName.replace(/"/g, "")}" <${firmCfg.fromEmail}>`
       : firmCfg.fromEmail;
     return {
       transporter,

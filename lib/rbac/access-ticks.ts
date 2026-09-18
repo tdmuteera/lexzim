@@ -90,7 +90,7 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     code: "users.activity.view",
     section: "Platform",
     label: "View user activity",
-    hint: "User activity tab under Lawyers & Staff: who changed what and when. Does not include the full Audit Log page.",
+    hint: "User activity under Settings: who changed what and when. Does not include the full Audit Log page.",
   },
 ];
 

@@ -47,14 +47,11 @@ function entityLabel(row: ActivityRow): string {
   return row.entityType ?? row.entityId ?? "—";
 }
 
-type Props = {
-  loginUsers: LoginOption[];
-};
-
-export function UserActivityPanel({ loginUsers }: Props) {
+export function UserActivityPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ActivityRow[]>([]);
+  const [loginUsers, setLoginUsers] = useState<LoginOption[]>([]);
   const [filterUserId, setFilterUserId] = useState("");
 
   const sortedLogins = useMemo(
@@ -70,7 +67,7 @@ export function UserActivityPanel({ loginUsers }: Props) {
       const res = await fetch(`/api/staff/activity${q}`, { credentials: "include" });
       const body = (await res.json()) as {
         ok: boolean;
-        data?: { items: ActivityRow[] };
+        data?: { items: ActivityRow[]; loginUsers?: LoginOption[] };
         error?: { message: string };
       };
       if (!res.ok || !body.ok || !body.data) {
@@ -79,6 +76,7 @@ export function UserActivityPanel({ loginUsers }: Props) {
         return;
       }
       setItems(body.data.items);
+      if (body.data.loginUsers) setLoginUsers(body.data.loginUsers);
     } catch {
       setError("Could not load user activity.");
       setItems([]);
@@ -92,103 +90,99 @@ export function UserActivityPanel({ loginUsers }: Props) {
   }, [load]);
 
   return (
-    <div className="panel">
-      <div className="panel-body hr-panel-body">
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            marginBottom: "0.85rem",
-          }}
-        >
-          <div>
-            <strong className="hr-section-title">User activity</strong>
-            <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem", maxWidth: "42rem" }}>
-              Recent actions in your firm: logins, edits, downloads, and approvals. Grant{" "}
-              <strong>View user activity</strong> under Edit access to let others see this tab without
-              opening the full Audit Log.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-            <label>
-              <div className="muted" style={{ fontSize: "0.8rem" }}>
-                User
-              </div>
-              <select
-                className="filter-select"
-                value={filterUserId}
-                onChange={(e) => setFilterUserId(e.target.value)}
-              >
-                <option value="">All users</option>
-                {sortedLogins.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button variant="ghost" onClick={() => void load()} disabled={loading}>
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {loading ? <p className="hr-empty-loading">Loading…</p> : null}
-
-        {!loading && !error && items.length === 0 ? (
-          <p className="muted">No activity recorded yet for this filter.</p>
-        ) : null}
-
-        {!loading && items.length > 0 ? (
-          <div className="hr-activity-table-wrap">
-            <table className="hr-activity-table">
-              <thead>
-                <tr>
-                  <th scope="col">When</th>
-                  <th scope="col">User</th>
-                  <th scope="col">Action</th>
-                  <th scope="col">Record</th>
-                  <th scope="col">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => {
-                  const meta = formatMetadata(row.metadata);
-                  return (
-                    <tr key={row.id}>
-                      <td>{formatDateTime(row.createdAt)}</td>
-                      <td>
-                        {row.userFullName ?? "System"}
-                        {row.userEmail ? (
-                          <div className="muted" style={{ fontSize: "0.75rem" }}>
-                            {row.userEmail}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>
-                        <code style={{ fontSize: "0.78rem" }}>{row.action}</code>
-                      </td>
-                      <td>{entityLabel(row)}</td>
-                      <td className="muted" style={{ fontSize: "0.8rem", maxWidth: "18rem" }}>
-                        {meta || row.ipOrUserAgent || "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
+    <div className="settings-form">
+      <div className="settings-form-head">
+        <p className="settings-lede">
+          Recent actions in your firm: logins, edits, downloads, and approvals. Grant{" "}
+          <strong>View user activity</strong> under Edit access to let others open this section
+          without the full Audit Log.
+        </p>
       </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.75rem",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          marginBottom: "0.85rem",
+        }}
+      >
+        <label>
+          <div className="muted" style={{ fontSize: "0.8rem" }}>
+            User
+          </div>
+          <select
+            className="filter-select"
+            value={filterUserId}
+            onChange={(e) => setFilterUserId(e.target.value)}
+          >
+            <option value="">All users</option>
+            {sortedLogins.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button variant="ghost" onClick={() => void load()} disabled={loading}>
+          Refresh
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {loading ? <p className="muted">Loading…</p> : null}
+
+      {!loading && !error && items.length === 0 ? (
+        <p className="muted">No activity recorded yet for this filter.</p>
+      ) : null}
+
+      {!loading && items.length > 0 ? (
+        <div className="hr-activity-table-wrap">
+          <table className="hr-activity-table">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">User</th>
+                <th scope="col">Action</th>
+                <th scope="col">Record</th>
+                <th scope="col">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row) => {
+                const meta = formatMetadata(row.metadata);
+                return (
+                  <tr key={row.id}>
+                    <td>{formatDateTime(row.createdAt)}</td>
+                    <td>
+                      {row.userFullName ?? "System"}
+                      {row.userEmail ? (
+                        <div className="muted" style={{ fontSize: "0.75rem" }}>
+                          {row.userEmail}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <code style={{ fontSize: "0.78rem" }}>{row.action}</code>
+                    </td>
+                    <td style={{ fontSize: "0.82rem" }}>{entityLabel(row)}</td>
+                    <td className="muted" style={{ fontSize: "0.78rem" }}>
+                      {meta || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

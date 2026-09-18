@@ -19,24 +19,35 @@ export async function GET(request: Request) {
     const conditions = [eq(auditLogs.firmId, firmId)];
     if (userId) conditions.push(eq(auditLogs.userId, userId));
 
-    const rows = await db
-      .select({
-        id: auditLogs.id,
-        action: auditLogs.action,
-        entityType: auditLogs.entityType,
-        entityId: auditLogs.entityId,
-        metadataJson: auditLogs.metadataJson,
-        ipOrUserAgent: auditLogs.ipOrUserAgent,
-        userId: auditLogs.userId,
-        userFullName: users.fullName,
-        userEmail: users.email,
-        createdAt: auditLogs.createdAt,
-      })
-      .from(auditLogs)
-      .leftJoin(users, eq(auditLogs.userId, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(auditLogs.createdAt))
-      .limit(limit);
+    const [rows, loginUsers] = await Promise.all([
+      db
+        .select({
+          id: auditLogs.id,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          metadataJson: auditLogs.metadataJson,
+          ipOrUserAgent: auditLogs.ipOrUserAgent,
+          userId: auditLogs.userId,
+          userFullName: users.fullName,
+          userEmail: users.email,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(limit),
+      db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+        })
+        .from(users)
+        .where(and(eq(users.firmId, firmId), eq(users.isSystemUser, true)))
+        .orderBy(users.fullName),
+    ]);
 
     return jsonOk({
       items: rows.map((row) => ({
@@ -51,6 +62,7 @@ export async function GET(request: Request) {
         userEmail: row.userEmail,
         createdAt: row.createdAt.toISOString(),
       })),
+      loginUsers,
     });
   } catch (err) {
     return jsonError(err, request);

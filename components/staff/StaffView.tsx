@@ -10,7 +10,6 @@ import { formatDateTime } from "@/lib/format/dates";
 import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { AccessChecklist } from "@/components/staff/AccessChecklist";
 import { DelegationsPanel } from "@/components/staff/DelegationsPanel";
-import { UserActivityPanel } from "@/components/staff/UserActivityPanel";
 
 function initials(name: string) {
   return name
@@ -63,13 +62,13 @@ type EligibleStaff = {
   linkedDirectoryOnly: boolean;
 };
 
-type StaffTab = "logins" | "lawyers" | "delegations" | "activity";
+type StaffTab = "logins" | "lawyers" | "delegations";
 
 const DEFAULT_TICKS = ["dashboard.view"];
 
 export function StaffView() {
   const { toast } = useToast();
-  const { user: me, refresh, can } = useAuth();
+  const { user: me, refresh } = useAuth();
   const [tab, setTab] = useState<StaffTab>("logins");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -470,24 +469,10 @@ export function StaffView() {
           >
             Delegations
           </button>
-          {can("users.activity.view") || can("users.manage") ? (
-            <button
-              type="button"
-              className={["tab", tab === "activity" ? "active" : ""].filter(Boolean).join(" ")}
-              onClick={() => {
-                setTab("activity");
-                setEditingId(null);
-              }}
-            >
-              User activity
-            </button>
-          ) : null}
         </div>
 
         {tab === "delegations" ? (
           <DelegationsPanel loginUsers={loginUsers} currentUserId={me?.id} />
-        ) : tab === "activity" ? (
-          <UserActivityPanel loginUsers={loginUsers} />
         ) : (
           <>
         {tab === "logins" && seats !== null && seats.remaining <= 0 ? (
