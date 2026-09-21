@@ -764,32 +764,6 @@ export function CalendarView() {
       !selected.id.startsWith("holiday:")
     : false;
 
-  const agendaAccessors = useMemo(
-    () => ({
-      when: (r: SerializedEvent) => r.startsAt,
-      type: (r: SerializedEvent) => EVENT_TYPE_LABELS[r.eventType] ?? r.eventType,
-      title: (r: SerializedEvent) => r.title,
-      visibility: (r: SerializedEvent) =>
-        VISIBILITY_LABELS[(r.visibility as keyof typeof VISIBILITY_LABELS) ?? "firm"] ??
-        r.visibility ??
-        "",
-      matter: (r: SerializedEvent) =>
-        r.matterNumber
-          ? r.matterTitle
-            ? `${r.matterNumber} · ${r.matterTitle}`
-            : r.matterNumber
-          : r.matterTitle ?? "",
-      location: (r: SerializedEvent) => r.location ?? "",
-    }),
-    [],
-  );
-  const {
-    sortedRows: sortedAgenda,
-    sortKey: agendaKey,
-    sortDir: agendaDir,
-    toggleSort: toggleAgenda,
-  } = useTableSort(items, agendaAccessors, { key: "when", dir: "asc" });
-
   return (
     <section className="view active scrollable" aria-label="Court Calendar">
       <div className="panel">

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay, formatMinutes } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type TimeEntryItem = {
   id: string;
@@ -218,10 +220,31 @@ export function MatterTimePanel({ matterId }: MatterTimePanelProps) {
     }
   }
 
-  const visible = items.filter((item) => {
-    if (filter === "unbilled") return item.billable && !item.locked;
-    if (filter === "locked") return item.locked;
-    return true;
+  const visible = useMemo(
+    () =>
+      items.filter((item) => {
+        if (filter === "unbilled") return item.billable && !item.locked;
+        if (filter === "locked") return item.locked;
+        return true;
+      }),
+    [items, filter],
+  );
+
+  const accessors = useMemo(
+    () => ({
+      when: (r: TimeEntryItem) => r.workedAt,
+      earner: (r: TimeEntryItem) => r.userName ?? "",
+      time: (r: TimeEntryItem) => r.minutes,
+      rate: (r: TimeEntryItem) => r.rateCents ?? 0,
+      amount: (r: TimeEntryItem) => r.amountCents ?? 0,
+      status: (r: TimeEntryItem) =>
+        r.locked ? "On invoice" : r.billable ? "Unbilled" : "Non-billable",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(visible, accessors, {
+    key: "when",
+    dir: "desc",
   });
 
   const currency = totals?.currency || defaultCurrency;
@@ -407,17 +430,17 @@ export function MatterTimePanel({ matterId }: MatterTimePanelProps) {
         <table className="data">
           <thead>
             <tr>
-              <th>When</th>
-              <th>Earner</th>
-              <th>Time</th>
-              <th>Rate</th>
-              <th>Amount</th>
-              <th>Status</th>
+              <SortableTh label="When" columnKey="when" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Earner" columnKey="earner" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Time" columnKey="time" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Rate" columnKey="rate" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Amount" columnKey="amount" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
               <th />
             </tr>
           </thead>
           <tbody>
-            {visible.map((item) => (
+            {sortedRows.map((item) => (
               <tr key={item.id}>
                 <td>
                   <div>

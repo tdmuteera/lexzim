@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ProcedureItem = {
   id: string;
@@ -158,10 +160,25 @@ export function MatterProceduresPanel({ matterId }: MatterProceduresPanelProps) 
     }
   }
 
-  const visible = items.filter((item) =>
-    filter === "open" ? item.status === "todo" : true,
+  const visible = useMemo(
+    () => items.filter((item) => (filter === "open" ? item.status === "todo" : true)),
+    [items, filter],
   );
   const overdueCount = items.filter((i) => i.isOverdue).length;
+
+  const accessors = useMemo(
+    () => ({
+      title: (r: ProcedureItem) => r.title,
+      due: (r: ProcedureItem) => r.dueAt,
+      assignee: (r: ProcedureItem) => r.assigneeName ?? "",
+      status: (r: ProcedureItem) => r.statusLabel || r.status,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(visible, accessors, {
+    key: "due",
+    dir: "asc",
+  });
 
   return (
     <div>
@@ -285,15 +302,15 @@ export function MatterProceduresPanel({ matterId }: MatterProceduresPanelProps) 
           <table className="data">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Due</th>
-                <th>Assignee</th>
-                <th>Status</th>
+                <SortableTh label="Title" columnKey="title" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Due" columnKey="due" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Assignee" columnKey="assignee" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {visible.map((item) => (
+              {sortedRows.map((item) => (
                 <tr
                   key={item.id}
                   style={

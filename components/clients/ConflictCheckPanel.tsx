@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ConflictItem = {
   id: string;
@@ -145,6 +147,38 @@ export function ConflictCheckPanel({
 
   const latest = items[0];
 
+  const candidateAccessors = useMemo(
+    () => ({
+      type: (r: Candidate) => r.kind,
+      match: (r: Candidate) => r.label,
+      detail: (r: Candidate) => r.detail ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedCandidates,
+    sortKey: candKey,
+    sortDir: candDir,
+    toggleSort: toggleCand,
+  } = useTableSort(candidates, candidateAccessors, { key: "type", dir: "asc" });
+
+  const historyAccessors = useMemo(
+    () => ({
+      date: (r: ConflictItem) => r.checkedAt,
+      result: (r: ConflictItem) => r.result,
+      query: (r: ConflictItem) => r.query,
+      by: (r: ConflictItem) => r.checkedByName ?? "",
+      notes: (r: ConflictItem) => r.notes ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedHistory,
+    sortKey: histKey,
+    sortDir: histDir,
+    toggleSort: toggleHist,
+  } = useTableSort(items, historyAccessors, { key: "date", dir: "desc" });
+
   return (
     <div
       className={highlight ? "panel" : undefined}
@@ -194,13 +228,13 @@ export function ConflictCheckPanel({
             <table className="data data-dense">
               <thead>
                 <tr>
-                  <th>Type</th>
-                  <th>Match</th>
-                  <th>Detail</th>
+                  <SortableTh label="Type" columnKey="type" activeKey={candKey} direction={candDir} onSort={toggleCand} />
+                  <SortableTh label="Match" columnKey="match" activeKey={candKey} direction={candDir} onSort={toggleCand} />
+                  <SortableTh label="Detail" columnKey="detail" activeKey={candKey} direction={candDir} onSort={toggleCand} />
                 </tr>
               </thead>
               <tbody>
-                {candidates.map((c) => (
+                {sortedCandidates.map((c) => (
                   <tr key={`${c.kind}-${c.id}`}>
                     <td>{c.kind.replace(/_/g, " ")}</td>
                     <td>{c.label}</td>
@@ -249,15 +283,15 @@ export function ConflictCheckPanel({
           <table className="data data-dense">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Result</th>
-                <th>Query</th>
-                <th>By</th>
-                <th>Notes</th>
+                <SortableTh label="Date" columnKey="date" activeKey={histKey} direction={histDir} onSort={toggleHist} />
+                <SortableTh label="Result" columnKey="result" activeKey={histKey} direction={histDir} onSort={toggleHist} />
+                <SortableTh label="Query" columnKey="query" activeKey={histKey} direction={histDir} onSort={toggleHist} />
+                <SortableTh label="By" columnKey="by" activeKey={histKey} direction={histDir} onSort={toggleHist} />
+                <SortableTh label="Notes" columnKey="notes" activeKey={histKey} direction={histDir} onSort={toggleHist} />
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedHistory.map((item) => (
                 <tr key={item.id}>
                   <td>
                     {item.checkedAt

@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import {
   PARTY_ROLES,
   partyRoleLabel,
   type PartyRole,
 } from "@/lib/parties/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type PartyItem = {
   id: string;
@@ -182,6 +184,20 @@ export function RelatedPartiesPanel({
     }
   }
 
+  const accessors = useMemo(
+    () => ({
+      name: (r: PartyItem) => r.name,
+      role: (r: PartyItem) => r.partyRoleLabel || r.partyRole,
+      contact: (r: PartyItem) => r.contact ?? "",
+      matter: (r: PartyItem) => r.matterTitle ?? "",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "name",
+    dir: "asc",
+  });
+
   return (
     <div>
       <div
@@ -299,15 +315,17 @@ export function RelatedPartiesPanel({
           <table className="data">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Contact</th>
-                {scope === "client" ? <th>Matter</th> : null}
+                <SortableTh label="Name" columnKey="name" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Role" columnKey="role" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Contact" columnKey="contact" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                {scope === "client" ? (
+                  <SortableTh label="Matter" columnKey="matter" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                ) : null}
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{item.name}</div>

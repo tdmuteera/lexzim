@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type CommItem = {
   id: string;
@@ -81,6 +83,21 @@ export function DebtorCommunicationsPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const accessors = useMemo(
+    () => ({
+      when: (r: CommItem) => r.loggedAt,
+      by: (r: CommItem) => r.employeeName ?? "",
+      channel: (r: CommItem) => channelLabel(r.channel),
+      outcome: (r: CommItem) => r.outcomeNotes,
+      followUp: (r: CommItem) => r.nextFollowUpAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "when",
+    dir: "desc",
+  });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -192,15 +209,15 @@ export function DebtorCommunicationsPanel({
           <table className="data data-dense">
             <thead>
               <tr>
-                <th>When</th>
-                <th>By</th>
-                <th>Channel</th>
-                <th>Outcome</th>
-                <th>Next follow-up</th>
+                <SortableTh label="When" columnKey="when" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="By" columnKey="by" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Channel" columnKey="channel" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Outcome" columnKey="outcome" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Next follow-up" columnKey="followUp" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={item.id}>
                   <td>{formatWhen(item.loggedAt)}</td>
                   <td>{item.employeeName ?? "—"}</td>

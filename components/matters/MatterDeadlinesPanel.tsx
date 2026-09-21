@@ -6,6 +6,8 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type DeadlineItem = {
   id: string;
@@ -113,6 +115,20 @@ export function MatterDeadlinesPanel({ matterId }: MatterDeadlinesPanelProps) {
     if (filter === "all") return items;
     return items.filter((i) => i.status === "open");
   }, [items, filter]);
+
+  const accessors = useMemo(
+    () => ({
+      title: (r: DeadlineItem) => r.title,
+      due: (r: DeadlineItem) => r.dueAt,
+      status: (r: DeadlineItem) => r.status,
+      calendar: (r: DeadlineItem) => (r.calendarEventId ? "Linked" : ""),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(visible, accessors, {
+    key: "due",
+    dir: "asc",
+  });
 
   async function applyTemplate(e: FormEvent) {
     e.preventDefault();
@@ -345,15 +361,15 @@ export function MatterDeadlinesPanel({ matterId }: MatterDeadlinesPanelProps) {
         <table className="data">
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Due</th>
-              <th>Status</th>
-              <th>Calendar</th>
+              <SortableTh label="Title" columnKey="title" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Due" columnKey="due" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Calendar" columnKey="calendar" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
               <th />
             </tr>
           </thead>
           <tbody>
-            {visible.map((d) => (
+            {sortedRows.map((d) => (
               <tr
                 key={d.id}
                 style={

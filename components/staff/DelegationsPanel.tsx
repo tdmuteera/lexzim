@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { useToast } from "@/components/ui/Toast";
 import { formatDateTime } from "@/lib/format/dates";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Capability = {
   code: string;
@@ -145,6 +147,21 @@ export function DelegationsPanel({ loginUsers, currentUserId }: Props) {
     }
   }
 
+  const accessors = useMemo(
+    () => ({
+      person: (r: GrantRow) => r.granteeName,
+      capability: (r: GrantRow) => r.label,
+      status: (r: GrantRow) => r.status,
+      granted: (r: GrantRow) => r.createdAt,
+      expires: (r: GrantRow) => r.expiresAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "granted",
+    dir: "desc",
+  });
+
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>
@@ -247,16 +264,16 @@ export function DelegationsPanel({ loginUsers, currentUserId }: Props) {
             <table className="data-table" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th>Person</th>
-                  <th>Capability</th>
-                  <th>Status</th>
-                  <th>Granted</th>
-                  <th>Expires</th>
+                  <SortableTh label="Person" columnKey="person" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Capability" columnKey="capability" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Granted" columnKey="granted" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Expires" columnKey="expires" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {items.map((g) => (
+                {sortedRows.map((g) => (
                   <tr key={g.id}>
                     <td>
                       <div>{g.granteeName}</div>
