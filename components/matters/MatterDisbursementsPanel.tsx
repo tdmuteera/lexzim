@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type DisbursementItem = {
   id: string;
@@ -189,10 +191,29 @@ export function MatterDisbursementsPanel({ matterId }: MatterDisbursementsPanelP
     }
   }
 
-  const visible = items.filter((item) => {
-    if (filter === "unbilled") return item.billable && !item.locked;
-    if (filter === "locked") return item.locked;
-    return true;
+  const visible = useMemo(
+    () =>
+      items.filter((item) => {
+        if (filter === "unbilled") return item.billable && !item.locked;
+        if (filter === "locked") return item.locked;
+        return true;
+      }),
+    [items, filter],
+  );
+
+  const accessors = useMemo(
+    () => ({
+      when: (r: DisbursementItem) => r.incurredAt,
+      description: (r: DisbursementItem) => r.description,
+      amount: (r: DisbursementItem) => r.amountCents,
+      status: (r: DisbursementItem) =>
+        r.locked ? "On invoice" : r.billable ? "Unbilled" : "Not to client",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(visible, accessors, {
+    key: "when",
+    dir: "desc",
   });
 
   const currency = totals?.currency || defaultCurrency;
@@ -357,15 +378,15 @@ export function MatterDisbursementsPanel({ matterId }: MatterDisbursementsPanelP
         <table className="data">
           <thead>
             <tr>
-              <th>When</th>
-              <th>Description</th>
-              <th>Amount</th>
-              <th>Status</th>
+              <SortableTh label="When" columnKey="when" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Description" columnKey="description" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Amount" columnKey="amount" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+              <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
               <th />
             </tr>
           </thead>
           <tbody>
-            {visible.map((item) => (
+            {sortedRows.map((item) => (
               <tr key={item.id}>
                 <td>
                   {new Date(item.incurredAt).toLocaleDateString(undefined, {

@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import {
   CLIENT_DOC_CATEGORIES,
   clientDocCategoryLabel,
   isClientDocCategory,
 } from "@/lib/clients/doc-categories";
 import { formatBytes } from "@/lib/documents/serialize";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type DocumentItem = {
   id: string;
@@ -141,6 +143,30 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
     }
   }
 
+  const accessors = useMemo(
+    () => ({
+      type: (r: DocumentItem) =>
+        isClientDocCategory(r.docType) || r.docType === "other"
+          ? clientDocCategoryLabel(r.docType)
+          : r.matterId
+            ? "Matter file"
+            : clientDocCategoryLabel(r.docType),
+      title: (r: DocumentItem) => r.title,
+      file: (r: DocumentItem) => r.fileName,
+      matter: (r: DocumentItem) =>
+        r.matterNumber
+          ? `${r.matterNumber}${r.matterTitle ? ` · ${r.matterTitle}` : ""}`
+          : "",
+      size: (r: DocumentItem) => r.sizeBytes ?? 0,
+      added: (r: DocumentItem) => r.createdAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "added",
+    dir: "desc",
+  });
+
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
@@ -226,17 +252,17 @@ export function ClientDocumentsPanel({ clientId }: { clientId: string }) {
           <table className="data">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Title</th>
-                <th>File</th>
-                <th>Matter</th>
-                <th>Size</th>
-                <th>Added</th>
+                <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Title" columnKey="title" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="File" columnKey="file" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Matter" columnKey="matter" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Size" columnKey="size" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Added" columnKey="added" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={item.id}>
                   <td>
                     {isClientDocCategory(item.docType) || item.docType === "other"

@@ -780,15 +780,15 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Paid</th>
-                              <th>Description</th>
-                              <th>Amount</th>
-                              <th>Matter</th>
+                              <SortableTh label="Paid" columnKey="paid" activeKey={recKey} direction={recDir} onSort={toggleRec} />
+                              <SortableTh label="Description" columnKey="description" activeKey={recKey} direction={recDir} onSort={toggleRec} />
+                              <SortableTh label="Amount" columnKey="amount" activeKey={recKey} direction={recDir} onSort={toggleRec} />
+                              <SortableTh label="Matter" columnKey="matter" activeKey={recKey} direction={recDir} onSort={toggleRec} />
                               <th />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.recoverableRequisitions.map((r) => (
+                            {sortedRecoverables.map((r) => (
                               <tr key={r.id}>
                                 <td>
                                   {r.paidAt

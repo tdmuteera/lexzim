@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { ExportMenu } from "@/components/export/ExportMenu";
@@ -9,9 +9,11 @@ import { TrustVaultPanel } from "@/components/trust/TrustVaultPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
-import type { TrustOverview } from "@/lib/repos/trust";
+import type { TrustClientBalanceRow, TrustOverview } from "@/lib/repos/trust";
 import { TRUST_ENTRY_TYPES, type TrustEntryType } from "@/lib/trust/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Account = {
   id: string;
@@ -415,6 +417,76 @@ export function TrustView() {
   const vaultAccounts = overview?.accounts.filter((a) => a.accountKind === "vault") ?? [];
   const ledgerRows = clientFilter && clientLedger.length ? clientLedger : ledger;
   const ledgerShowsRunning = Boolean(clientFilter && clientLedger.length);
+
+  const clientBalances = overview?.clientBalances ?? [];
+  const balanceAccessors = useMemo(
+    () => ({
+      client: (r: TrustClientBalanceRow) => r.clientName,
+      balance: (r: TrustClientBalanceRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBalances,
+    sortKey: balKey,
+    sortDir: balDir,
+    toggleSort: toggleBal,
+  } = useTableSort(clientBalances, balanceAccessors, { key: "client", dir: "asc" });
+
+  const accountAccessors = useMemo(
+    () => ({
+      name: (r: Account) => r.name,
+      type: (r: Account) => accountKindLabel(r.accountKind),
+      reference: (r: Account) => r.accountRef ?? "",
+      balance: (r: Account) => r.balanceCents,
+      status: (r: Account) => (r.isActive ? "Active" : "Inactive"),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAccounts,
+    sortKey: acctKey,
+    sortDir: acctDir,
+    toggleSort: toggleAcct,
+  } = useTableSort(accounts, accountAccessors, { key: "name", dir: "asc" });
+
+  const ledgerAccessors = useMemo(
+    () => ({
+      when: (r: LedgerItem) => r.occurredAt,
+      type: (r: LedgerItem) => r.entryType,
+      client: (r: LedgerItem) => r.clientDisplayName ?? "",
+      account: (r: LedgerItem) => r.accountName ?? "",
+      amount: (r: LedgerItem) => r.amountCents,
+      running: (r: LedgerItem) => r.runningBalanceCents ?? 0,
+      detail: (r: LedgerItem) => r.narrative ?? r.reference ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedLedger,
+    sortKey: ledKey,
+    sortDir: ledDir,
+    toggleSort: toggleLed,
+  } = useTableSort(ledgerRows, ledgerAccessors, { key: "when", dir: "desc" });
+
+  const statementLines = statement?.lines ?? [];
+  const statementAccessors = useMemo(
+    () => ({
+      when: (r: LedgerItem) => r.occurredAt,
+      type: (r: LedgerItem) => r.entryType,
+      amount: (r: LedgerItem) => r.amountCents,
+      running: (r: LedgerItem) => r.runningBalanceCents ?? 0,
+      detail: (r: LedgerItem) =>
+        [r.accountName, r.narrative].filter(Boolean).join(" · "),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedStatement,
+    sortKey: stmtKey,
+    sortDir: stmtDir,
+    toggleSort: toggleStmt,
+  } = useTableSort(statementLines, statementAccessors, { key: "when", dir: "asc" });
 
   return (
     <section className="view active scrollable finance-desk-view trust-desk-view" aria-label="Trust">
@@ -865,13 +937,25 @@ export function TrustView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        <th>Balance</th>
+                        <SortableTh
+                          label="Client"
+                          columnKey="client"
+                          activeKey={balKey}
+                          direction={balDir}
+                          onSort={toggleBal}
+                        />
+                        <SortableTh
+                          label="Balance"
+                          columnKey="balance"
+                          activeKey={balKey}
+                          direction={balDir}
+                          onSort={toggleBal}
+                        />
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {overview.clientBalances.map((row) => (
+                      {sortedBalances.map((row) => (
                         <tr key={`${row.clientId}-${row.currency}`}>
                           <td>
                             <Link href={`/clients/${row.clientId}`}>{row.clientName}</Link>
@@ -916,15 +1000,45 @@ export function TrustView() {
               <table className="data data-dense">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Reference</th>
-                    <th>Balance</th>
-                    <th>Status</th>
+                    <SortableTh
+                      label="Name"
+                      columnKey="name"
+                      activeKey={acctKey}
+                      direction={acctDir}
+                      onSort={toggleAcct}
+                    />
+                    <SortableTh
+                      label="Type"
+                      columnKey="type"
+                      activeKey={acctKey}
+                      direction={acctDir}
+                      onSort={toggleAcct}
+                    />
+                    <SortableTh
+                      label="Reference"
+                      columnKey="reference"
+                      activeKey={acctKey}
+                      direction={acctDir}
+                      onSort={toggleAcct}
+                    />
+                    <SortableTh
+                      label="Balance"
+                      columnKey="balance"
+                      activeKey={acctKey}
+                      direction={acctDir}
+                      onSort={toggleAcct}
+                    />
+                    <SortableTh
+                      label="Status"
+                      columnKey="status"
+                      activeKey={acctKey}
+                      direction={acctDir}
+                      onSort={toggleAcct}
+                    />
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map((a) => (
+                  {sortedAccounts.map((a) => (
                     <tr key={a.id}>
                       <td>{a.name}</td>
                       <td>{accountKindLabel(a.accountKind ?? "bank")}</td>
@@ -986,17 +1100,63 @@ export function TrustView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>When</th>
-                        <th>Type</th>
-                        {!clientFilter ? <th>Client</th> : null}
-                        <th>Account</th>
-                        <th>Amount</th>
-                        {ledgerShowsRunning ? <th>Running</th> : null}
-                        <th>Detail</th>
+                        <SortableTh
+                          label="When"
+                          columnKey="when"
+                          activeKey={ledKey}
+                          direction={ledDir}
+                          onSort={toggleLed}
+                        />
+                        <SortableTh
+                          label="Type"
+                          columnKey="type"
+                          activeKey={ledKey}
+                          direction={ledDir}
+                          onSort={toggleLed}
+                        />
+                        {!clientFilter ? (
+                          <SortableTh
+                            label="Client"
+                            columnKey="client"
+                            activeKey={ledKey}
+                            direction={ledDir}
+                            onSort={toggleLed}
+                          />
+                        ) : null}
+                        <SortableTh
+                          label="Account"
+                          columnKey="account"
+                          activeKey={ledKey}
+                          direction={ledDir}
+                          onSort={toggleLed}
+                        />
+                        <SortableTh
+                          label="Amount"
+                          columnKey="amount"
+                          activeKey={ledKey}
+                          direction={ledDir}
+                          onSort={toggleLed}
+                        />
+                        {ledgerShowsRunning ? (
+                          <SortableTh
+                            label="Running"
+                            columnKey="running"
+                            activeKey={ledKey}
+                            direction={ledDir}
+                            onSort={toggleLed}
+                          />
+                        ) : null}
+                        <SortableTh
+                          label="Detail"
+                          columnKey="detail"
+                          activeKey={ledKey}
+                          direction={ledDir}
+                          onSort={toggleLed}
+                        />
                       </tr>
                     </thead>
                     <tbody>
-                      {ledgerRows.map((row) => (
+                      {sortedLedger.map((row) => (
                         <tr key={row.id}>
                           <td>{new Date(row.occurredAt).toLocaleDateString()}</td>
                           <td>{row.entryType}</td>
@@ -1090,15 +1250,45 @@ export function TrustView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>When</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                        <th>Running</th>
-                        <th>Detail</th>
+                        <SortableTh
+                          label="When"
+                          columnKey="when"
+                          activeKey={stmtKey}
+                          direction={stmtDir}
+                          onSort={toggleStmt}
+                        />
+                        <SortableTh
+                          label="Type"
+                          columnKey="type"
+                          activeKey={stmtKey}
+                          direction={stmtDir}
+                          onSort={toggleStmt}
+                        />
+                        <SortableTh
+                          label="Amount"
+                          columnKey="amount"
+                          activeKey={stmtKey}
+                          direction={stmtDir}
+                          onSort={toggleStmt}
+                        />
+                        <SortableTh
+                          label="Running"
+                          columnKey="running"
+                          activeKey={stmtKey}
+                          direction={stmtDir}
+                          onSort={toggleStmt}
+                        />
+                        <SortableTh
+                          label="Detail"
+                          columnKey="detail"
+                          activeKey={stmtKey}
+                          direction={stmtDir}
+                          onSort={toggleStmt}
+                        />
                       </tr>
                     </thead>
                     <tbody>
-                      {statement.lines.map((row) => (
+                      {sortedStatement.map((row) => (
                         <tr key={row.id}>
                           <td>{new Date(row.occurredAt).toLocaleDateString()}</td>
                           <td>{row.entryType}</td>

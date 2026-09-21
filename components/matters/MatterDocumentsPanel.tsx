@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { MatterGeneratePanel } from "@/components/matters/MatterGeneratePanel";
 import { formatBytes } from "@/lib/documents/serialize";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type DocumentItem = {
   id: string;
@@ -164,6 +166,20 @@ export function MatterDocumentsPanel({ matterId }: MatterDocumentsPanelProps) {
     }
   }
 
+  const accessors = useMemo(
+    () => ({
+      title: (r: DocumentItem) => r.title,
+      type: (r: DocumentItem) => r.docType,
+      size: (r: DocumentItem) => r.sizeBytes ?? 0,
+      uploaded: (r: DocumentItem) => r.createdAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "uploaded",
+    dir: "desc",
+  });
+
   return (
     <div>
       <div
@@ -233,15 +249,15 @@ export function MatterDocumentsPanel({ matterId }: MatterDocumentsPanelProps) {
           <table className="data">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Size</th>
-                <th>Uploaded</th>
+                <SortableTh label="Title" columnKey="title" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Size" columnKey="size" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                <SortableTh label="Uploaded" columnKey="uploaded" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{item.title}</div>
