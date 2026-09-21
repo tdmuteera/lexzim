@@ -1,14 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ClientOption = { id: string; displayLabel: string; displayName?: string };
 type MatterOption = { id: string; title: string; matterNumber: string | null };
+
+type ClientPortion = {
+  clientId: string;
+  clientName: string;
+  currency: string;
+  balanceCents: number;
+};
+
+type BankIn = {
+  id: string;
+  amountCents: number;
+  currency: string;
+  occurredAt: string;
+  clientName: string | null;
+  bankName: string;
+};
+
+type VaultCount = {
+  id: string;
+  countedAt: string;
+  systemBalanceCents: number;
+  countedBalanceCents: number;
+  varianceCents: number;
+  notes: string | null;
+};
 
 type VaultData = {
   vaultAccounts: Array<{ id: string; name: string; currency: string; isActive: boolean }>;
@@ -18,29 +45,10 @@ type VaultData = {
     name: string;
     currency: string;
     balanceCents: number;
-    clientPortions: Array<{
-      clientId: string;
-      clientName: string;
-      currency: string;
-      balanceCents: number;
-    }>;
+    clientPortions: ClientPortion[];
     clientPortionsTotalCents: number;
-    recentBankIns: Array<{
-      id: string;
-      amountCents: number;
-      currency: string;
-      occurredAt: string;
-      clientName: string | null;
-      bankName: string;
-    }>;
-    recentCounts: Array<{
-      id: string;
-      countedAt: string;
-      systemBalanceCents: number;
-      countedBalanceCents: number;
-      varianceCents: number;
-      notes: string | null;
-    }>;
+    recentBankIns: BankIn[];
+    recentCounts: VaultCount[];
   } | null;
 };
 
@@ -231,6 +239,57 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
       setSaving(false);
     }
   }
+
+  const portions = data?.vault?.clientPortions ?? [];
+  const bankIns = data?.vault?.recentBankIns ?? [];
+  const counts = data?.vault?.recentCounts ?? [];
+
+  const portionAccessors = useMemo(
+    () => ({
+      client: (r: ClientPortion) => r.clientName,
+      balance: (r: ClientPortion) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedPortions,
+    sortKey: portionKey,
+    sortDir: portionDir,
+    toggleSort: togglePortion,
+  } = useTableSort(portions, portionAccessors, { key: "client", dir: "asc" });
+
+  const bankInAccessors = useMemo(
+    () => ({
+      when: (r: BankIn) => r.occurredAt,
+      client: (r: BankIn) => r.clientName ?? "",
+      bank: (r: BankIn) => r.bankName,
+      amount: (r: BankIn) => r.amountCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBankIns,
+    sortKey: bankInKey,
+    sortDir: bankInDir,
+    toggleSort: toggleBankIn,
+  } = useTableSort(bankIns, bankInAccessors, { key: "when", dir: "desc" });
+
+  const countAccessors = useMemo(
+    () => ({
+      counted: (r: VaultCount) => r.countedAt,
+      system: (r: VaultCount) => r.systemBalanceCents,
+      countedAmt: (r: VaultCount) => r.countedBalanceCents,
+      variance: (r: VaultCount) => r.varianceCents,
+      notes: (r: VaultCount) => r.notes ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedCounts,
+    sortKey: countKey,
+    sortDir: countDir,
+    toggleSort: toggleCount,
+  } = useTableSort(counts, countAccessors, { key: "counted", dir: "desc" });
 
   if (loading && !data) {
     return <p className="muted">Loading vault…</p>;
@@ -449,12 +508,12 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
         <table className="data data-dense" style={{ marginBottom: "1.25rem" }}>
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Balance in vault</th>
+              <SortableTh label="Client" columnKey="client" activeKey={portionKey} direction={portionDir} onSort={togglePortion} />
+              <SortableTh label="Balance in vault" columnKey="balance" activeKey={portionKey} direction={portionDir} onSort={togglePortion} />
             </tr>
           </thead>
           <tbody>
-            {vault.clientPortions.map((row) => (
+            {sortedPortions.map((row) => (
               <tr key={`${row.clientId}-${row.currency}`}>
                 <td>
                   <Link href={`/clients/${row.clientId}`}>{row.clientName}</Link>
@@ -472,14 +531,14 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
           <table className="data data-dense" style={{ marginBottom: "1.25rem" }}>
             <thead>
               <tr>
-                <th>When</th>
-                <th>Client</th>
-                <th>Bank</th>
-                <th>Amount</th>
+                <SortableTh label="When" columnKey="when" activeKey={bankInKey} direction={bankInDir} onSort={toggleBankIn} />
+                <SortableTh label="Client" columnKey="client" activeKey={bankInKey} direction={bankInDir} onSort={toggleBankIn} />
+                <SortableTh label="Bank" columnKey="bank" activeKey={bankInKey} direction={bankInDir} onSort={toggleBankIn} />
+                <SortableTh label="Amount" columnKey="amount" activeKey={bankInKey} direction={bankInDir} onSort={toggleBankIn} />
               </tr>
             </thead>
             <tbody>
-              {vault.recentBankIns.map((row) => (
+              {sortedBankIns.map((row) => (
                 <tr key={row.id}>
                   <td>{new Date(row.occurredAt).toLocaleDateString()}</td>
                   <td>{row.clientName ?? "n/a"}</td>
@@ -498,15 +557,15 @@ export function TrustVaultPanel({ clients, matters, onRefresh }: TrustVaultPanel
           <table className="data data-dense">
             <thead>
               <tr>
-                <th>Counted</th>
-                <th>System</th>
-                <th>Counted</th>
-                <th>Variance</th>
-                <th>Notes</th>
+                <SortableTh label="Counted" columnKey="counted" activeKey={countKey} direction={countDir} onSort={toggleCount} />
+                <SortableTh label="System" columnKey="system" activeKey={countKey} direction={countDir} onSort={toggleCount} />
+                <SortableTh label="Counted" columnKey="countedAmt" activeKey={countKey} direction={countDir} onSort={toggleCount} />
+                <SortableTh label="Variance" columnKey="variance" activeKey={countKey} direction={countDir} onSort={toggleCount} />
+                <SortableTh label="Notes" columnKey="notes" activeKey={countKey} direction={countDir} onSort={toggleCount} />
               </tr>
             </thead>
             <tbody>
-              {vault.recentCounts.map((row) => (
+              {sortedCounts.map((row) => (
                 <tr key={row.id}>
                   <td>{new Date(row.countedAt).toLocaleDateString()}</td>
                   <td>{centsToDisplay(row.systemBalanceCents, vault.currency)}</td>

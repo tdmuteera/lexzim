@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import {
   DEADLINE_TEMPLATE_EVENT_TYPES,
   type DeadlineTemplateEventType,
 } from "@/lib/deadlines/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Template = {
   id: string;
@@ -169,6 +171,21 @@ export function DeadlineTemplatesPanel() {
       setSaving(false);
     }
   }
+
+  const accessors = useMemo(
+    () => ({
+      name: (r: Template) => r.name,
+      offset: (r: Template) => r.offsetDays,
+      type: (r: Template) => r.defaultEventType,
+      area: (r: Template) => r.areaOfLaw ?? "",
+      status: (r: Template) => (r.isActive ? "Active" : "Inactive"),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "name",
+    dir: "asc",
+  });
 
   return (
     <div className="settings-form">
@@ -332,16 +349,16 @@ export function DeadlineTemplatesPanel() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Offset</th>
-                  <th>Type</th>
-                  <th>Area</th>
-                  <th>Status</th>
+                  <SortableTh label="Name" columnKey="name" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Offset" columnKey="offset" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Area" columnKey="area" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {items.map((t) => (
+                {sortedRows.map((t) => (
                   <tr key={t.id}>
                     <td>
                       <div>{t.name}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { FinanceKpisPanel } from "@/components/finance/FinanceKpisPanel";
@@ -9,12 +9,18 @@ import { ExportMenu } from "@/components/export/ExportMenu";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
 import type { FinanceKpis } from "@/lib/repos/finance-kpis";
 import type {
+  FirmAssetRow,
   MonthlyFinancePack,
+  OutstandingInvoiceRow,
+  ReconRunSummary,
   WeeklyFinancePack,
 } from "@/lib/repos/finance-reports";
+import type { TrustClientBalanceRow } from "@/lib/repos/trust";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Tab = "weekly" | "monthly" | "kpis";
 
@@ -183,6 +189,105 @@ export function FinanceReportsView() {
     weeklyPack?.trustSnapshot.accounts
       .filter((a) => a.accountKind === "vault")
       .reduce((sum, a) => sum + a.balanceCents, 0) ?? 0;
+
+  const outstandingInvoices = weeklyPack?.outstandingInvoices ?? [];
+  const outstandingAccessors = useMemo(
+    () => ({
+      invoice: (r: OutstandingInvoiceRow) => r.invoiceNumber,
+      client: (r: OutstandingInvoiceRow) => r.clientName,
+      due: (r: OutstandingInvoiceRow) => r.dueDate,
+      balance: (r: OutstandingInvoiceRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedOutstanding,
+    sortKey: outKey,
+    sortDir: outDir,
+    toggleSort: toggleOut,
+  } = useTableSort(outstandingInvoices, outstandingAccessors, { key: "due", dir: "asc" });
+
+  const clientBalances = weeklyPack?.trustSnapshot.clientBalances ?? [];
+  const balAccessors = useMemo(
+    () => ({
+      client: (r: TrustClientBalanceRow) => r.clientName,
+      balance: (r: TrustClientBalanceRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBalances,
+    sortKey: balKey,
+    sortDir: balDir,
+    toggleSort: toggleBal,
+  } = useTableSort(clientBalances, balAccessors, { key: "client", dir: "asc" });
+
+  const trustRecons = monthlyPack?.trustRecons ?? [];
+  const trustReconAccessors = useMemo(
+    () => ({
+      type: (r: ReconRunSummary) => r.reconType,
+      account: (r: ReconRunSummary) => r.trustAccountName ?? "",
+      status: (r: ReconRunSummary) => r.status,
+      variance: (r: ReconRunSummary) => r.varianceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedTrustRecons,
+    sortKey: trKey,
+    sortDir: trDir,
+    toggleSort: toggleTr,
+  } = useTableSort(trustRecons, trustReconAccessors, { key: "type", dir: "asc" });
+
+  const businessRecons = monthlyPack?.businessBankRecons ?? [];
+  const bizReconAccessors = useMemo(
+    () => ({
+      bank: (r: ReconRunSummary) => r.bankAccountLabel ?? "",
+      status: (r: ReconRunSummary) => r.status,
+      variance: (r: ReconRunSummary) => r.varianceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBizRecons,
+    sortKey: bizKey,
+    sortDir: bizDir,
+    toggleSort: toggleBiz,
+  } = useTableSort(businessRecons, bizReconAccessors, { key: "bank", dir: "asc" });
+
+  type ExpenseItem = MonthlyFinancePack["expenses"]["items"][number];
+  const expenses = monthlyPack?.expenses.items ?? [];
+  const expenseAccessors = useMemo(
+    () => ({
+      date: (r: ExpenseItem) => r.expenseDate,
+      category: (r: ExpenseItem) => r.categoryLabel,
+      payee: (r: ExpenseItem) => r.payee,
+      amount: (r: ExpenseItem) => r.amountCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedExpenses,
+    sortKey: expKey,
+    sortDir: expDir,
+    toggleSort: toggleExp,
+  } = useTableSort(expenses, expenseAccessors, { key: "date", dir: "desc" });
+
+  const assets = monthlyPack?.assets ?? [];
+  const assetAccessors = useMemo(
+    () => ({
+      description: (r: FirmAssetRow) => r.description,
+      acquired: (r: FirmAssetRow) => r.acquiredDate,
+      cost: (r: FirmAssetRow) => r.costCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAssets,
+    sortKey: assetKey,
+    sortDir: assetDir,
+    toggleSort: toggleAsset,
+  } = useTableSort(assets, assetAccessors, { key: "description", dir: "asc" });
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Finance reports">
@@ -360,14 +465,14 @@ export function FinanceReportsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Invoice</th>
-                      <th>Client</th>
-                      <th>Due</th>
-                      <th>Balance</th>
+                      <SortableTh label="Invoice" columnKey="invoice" activeKey={outKey} direction={outDir} onSort={toggleOut} />
+                      <SortableTh label="Client" columnKey="client" activeKey={outKey} direction={outDir} onSort={toggleOut} />
+                      <SortableTh label="Due" columnKey="due" activeKey={outKey} direction={outDir} onSort={toggleOut} />
+                      <SortableTh label="Balance" columnKey="balance" activeKey={outKey} direction={outDir} onSort={toggleOut} />
                     </tr>
                   </thead>
                   <tbody>
-                    {weeklyPack.outstandingInvoices.slice(0, 25).map((row) => (
+                    {sortedOutstanding.slice(0, 25).map((row) => (
                       <tr key={row.invoiceId}>
                         <td>{row.invoiceNumber}</td>
                         <td>{row.clientName}</td>
@@ -391,12 +496,12 @@ export function FinanceReportsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Client</th>
-                      <th>Balance</th>
+                      <SortableTh label="Client" columnKey="client" activeKey={balKey} direction={balDir} onSort={toggleBal} />
+                      <SortableTh label="Balance" columnKey="balance" activeKey={balKey} direction={balDir} onSort={toggleBal} />
                     </tr>
                   </thead>
                   <tbody>
-                    {weeklyPack.trustSnapshot.clientBalances.slice(0, 15).map((row) => (
+                    {sortedBalances.slice(0, 15).map((row) => (
                       <tr key={`${row.clientId}-${row.currency}`}>
                         <td>{row.clientName}</td>
                         <td>{centsToDisplay(row.balanceCents, row.currency)}</td>
@@ -493,14 +598,14 @@ export function FinanceReportsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Type</th>
-                      <th>Account</th>
-                      <th>Status</th>
-                      <th>Variance</th>
+                      <SortableTh label="Type" columnKey="type" activeKey={trKey} direction={trDir} onSort={toggleTr} />
+                      <SortableTh label="Account" columnKey="account" activeKey={trKey} direction={trDir} onSort={toggleTr} />
+                      <SortableTh label="Status" columnKey="status" activeKey={trKey} direction={trDir} onSort={toggleTr} />
+                      <SortableTh label="Variance" columnKey="variance" activeKey={trKey} direction={trDir} onSort={toggleTr} />
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyPack.trustRecons.map((r) => (
+                    {sortedTrustRecons.map((r) => (
                       <tr key={r.id}>
                         <td>{r.reconType}</td>
                         <td>{r.trustAccountName ?? "—"}</td>
@@ -525,13 +630,13 @@ export function FinanceReportsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Bank</th>
-                      <th>Status</th>
-                      <th>Variance</th>
+                      <SortableTh label="Bank" columnKey="bank" activeKey={bizKey} direction={bizDir} onSort={toggleBiz} />
+                      <SortableTh label="Status" columnKey="status" activeKey={bizKey} direction={bizDir} onSort={toggleBiz} />
+                      <SortableTh label="Variance" columnKey="variance" activeKey={bizKey} direction={bizDir} onSort={toggleBiz} />
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyPack.businessBankRecons.map((r) => (
+                    {sortedBizRecons.map((r) => (
                       <tr key={r.id}>
                         <td>{r.bankAccountLabel ?? "—"}</td>
                         <td>
@@ -553,14 +658,14 @@ export function FinanceReportsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Category</th>
-                      <th>Payee</th>
-                      <th>Amount</th>
+                      <SortableTh label="Date" columnKey="date" activeKey={expKey} direction={expDir} onSort={toggleExp} />
+                      <SortableTh label="Category" columnKey="category" activeKey={expKey} direction={expDir} onSort={toggleExp} />
+                      <SortableTh label="Payee" columnKey="payee" activeKey={expKey} direction={expDir} onSort={toggleExp} />
+                      <SortableTh label="Amount" columnKey="amount" activeKey={expKey} direction={expDir} onSort={toggleExp} />
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyPack.expenses.items.map((e) => (
+                    {sortedExpenses.map((e) => (
                       <tr key={e.id}>
                         <td>{formatShortDate(e.expenseDate)}</td>
                         <td>{e.categoryLabel}</td>
@@ -578,13 +683,13 @@ export function FinanceReportsView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>Description</th>
-                        <th>Acquired</th>
-                        <th>Cost</th>
+                        <SortableTh label="Description" columnKey="description" activeKey={assetKey} direction={assetDir} onSort={toggleAsset} />
+                        <SortableTh label="Acquired" columnKey="acquired" activeKey={assetKey} direction={assetDir} onSort={toggleAsset} />
+                        <SortableTh label="Cost" columnKey="cost" activeKey={assetKey} direction={assetDir} onSort={toggleAsset} />
                       </tr>
                     </thead>
                     <tbody>
-                      {monthlyPack.assets.map((a) => (
+                      {sortedAssets.map((a) => (
                         <tr key={a.id}>
                           <td>{a.description}</td>
                           <td>{formatShortDate(a.acquiredDate)}</td>

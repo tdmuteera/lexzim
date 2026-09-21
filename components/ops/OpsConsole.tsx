@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type LicenceSummary = {
   edition: string;
@@ -318,6 +320,24 @@ export function OpsConsole() {
     }
   }
 
+  const firmAccessors = useMemo(
+    () => ({
+      firm: (r: FirmRow) => r.name,
+      status: (r: FirmRow) => r.status,
+      users: (r: FirmRow) => r.activeUsers,
+      licence: (r: FirmRow) =>
+        r.licence
+          ? `${r.licence.edition} · ${r.licence.status}`
+          : "",
+    }),
+    [],
+  );
+  const { sortedRows: sortedFirms, sortKey, sortDir, toggleSort } = useTableSort(
+    firms,
+    firmAccessors,
+    { key: "firm", dir: "asc" },
+  );
+
   return (
     <>
       <section className="ops-card">
@@ -590,15 +610,15 @@ export function OpsConsole() {
             <table className="ops-table">
               <thead>
                 <tr>
-                  <th>Firm</th>
-                  <th>Status</th>
-                  <th>Users</th>
-                  <th>Licence</th>
+                  <SortableTh label="Firm" columnKey="firm" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Users" columnKey="users" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Licence" columnKey="licence" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {firms.map((f) => (
+                {sortedFirms.map((f) => (
                   <tr key={f.id}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{f.name}</div>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { useToast } from "@/components/ui/Toast";
 import { formatDateTime } from "@/lib/format/dates";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type PackSource = {
   id: string;
@@ -169,6 +171,20 @@ export function KnowledgePackPanel() {
     }
   }
 
+  const sources = stats?.sources ?? [];
+  const sourceAccessors = useMemo(
+    () => ({
+      source: (r: PackSource) => r.title,
+      type: (r: PackSource) => r.sourceType,
+      ingested: (r: PackSource) => r.ingestedAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(sources, sourceAccessors, {
+    key: "source",
+    dir: "asc",
+  });
+
   return (
     <div className="settings-form">
       <div className="settings-form-head">
@@ -220,13 +236,13 @@ export function KnowledgePackPanel() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Source</th>
-                  <th>Type</th>
-                  <th>Ingested</th>
+                  <SortableTh label="Source" columnKey="source" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Ingested" columnKey="ingested" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>
-                {stats.sources.map((s) => (
+                {sortedRows.map((s) => (
                   <tr key={s.id}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{s.title}</div>

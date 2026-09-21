@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Can } from "@/components/auth/Can";
@@ -9,6 +9,7 @@ import { SendDocumentButton } from "@/components/email/SendDocumentButton";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
 import {
@@ -17,6 +18,7 @@ import {
   type FeePaymentChannel,
 } from "@/lib/billing/fee-payment-methods";
 import { INVOICING_LIST_PATH } from "@/lib/billing/paths";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Invoice = {
   id: string;
@@ -288,6 +290,41 @@ export function InvoiceDetailView({
       setBusy(false);
     }
   }
+
+  const paymentAccessors = useMemo(
+    () => ({
+      receipt: (r: Payment) => r.receiptNumber ?? "",
+      date: (r: Payment) => r.paidAt,
+      amount: (r: Payment) => r.amountCents,
+      method: (r: Payment) => r.method ?? "",
+      reference: (r: Payment) => r.reference ?? "",
+      balance: (r: Payment) => r.balanceCents ?? 0,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedPayments,
+    sortKey: payKey,
+    sortDir: payDir,
+    toggleSort: togglePay,
+  } = useTableSort(payments, paymentAccessors, { key: "date", dir: "desc" });
+
+  const lineAccessors = useMemo(
+    () => ({
+      description: (r: Line) => r.description,
+      type: (r: Line) => r.lineType,
+      qty: (r: Line) => r.quantity,
+      unit: (r: Line) => r.unitAmountCents,
+      amount: (r: Line) => r.amountCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedLines,
+    sortKey: lineKey,
+    sortDir: lineDir,
+    toggleSort: toggleLine,
+  } = useTableSort(lines, lineAccessors, { key: "description", dir: "asc" });
 
   if (loading && !invoice) {
     return (
@@ -719,17 +756,17 @@ export function InvoiceDetailView({
               <table className="data data-dense">
                 <thead>
                   <tr>
-                    <th>Receipt #</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Method</th>
-                    <th>Reference</th>
-                    <th>Balance after</th>
+                    <SortableTh label="Receipt #" columnKey="receipt" activeKey={payKey} direction={payDir} onSort={togglePay} />
+                    <SortableTh label="Date" columnKey="date" activeKey={payKey} direction={payDir} onSort={togglePay} />
+                    <SortableTh label="Amount" columnKey="amount" activeKey={payKey} direction={payDir} onSort={togglePay} />
+                    <SortableTh label="Method" columnKey="method" activeKey={payKey} direction={payDir} onSort={togglePay} />
+                    <SortableTh label="Reference" columnKey="reference" activeKey={payKey} direction={payDir} onSort={togglePay} />
+                    <SortableTh label="Balance after" columnKey="balance" activeKey={payKey} direction={payDir} onSort={togglePay} />
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p) => (
+                  {sortedPayments.map((p) => (
                     <tr key={p.id}>
                       <td>{p.receiptNumber ?? "n/a"}</td>
                       <td>{new Date(p.paidAt).toLocaleDateString()}</td>
@@ -849,15 +886,15 @@ export function InvoiceDetailView({
           <table className="data data-dense">
             <thead>
               <tr>
-                <th>Description</th>
-                <th>Type</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Amount</th>
+                <SortableTh label="Description" columnKey="description" activeKey={lineKey} direction={lineDir} onSort={toggleLine} />
+                <SortableTh label="Type" columnKey="type" activeKey={lineKey} direction={lineDir} onSort={toggleLine} />
+                <SortableTh label="Qty" columnKey="qty" activeKey={lineKey} direction={lineDir} onSort={toggleLine} />
+                <SortableTh label="Unit" columnKey="unit" activeKey={lineKey} direction={lineDir} onSort={toggleLine} />
+                <SortableTh label="Amount" columnKey="amount" activeKey={lineKey} direction={lineDir} onSort={toggleLine} />
               </tr>
             </thead>
             <tbody>
-              {lines.map((line) => (
+              {sortedLines.map((line) => (
                 <tr key={line.id}>
                   <td>{line.description}</td>
                   <td>{line.lineType}</td>

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type AccountOption = { id: string; name: string; currency: string };
 
@@ -238,6 +240,25 @@ export function ReconciliationsView() {
     }
   }
 
+  const historyAccessors = useMemo(
+    () => ({
+      period: (r: ReconRun) => `${r.periodYear}-${String(r.periodMonth).padStart(2, "0")}`,
+      type: (r: ReconRun) => reconTypeLabel(r.reconType),
+      account: (r: ReconRun) => r.trustAccountName ?? "",
+      statement: (r: ReconRun) => r.statementBalanceCents,
+      book: (r: ReconRun) => r.ledgerBalanceCents,
+      variance: (r: ReconRun) => r.varianceCents,
+      status: (r: ReconRun) => r.status,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedHistory,
+    sortKey,
+    sortDir,
+    toggleSort,
+  } = useTableSort(history, historyAccessors, { key: "period", dir: "desc" });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Reconciliations">
       <div className="panel">
@@ -416,17 +437,17 @@ export function ReconciliationsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Period</th>
-                      <th>Type</th>
-                      <th>Account</th>
-                      <th>Statement</th>
-                      <th>Book</th>
-                      <th>Variance</th>
-                      <th>Status</th>
+                      <SortableTh label="Period" columnKey="period" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Account" columnKey="account" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Statement" columnKey="statement" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Book" columnKey="book" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Variance" columnKey="variance" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                      <SortableTh label="Status" columnKey="status" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((row) => (
+                    {sortedHistory.map((row) => (
                       <tr key={row.id}>
                         <td>{periodLabel(row.periodYear, row.periodMonth)}</td>
                         <td>{reconTypeLabel(row.reconType)}</td>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { ClientEmailButton } from "@/components/email/ClientEmailButton";
 import { ClientDocumentsPanel } from "@/components/clients/ClientDocumentsPanel";
 import { ConflictCheckPanel } from "@/components/clients/ConflictCheckPanel";
@@ -18,6 +19,7 @@ import {
   clientTypeLabel,
   normalizeClientType,
 } from "@/lib/clients/kyc-types";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ClientDetail = {
   id: string;
@@ -118,6 +120,37 @@ export function ClientDetailView({
   const type = normalizeClientType(client.clientType);
   const canSeeKyc = can("clients.kyc.manage") || can("clients.edit");
   const visibleTabs = TABS.filter((t) => t.id !== "kyc" || canSeeKyc);
+
+  const uboAccessors = useMemo(
+    () => ({
+      name: (r: ClientDetail["uboJson"][number]) => r.fullName,
+      nationality: (r: ClientDetail["uboJson"][number]) => r.nationality ?? "",
+      control: (r: ClientDetail["uboJson"][number]) => r.controlPct ?? 0,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedUbos,
+    sortKey: uboKey,
+    sortDir: uboDir,
+    toggleSort: toggleUbo,
+  } = useTableSort(client.uboJson, uboAccessors, { key: "name", dir: "asc" });
+
+  const matterAccessors = useMemo(
+    () => ({
+      title: (r: MatterSummary) => r.title,
+      area: (r: MatterSummary) => r.areaOfLaw,
+      status: (r: MatterSummary) => r.statusLabel || r.status,
+      number: (r: MatterSummary) => r.matterNumber ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedMatters,
+    sortKey: matterKey,
+    sortDir: matterDir,
+    toggleSort: toggleMatter,
+  } = useTableSort(matters, matterAccessors, { key: "title", dir: "asc" });
 
   async function onDownloadKycPdf() {
     setKycPdfLoading(true);
@@ -347,13 +380,13 @@ export function ClientDetailView({
                     <table className="data-table compact">
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Nationality</th>
-                          <th>Control %</th>
+                          <SortableTh label="Name" columnKey="name" activeKey={uboKey} direction={uboDir} onSort={toggleUbo} />
+                          <SortableTh label="Nationality" columnKey="nationality" activeKey={uboKey} direction={uboDir} onSort={toggleUbo} />
+                          <SortableTh label="Control %" columnKey="control" activeKey={uboKey} direction={uboDir} onSort={toggleUbo} />
                         </tr>
                       </thead>
                       <tbody>
-                        {client.uboJson.map((ubo, idx) => (
+                        {sortedUbos.map((ubo, idx) => (
                           <tr key={idx}>
                             <td>{ubo.fullName}</td>
                             <td>{ubo.nationality ?? "—"}</td>
@@ -395,14 +428,14 @@ export function ClientDetailView({
                   <table className="data">
                     <thead>
                       <tr>
-                        <th>Title</th>
-                        <th>Area</th>
-                        <th>Status</th>
-                        <th>Number</th>
+                        <SortableTh label="Title" columnKey="title" activeKey={matterKey} direction={matterDir} onSort={toggleMatter} />
+                        <SortableTh label="Area" columnKey="area" activeKey={matterKey} direction={matterDir} onSort={toggleMatter} />
+                        <SortableTh label="Status" columnKey="status" activeKey={matterKey} direction={matterDir} onSort={toggleMatter} />
+                        <SortableTh label="Number" columnKey="number" activeKey={matterKey} direction={matterDir} onSort={toggleMatter} />
                       </tr>
                     </thead>
                     <tbody>
-                      {matters.map((matter) => (
+                      {sortedMatters.map((matter) => (
                         <tr key={matter.id}>
                           <td>
                             <Link href={`/matters/${matter.id}`}>{matter.title}</Link>

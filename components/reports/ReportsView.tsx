@@ -6,7 +6,9 @@ import type { ReportType } from "@/lib/reports/types";
 import { centsToDisplay, formatMinutes } from "@/lib/billing/money";
 import { Button } from "@/components/ui/Button";
 import { ExportMenu } from "@/components/export/ExportMenu";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { UiAnomalyProbe } from "@/components/diagnostics/UiAnomalyProbe";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 const REPORTS: Array<{ id: ReportType; label: string }> = [
   { id: "ar-aging", label: "AR aging" },
@@ -304,18 +306,51 @@ function ArAgingTable({ report }: { report: Record<string, unknown> }) {
     balanceCents: number;
   }>) ?? [];
 
+  const summaryAccessors = useMemo(
+    () => ({
+      bucket: (r: (typeof summary)[number]) => r.bucket,
+      count: (r: (typeof summary)[number]) => r.count,
+      balance: (r: (typeof summary)[number]) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedSummary,
+    sortKey: sumKey,
+    sortDir: sumDir,
+    toggleSort: toggleSum,
+  } = useTableSort(summary, summaryAccessors, { key: "bucket", dir: "asc" });
+
+  const rowAccessors = useMemo(
+    () => ({
+      invoice: (r: (typeof rows)[number]) => r.invoiceNumber,
+      client: (r: (typeof rows)[number]) => r.clientName,
+      matter: (r: (typeof rows)[number]) => r.matterTitle,
+      due: (r: (typeof rows)[number]) => r.dueDate,
+      bucket: (r: (typeof rows)[number]) => r.bucket,
+      balance: (r: (typeof rows)[number]) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedRows,
+    sortKey: rowKey,
+    sortDir: rowDir,
+    toggleSort: toggleRow,
+  } = useTableSort(rows, rowAccessors, { key: "invoice", dir: "asc" });
+
   return (
     <>
       <table className="data" style={{ marginBottom: "1rem" }}>
         <thead>
           <tr>
-            <th>Bucket</th>
-            <th>Count</th>
-            <th>Balance</th>
+            <SortableTh label="Bucket" columnKey="bucket" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
+            <SortableTh label="Count" columnKey="count" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
+            <SortableTh label="Balance" columnKey="balance" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
           </tr>
         </thead>
         <tbody>
-          {summary.map((s) => (
+          {sortedSummary.map((s) => (
             <tr key={s.bucket}>
               <td>{s.bucket}</td>
               <td>{s.count}</td>
@@ -327,17 +362,17 @@ function ArAgingTable({ report }: { report: Record<string, unknown> }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Invoice</th>
-            <th>Client</th>
-            <th>Matter</th>
-            <th>Due</th>
-            <th>Bucket</th>
-            <th>Balance</th>
+            <SortableTh label="Invoice" columnKey="invoice" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Client" columnKey="client" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Matter" columnKey="matter" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Due" columnKey="due" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Bucket" columnKey="bucket" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Balance" columnKey="balance" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
           </tr>
         </thead>
         <tbody>
-          {rows.length ? (
-            rows.map((r) => (
+          {sortedRows.length ? (
+            sortedRows.map((r) => (
               <tr key={`${r.invoiceNumber}-${r.dueDate}`}>
                 <td>
                   {r.invoiceNumber} ({r.status})
@@ -375,20 +410,35 @@ function TimeTable({ report }: { report: Record<string, unknown> }) {
     entries: number;
   }>) ?? [];
 
+  const accessors = useMemo(
+    () => ({
+      group: (r: (typeof rows)[number]) => r.label,
+      minutes: (r: (typeof rows)[number]) => r.minutes,
+      billable: (r: (typeof rows)[number]) => r.billableMinutes,
+      amount: (r: (typeof rows)[number]) => r.amountCents,
+      entries: (r: (typeof rows)[number]) => r.entries,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(rows, accessors, {
+    key: "group",
+    dir: "asc",
+  });
+
   return (
     <table className="data">
       <thead>
         <tr>
-          <th>Group</th>
-          <th>Minutes</th>
-          <th>Billable</th>
-          <th>Amount</th>
-          <th>Entries</th>
+          <SortableTh label="Group" columnKey="group" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Minutes" columnKey="minutes" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Billable" columnKey="billable" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Amount" columnKey="amount" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Entries" columnKey="entries" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
         </tr>
       </thead>
       <tbody>
-        {rows.length ? (
-          rows.map((r) => (
+        {sortedRows.length ? (
+          sortedRows.map((r) => (
             <tr key={r.key}>
               <td>{r.label}</td>
               <td>{formatMinutes(r.minutes)}</td>
@@ -424,19 +474,48 @@ function TrustBalancesTable({ report }: { report: Record<string, unknown> }) {
     balanceCents: number;
   }>) ?? [];
 
+  const accountAccessors = useMemo(
+    () => ({
+      account: (r: (typeof accounts)[number]) => r.name,
+      active: (r: (typeof accounts)[number]) => (r.isActive ? "yes" : "no"),
+      balance: (r: (typeof accounts)[number]) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAccounts,
+    sortKey: acctKey,
+    sortDir: acctDir,
+    toggleSort: toggleAcct,
+  } = useTableSort(accounts, accountAccessors, { key: "account", dir: "asc" });
+
+  const clientAccessors = useMemo(
+    () => ({
+      client: (r: (typeof clients)[number]) => r.clientName,
+      balance: (r: (typeof clients)[number]) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedClients,
+    sortKey: clientKey,
+    sortDir: clientDir,
+    toggleSort: toggleClient,
+  } = useTableSort(clients, clientAccessors, { key: "client", dir: "asc" });
+
   return (
     <>
       <h5>Accounts</h5>
       <table className="data" style={{ marginBottom: "1rem" }}>
         <thead>
           <tr>
-            <th>Account</th>
-            <th>Active</th>
-            <th>Balance</th>
+            <SortableTh label="Account" columnKey="account" activeKey={acctKey} direction={acctDir} onSort={toggleAcct} />
+            <SortableTh label="Active" columnKey="active" activeKey={acctKey} direction={acctDir} onSort={toggleAcct} />
+            <SortableTh label="Balance" columnKey="balance" activeKey={acctKey} direction={acctDir} onSort={toggleAcct} />
           </tr>
         </thead>
         <tbody>
-          {accounts.map((a) => (
+          {sortedAccounts.map((a) => (
             <tr key={a.id}>
               <td>{a.name}</td>
               <td>{a.isActive ? "yes" : "no"}</td>
@@ -449,13 +528,13 @@ function TrustBalancesTable({ report }: { report: Record<string, unknown> }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Client</th>
-            <th>Balance</th>
+            <SortableTh label="Client" columnKey="client" activeKey={clientKey} direction={clientDir} onSort={toggleClient} />
+            <SortableTh label="Balance" columnKey="balance" activeKey={clientKey} direction={clientDir} onSort={toggleClient} />
           </tr>
         </thead>
         <tbody>
-          {clients.length ? (
-            clients.map((c) => (
+          {sortedClients.length ? (
+            sortedClients.map((c) => (
               <tr key={c.clientId}>
                 <td>{c.clientName}</td>
                 <td>{centsToDisplay(c.balanceCents, c.currency)}</td>
@@ -487,22 +566,39 @@ function TrustMovementsTable({ report }: { report: Record<string, unknown> }) {
     reference: string | null;
   }>) ?? [];
 
+  const accessors = useMemo(
+    () => ({
+      when: (r: (typeof rows)[number]) => r.occurredAt,
+      type: (r: (typeof rows)[number]) => r.entryType,
+      account: (r: (typeof rows)[number]) => r.accountName,
+      client: (r: (typeof rows)[number]) => r.clientName ?? "",
+      matter: (r: (typeof rows)[number]) => r.matterTitle ?? "",
+      amount: (r: (typeof rows)[number]) => r.amountCents,
+      ref: (r: (typeof rows)[number]) => r.reference ?? "",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(rows, accessors, {
+    key: "when",
+    dir: "desc",
+  });
+
   return (
     <table className="data">
       <thead>
         <tr>
-          <th>When</th>
-          <th>Type</th>
-          <th>Account</th>
-          <th>Client</th>
-          <th>Matter</th>
-          <th>Amount</th>
-          <th>Ref</th>
+          <SortableTh label="When" columnKey="when" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Account" columnKey="account" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Client" columnKey="client" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Matter" columnKey="matter" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Amount" columnKey="amount" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+          <SortableTh label="Ref" columnKey="ref" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
         </tr>
       </thead>
       <tbody>
-        {rows.length ? (
-          rows.map((r) => (
+        {sortedRows.length ? (
+          sortedRows.map((r) => (
             <tr key={r.id}>
               <td>{new Date(r.occurredAt).toLocaleString()}</td>
               <td>{r.entryType}</td>
@@ -541,18 +637,53 @@ function WorkloadTable({ report }: { report: Record<string, unknown> }) {
     clientName: string;
   }>) ?? [];
 
+  const summaryAccessors = useMemo(
+    () => ({
+      lawyer: (r: (typeof summary)[number]) => r.lawyerName,
+      open: (r: (typeof summary)[number]) => r.count,
+      byStatus: (r: (typeof summary)[number]) =>
+        Object.entries(r.byStatus)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", "),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedSummary,
+    sortKey: sumKey,
+    sortDir: sumDir,
+    toggleSort: toggleSum,
+  } = useTableSort(summary, summaryAccessors, { key: "lawyer", dir: "asc" });
+
+  const rowAccessors = useMemo(
+    () => ({
+      matter: (r: (typeof rows)[number]) =>
+        r.matterNumber ? `${r.matterNumber} · ${r.title}` : r.title,
+      client: (r: (typeof rows)[number]) => r.clientName,
+      lawyer: (r: (typeof rows)[number]) => r.lawyerName,
+      status: (r: (typeof rows)[number]) => r.status,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedRows,
+    sortKey: rowKey,
+    sortDir: rowDir,
+    toggleSort: toggleRow,
+  } = useTableSort(rows, rowAccessors, { key: "matter", dir: "asc" });
+
   return (
     <>
       <table className="data" style={{ marginBottom: "1rem" }}>
         <thead>
           <tr>
-            <th>Lawyer</th>
-            <th>Open matters</th>
-            <th>By status</th>
+            <SortableTh label="Lawyer" columnKey="lawyer" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
+            <SortableTh label="Open matters" columnKey="open" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
+            <SortableTh label="By status" columnKey="byStatus" activeKey={sumKey} direction={sumDir} onSort={toggleSum} />
           </tr>
         </thead>
         <tbody>
-          {summary.map((s) => (
+          {sortedSummary.map((s) => (
             <tr key={s.lawyerId ?? "unassigned"}>
               <td>{s.lawyerName}</td>
               <td>{s.count}</td>
@@ -568,14 +699,14 @@ function WorkloadTable({ report }: { report: Record<string, unknown> }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Matter</th>
-            <th>Client</th>
-            <th>Lawyer</th>
-            <th>Status</th>
+            <SortableTh label="Matter" columnKey="matter" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Client" columnKey="client" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Lawyer" columnKey="lawyer" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
+            <SortableTh label="Status" columnKey="status" activeKey={rowKey} direction={rowDir} onSort={toggleRow} />
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {sortedRows.map((r) => (
             <tr key={r.matterId}>
               <td>
                 {r.matterNumber ? `${r.matterNumber} · ` : ""}
@@ -609,21 +740,54 @@ function UpcomingTable({ report }: { report: Record<string, unknown> }) {
     matterNumber: string | null;
   }>) ?? [];
 
+  const hearingAccessors = useMemo(
+    () => ({
+      when: (r: (typeof hearings)[number]) => r.startsAt,
+      type: (r: (typeof hearings)[number]) => r.eventType,
+      title: (r: (typeof hearings)[number]) => r.title,
+      matter: (r: (typeof hearings)[number]) =>
+        r.matterNumber ? `${r.matterNumber} · ${r.matterTitle ?? ""}` : r.matterTitle ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedHearings,
+    sortKey: hearKey,
+    sortDir: hearDir,
+    toggleSort: toggleHear,
+  } = useTableSort(hearings, hearingAccessors, { key: "when", dir: "asc" });
+
+  const deadlineAccessors = useMemo(
+    () => ({
+      due: (r: (typeof deadlines)[number]) => r.dueAt,
+      title: (r: (typeof deadlines)[number]) => r.title,
+      matter: (r: (typeof deadlines)[number]) =>
+        r.matterNumber ? `${r.matterNumber} · ${r.matterTitle ?? ""}` : r.matterTitle ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedDeadlines,
+    sortKey: dlKey,
+    sortDir: dlDir,
+    toggleSort: toggleDl,
+  } = useTableSort(deadlines, deadlineAccessors, { key: "due", dir: "asc" });
+
   return (
     <>
       <h5>Calendar / hearings</h5>
       <table className="data" style={{ marginBottom: "1rem" }}>
         <thead>
           <tr>
-            <th>When</th>
-            <th>Type</th>
-            <th>Title</th>
-            <th>Matter</th>
+            <SortableTh label="When" columnKey="when" activeKey={hearKey} direction={hearDir} onSort={toggleHear} />
+            <SortableTh label="Type" columnKey="type" activeKey={hearKey} direction={hearDir} onSort={toggleHear} />
+            <SortableTh label="Title" columnKey="title" activeKey={hearKey} direction={hearDir} onSort={toggleHear} />
+            <SortableTh label="Matter" columnKey="matter" activeKey={hearKey} direction={hearDir} onSort={toggleHear} />
           </tr>
         </thead>
         <tbody>
-          {hearings.length ? (
-            hearings.map((h) => (
+          {sortedHearings.length ? (
+            sortedHearings.map((h) => (
               <tr key={h.id}>
                 <td>{new Date(h.startsAt).toLocaleString()}</td>
                 <td>{h.eventType}</td>
@@ -647,14 +811,14 @@ function UpcomingTable({ report }: { report: Record<string, unknown> }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Due</th>
-            <th>Title</th>
-            <th>Matter</th>
+            <SortableTh label="Due" columnKey="due" activeKey={dlKey} direction={dlDir} onSort={toggleDl} />
+            <SortableTh label="Title" columnKey="title" activeKey={dlKey} direction={dlDir} onSort={toggleDl} />
+            <SortableTh label="Matter" columnKey="matter" activeKey={dlKey} direction={dlDir} onSort={toggleDl} />
           </tr>
         </thead>
         <tbody>
-          {deadlines.length ? (
-            deadlines.map((d) => (
+          {sortedDeadlines.length ? (
+            sortedDeadlines.map((d) => (
               <tr key={d.id}>
                 <td>{new Date(d.dueAt).toLocaleString()}</td>
                 <td>{d.title}</td>

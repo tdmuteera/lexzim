@@ -5,7 +5,9 @@ import { ExportMenu } from "@/components/export/ExportMenu";
 import { AccountingSubNav } from "@/components/finance/AccountingSubNav";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type TrialBalanceRow = {
   code: string;
@@ -75,6 +77,21 @@ export function GlTrialBalanceView() {
 
   const rows = report?.rows ?? [];
 
+  const accessors = useMemo(
+    () => ({
+      code: (r: TrialBalanceRow) => r.code,
+      account: (r: TrialBalanceRow) => r.name,
+      type: (r: TrialBalanceRow) => r.type,
+      debit: (r: TrialBalanceRow) => r.debitCents,
+      credit: (r: TrialBalanceRow) => r.creditCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(rows, accessors, {
+    key: "code",
+    dir: "asc",
+  });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Trial balance">
       <AccountingSubNav />
@@ -117,15 +134,15 @@ export function GlTrialBalanceView() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Account</th>
-                    <th>Type</th>
-                    <th className="align-right">Debit</th>
-                    <th className="align-right">Credit</th>
+                    <SortableTh label="Code" columnKey="code" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Account" columnKey="account" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                    <SortableTh label="Debit" columnKey="debit" activeKey={sortKey} direction={sortDir} onSort={toggleSort} align="right" className="align-right" />
+                    <SortableTh label="Credit" columnKey="credit" activeKey={sortKey} direction={sortDir} onSort={toggleSort} align="right" className="align-right" />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {sortedRows.map((r) => (
                     <tr key={r.code}>
                       <td>{r.code}</td>
                       <td>{r.name}</td>
