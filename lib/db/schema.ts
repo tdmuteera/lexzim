@@ -2299,6 +2299,68 @@ export const firmServices = pgTable(
   ],
 );
 
+/**
+ * Firm-wide Pro Forma invoices (estimate only).
+ * Never posts to GL / AR / client balance.
+ */
+export const proFormas = pgTable(
+  "pro_formas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    proformaNumber: text("proforma_number").notNull(),
+    /** legal_fees | conveyancing */
+    kind: text("kind").notNull(),
+    /** registered_title | cession | commercial (conveyancing only) */
+    conveyancingCategory: text("conveyancing_category"),
+    propertyValueCents: integer("property_value_cents"),
+    /** draft | sent | void */
+    status: text("status").notNull().default("draft"),
+    currency: text("currency").notNull().default("USD"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("pro_formas_firm_number_uid").on(t.firmId, t.proformaNumber),
+    index("pro_formas_firm_status_idx").on(t.firmId, t.status),
+    index("pro_formas_firm_client_idx").on(t.firmId, t.clientId),
+    index("pro_formas_firm_kind_idx").on(t.firmId, t.kind),
+  ],
+);
+
+export const proFormaLines = pgTable(
+  "pro_forma_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    proformaId: uuid("proforma_id")
+      .notNull()
+      .references(() => proFormas.id, { onDelete: "cascade" }),
+    lineCode: text("line_code").notNull(),
+    description: text("description").notNull(),
+    included: boolean("included").notNull().default(true),
+    isOptional: boolean("is_optional").notNull().default(false),
+    qty: real("qty").notNull().default(1),
+    unitPriceCents: integer("unit_price_cents").notNull().default(0),
+    lineTotalCents: integer("line_total_cents").notNull().default(0),
+    ratePct: real("rate_pct"),
+    calcHint: text("calc_hint"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("pro_forma_lines_firm_proforma_idx").on(t.firmId, t.proformaId)],
+);
+
 /** Client quotations (Phase 7). No GL posting until invoice. */
 export const quotations = pgTable(
   "quotations",
@@ -2706,6 +2768,8 @@ export const schema = {
   glJournalEntries,
   glJournalLines,
   firmServices,
+  proFormas,
+  proFormaLines,
   quotations,
   quotationLines,
   pettyCashFloats,

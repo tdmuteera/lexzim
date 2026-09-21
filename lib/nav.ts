@@ -96,6 +96,13 @@ export const navSections: NavSection[] = [
         anyOf: ["billing.view", "billing.my_clients.view"],
       },
       {
+        href: "/finance/proforma",
+        label: "Pro forma",
+        icon: "clipboard",
+        permission: "billing.view",
+        anyOf: ["billing.view", "finance.quote.manage"],
+      },
+      {
         href: "/finance/debtors",
         label: "Debtors",
         icon: "list",
@@ -303,6 +310,13 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "Fee notes · time · disbursements · fee payments",
     purpose: "Track fee invoices and fee receipts, separate from trust.",
     phaseBadge: "Phase 3+",
+  },
+  "/finance/proforma": {
+    title: "Pro forma",
+    subtitle: "Legal fees draft · conveyancing estimates",
+    purpose:
+      "Draft legal-fees and conveyancing estimates. Prefills are editable. Does not post to debtors or GL.",
+    phaseBadge: "Phase 11",
   },
   "/finance/debtors": {
     title: "Debtors",

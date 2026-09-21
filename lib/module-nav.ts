@@ -30,6 +30,12 @@ export const FINANCE_TABS: ModuleTab[] = [
     aliases: ["/billing"],
   },
   {
+    href: "/finance/proforma",
+    label: "Pro forma",
+    permission: "billing.view",
+    anyOf: ["billing.view", "finance.quote.manage"],
+  },
+  {
     href: "/finance/debtors",
     label: "Debtors",
     permission: "billing.view",
@@ -109,6 +115,10 @@ export const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     anyOf: ["billing.view", "billing.my_clients.view"],
   },
   { prefix: "/billing", anyOf: ["billing.view", "billing.my_clients.view"] },
+  {
+    prefix: "/finance/proforma",
+    anyOf: ["billing.view", "finance.quote.manage"],
+  },
   {
     prefix: "/finance/debtors",
     anyOf: ["billing.view", "billing.my_clients.view"],
