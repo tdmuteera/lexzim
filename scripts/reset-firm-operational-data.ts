@@ -6,14 +6,21 @@
  * ai_settings, gl_accounts, firm_services, deadline_templates, hr_leave_types,
  * firm_holidays.
  *
+ * Optional keep flags (migration rehearsals):
+ *   --keep-calendar   leave calendar_events (+ shares/guests)
+ *   --keep-ai-chats   leave ai_conversations + ai_messages
+ *
+ * Privileged: non-dry-run requires developer unlock (DEVELOPER_UNLOCK_PASSWORD).
+ *
  * Usage:
  *   npx tsx scripts/reset-firm-operational-data.ts --slug=t-pfigu-attorneys --confirm="RESET FIRM DATA"
- *   npx tsx scripts/reset-firm-operational-data.ts --slug=t-pfigu-attorneys --confirm="RESET FIRM DATA" --remove-demo-users
+ *   npx tsx scripts/reset-firm-operational-data.ts --slug=t-pfigu-attorneys --confirm="RESET FIRM DATA" --keep-calendar --keep-ai-chats
  *   npx tsx scripts/reset-firm-operational-data.ts --slug=t-pfigu-attorneys --dry-run
  */
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
+import { assertDeveloperUnlock } from "../lib/developer/unlock";
 
 config({ path: ".env.local" });
 
@@ -33,6 +40,9 @@ const KEEP_TABLES = new Set([
   "hr_leave_types",
   "firm_holidays",
 ]);
+
+const CALENDAR_KEEP = ["calendar_event_guests", "calendar_event_shares", "calendar_events"] as const;
+const AI_CHAT_KEEP = ["ai_messages", "ai_conversations"] as const;
 
 /** Prefer wiping these before parents that use ON DELETE RESTRICT. */
 const DELETE_ORDER_HINT = [
@@ -149,6 +159,8 @@ async function main() {
   const confirm = arg("confirm")?.trim();
   const dryRun = hasFlag("dry-run");
   const removeDemoUsers = hasFlag("remove-demo-users");
+  const keepCalendar = hasFlag("keep-calendar");
+  const keepAiChats = hasFlag("keep-ai-chats");
 
   if (!slug) {
     console.error("Required: --slug=<firm-slug>");
@@ -158,6 +170,15 @@ async function main() {
     console.error(`Required: --confirm="${CONFIRM_PHRASE}" (or pass --dry-run)`);
     process.exit(1);
   }
+
+  if (!dryRun) {
+    assertDeveloperUnlock();
+    console.log("Developer unlock: ok (env)");
+  }
+
+  const keep = new Set(KEEP_TABLES);
+  if (keepCalendar) for (const t of CALENDAR_KEEP) keep.add(t);
+  if (keepAiChats) for (const t of AI_CHAT_KEEP) keep.add(t);
 
   const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
   if (!url) throw new Error("DIRECT_URL or DATABASE_URL required");
@@ -198,7 +219,7 @@ async function main() {
 
   const wipeTables = tables
     .map((t) => t.table_name)
-    .filter((t) => !KEEP_TABLES.has(t));
+    .filter((t) => !keep.has(t));
 
   const ordered = [
     ...DELETE_ORDER_HINT.filter((t) => wipeTables.includes(t)),
@@ -207,6 +228,9 @@ async function main() {
 
   console.log(`Firm: ${firm.name} (${firm.slug}) id=${firm.id}`);
   console.log(`Mode: ${dryRun ? "DRY RUN" : "EXECUTE"}`);
+  console.log(
+    `Keep extras: calendar=${keepCalendar ? "yes" : "no"} ai_chats=${keepAiChats ? "yes" : "no"}`,
+  );
   console.log(`Tables to wipe: ${ordered.length}`);
 
   const before: Record<string, number> = {};
@@ -338,7 +362,9 @@ async function main() {
     LIMIT 1
   `;
 
-  if (isolation[0] && isolationAfter[0]) {
+  // When wiping another firm, isolation must stay unchanged.
+  // When the wipe target IS isolation-test-firm, skip that guard.
+  if (firm.slug !== "isolation-test-firm" && isolation[0] && isolationAfter[0]) {
     if (
       isolation[0].clients !== isolationAfter[0].clients ||
       isolation[0].matters !== isolationAfter[0].matters
@@ -350,7 +376,7 @@ async function main() {
     );
   }
 
-  console.log("\nT Pfigu after reset:");
+  console.log(`\n${firm.name} after reset:`);
   console.log(`  clients=${afterClients[0]?.n ?? 0}`);
   console.log(`  matters=${afterMatters[0]?.n ?? 0}`);
   console.log(`  invoices=${afterInvoices[0]?.n ?? 0}`);
