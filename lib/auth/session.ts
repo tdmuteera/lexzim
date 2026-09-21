@@ -10,8 +10,14 @@ import { getEffectivePermissionCodes } from "@/lib/rbac/repository";
 import { AuthError, type AuthSessionUser } from "@/lib/auth/types";
 import {
   decodeAccessTokenClaims,
+  enforceStaffSessionFreshness,
   isStaffSessionRevoked,
 } from "@/lib/auth/staff-sessions";
+import {
+  STAFF_EXPIRED_LOGOUT_REASON,
+  STAFF_IDLE_LOGOUT_REASON,
+  type StaffLogoutReason,
+} from "@/lib/auth/idle-timeout";
 
 async function loadSessionUser(authUserId: string): Promise<AuthSessionUser | null> {
   const db = getDb();
@@ -113,12 +119,23 @@ export const authCurrentUser = cache(async (): Promise<AuthSessionUser | null> =
       data: { session },
     } = await supabase.auth.getSession();
     const accessToken = session?.access_token ?? null;
-    if (accessToken) {
-      const { sessionId } = decodeAccessTokenClaims(accessToken);
-      if (await isStaffSessionRevoked(sessionId)) {
-        await supabase.auth.signOut();
-        return null;
-      }
+    const { sessionId } = accessToken
+      ? decodeAccessTokenClaims(accessToken)
+      : { sessionId: null };
+
+    if (await isStaffSessionRevoked(sessionId)) {
+      await supabase.auth.signOut();
+      return null;
+    }
+
+    const freshness = await enforceStaffSessionFreshness({
+      userId: user.id,
+      sessionId,
+      touch: true,
+    });
+    if (freshness !== "ok") {
+      await supabase.auth.signOut();
+      return null;
     }
 
     const profile = await loadSessionUser(user.id);
@@ -146,16 +163,50 @@ export async function requireSession(): Promise<AuthSessionUser> {
   return session;
 }
 
+export type CookieSessionGate =
+  | { ok: true }
+  | { ok: false; reason: StaffLogoutReason | null };
+
 /**
- * Fast gate for platform shell: JWT / cookie only, no Postgres.
- * Full firm/role profile still loads via APIs and authCurrentUser when needed.
+ * Platform shell gate: JWT present AND staff session still within idle / absolute limits.
+ * Signs out and returns a login reason when the cookie is stale (bookmark / closed-tab return).
  */
-export async function authHasCookieSession(): Promise<boolean> {
+export async function authCookieSessionGate(): Promise<CookieSessionGate> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return Boolean(user);
+  if (!user) return { ok: false, reason: null };
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+  const { sessionId } = accessToken
+    ? decodeAccessTokenClaims(accessToken)
+    : { sessionId: null };
+
+  if (await isStaffSessionRevoked(sessionId)) {
+    await supabase.auth.signOut();
+    return { ok: false, reason: STAFF_EXPIRED_LOGOUT_REASON };
+  }
+
+  const freshness = await enforceStaffSessionFreshness({
+    userId: user.id,
+    sessionId,
+    touch: false,
+  });
+  if (freshness === "ok") return { ok: true };
+
+  await supabase.auth.signOut();
+  if (freshness === "idle") return { ok: false, reason: STAFF_IDLE_LOGOUT_REASON };
+  return { ok: false, reason: STAFF_EXPIRED_LOGOUT_REASON };
+}
+
+/** @deprecated Prefer authCookieSessionGate for idle/absolute enforcement. */
+export async function authHasCookieSession(): Promise<boolean> {
+  const gate = await authCookieSessionGate();
+  return gate.ok;
 }
 
 export { loadSessionUser };

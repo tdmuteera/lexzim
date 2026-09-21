@@ -1,12 +1,12 @@
-/**
- * Staff web session registry + revoke helpers (P5-08).
- * Tracks Supabase Auth session ids so Managing Partners can list/revoke
- * without desktop device pairing.
- */
 import "server-only";
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
+import {
+  STAFF_ACTIVITY_PING_MIN_MS,
+  STAFF_IDLE_TIMEOUT_MS,
+  STAFF_SESSION_ABSOLUTE_MAX_MS,
+} from "@/lib/auth/idle-timeout";
 import { getDb, getSql } from "@/lib/db";
 import { staffSessions, users } from "@/lib/db/schema";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,6 +29,104 @@ export function decodeAccessTokenClaims(accessToken: string): {
   }
 }
 
+export type StaffSessionFreshness = "ok" | "idle" | "expired" | "revoked";
+
+/**
+ * Server-side idle + absolute session gate.
+ * Returns why the session should end, or "ok" (and may refresh lastSeenAt).
+ */
+export async function enforceStaffSessionFreshness(input: {
+  userId: string;
+  sessionId: string | null;
+  /** When true, update lastSeenAt after a successful freshness check. */
+  touch?: boolean;
+}): Promise<StaffSessionFreshness> {
+  const db = getDb();
+  const now = Date.now();
+
+  let row:
+    | {
+        id: string;
+        createdAt: Date;
+        lastSeenAt: Date;
+        revokedAt: Date | null;
+      }
+    | undefined;
+
+  if (input.sessionId) {
+    const rows = await db
+      .select({
+        id: staffSessions.id,
+        createdAt: staffSessions.createdAt,
+        lastSeenAt: staffSessions.lastSeenAt,
+        revokedAt: staffSessions.revokedAt,
+      })
+      .from(staffSessions)
+      .where(
+        and(
+          eq(staffSessions.userId, input.userId),
+          eq(staffSessions.sessionId, input.sessionId),
+        ),
+      )
+      .limit(1);
+    row = rows[0];
+  }
+
+  if (!row) {
+    const rows = await db
+      .select({
+        id: staffSessions.id,
+        createdAt: staffSessions.createdAt,
+        lastSeenAt: staffSessions.lastSeenAt,
+        revokedAt: staffSessions.revokedAt,
+      })
+      .from(staffSessions)
+      .where(
+        and(eq(staffSessions.userId, input.userId), isNull(staffSessions.revokedAt)),
+      )
+      .orderBy(desc(staffSessions.lastSeenAt))
+      .limit(1);
+    row = rows[0];
+  }
+
+  // No registry row (legacy / failed register): require a fresh sign-in.
+  if (!row) return "expired";
+  if (row.revokedAt) return "revoked";
+
+  if (now - row.createdAt.getTime() > STAFF_SESSION_ABSOLUTE_MAX_MS) {
+    await db
+      .update(staffSessions)
+      .set({ revokedAt: new Date(), revokedByUserId: input.userId })
+      .where(and(eq(staffSessions.id, row.id), isNull(staffSessions.revokedAt)));
+    return "expired";
+  }
+
+  if (now - row.lastSeenAt.getTime() > STAFF_IDLE_TIMEOUT_MS) {
+    await db
+      .update(staffSessions)
+      .set({ revokedAt: new Date(), revokedByUserId: input.userId })
+      .where(and(eq(staffSessions.id, row.id), isNull(staffSessions.revokedAt)));
+    return "idle";
+  }
+
+  if (input.touch !== false && now - row.lastSeenAt.getTime() >= STAFF_ACTIVITY_PING_MIN_MS) {
+    await db
+      .update(staffSessions)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(staffSessions.id, row.id));
+  }
+
+  return "ok";
+}
+
+/** Explicit activity heartbeat from the open browser tab. */
+export async function touchStaffSessionActivity(input: {
+  userId: string;
+  sessionId: string | null;
+}): Promise<StaffSessionFreshness> {
+  return enforceStaffSessionFreshness({ ...input, touch: true });
+}
+
 export async function registerStaffSession(input: {
   firmId: string;
   userId: string;
@@ -36,6 +134,7 @@ export async function registerStaffSession(input: {
   ipOrUserAgent?: string | null;
 }) {
   const db = getDb();
+  const now = new Date();
   if (input.sessionId) {
     const existing = await db
       .select()
@@ -54,7 +153,8 @@ export async function registerStaffSession(input: {
       const rows = await db
         .update(staffSessions)
         .set({
-          lastSeenAt: new Date(),
+          lastSeenAt: now,
+          createdAt: now,
           ipOrUserAgent: input.ipOrUserAgent ?? existing[0].ipOrUserAgent,
         })
         .where(eq(staffSessions.id, existing[0].id))
@@ -71,6 +171,8 @@ export async function registerStaffSession(input: {
       sessionId: input.sessionId,
       ipOrUserAgent: input.ipOrUserAgent ?? null,
       userAgent: input.ipOrUserAgent ?? null,
+      createdAt: now,
+      lastSeenAt: now,
     })
     .returning();
   return rows[0];

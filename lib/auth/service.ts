@@ -291,7 +291,12 @@ export async function authLogout(opts?: {
 
   if (current) {
     await writeAuditLog({
-      action: opts?.reason === "idle" ? "auth.idle_logout" : "auth.logout",
+      action:
+        opts?.reason === "idle"
+          ? "auth.idle_logout"
+          : opts?.reason === "expired"
+            ? "auth.session_expired"
+            : "auth.logout",
       firmId: current.firm.id,
       userId: current.id,
       metadata: {

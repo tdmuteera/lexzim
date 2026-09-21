@@ -34,8 +34,11 @@ export function LoginForm() {
   const [resetMsg, setResetMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (searchParams.get("reason") === "idle") {
+    const reason = searchParams.get("reason");
+    if (reason === "idle") {
       setInfo("Signed out after inactivity. Sign in again to continue.");
+    } else if (reason === "expired") {
+      setInfo("Your session ended. Sign in again to continue.");
     }
   }, [searchParams]);
 

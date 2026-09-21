@@ -89,12 +89,27 @@ async function main() {
     "Idle timeout STAFF_IDLE + 30min default",
     idleSrc.includes("STAFF_IDLE") &&
       idleSrc.includes("30 * 60 * 1000") &&
-      idleSrc.includes("NEXT_PUBLIC_STAFF_IDLE_TIMEOUT_MS"),
+      idleSrc.includes("NEXT_PUBLIC_STAFF_IDLE_TIMEOUT_MS") &&
+      idleSrc.includes("STAFF_SESSION_ABSOLUTE_MAX_MS") &&
+      idleSrc.includes("2 * 24 * 60 * 60 * 1000"),
   );
   const guardSrc = read("components/auth/IdleSessionGuard.tsx");
   check(
-    "IdleSessionGuard uses STAFF_IDLE_TIMEOUT_MS",
-    guardSrc.includes("STAFF_IDLE_TIMEOUT_MS") && guardSrc.includes("STAFF_IDLE_LOGOUT_REASON"),
+    "IdleSessionGuard uses STAFF_IDLE_TIMEOUT_MS + activity ping",
+    guardSrc.includes("STAFF_IDLE_TIMEOUT_MS") &&
+      guardSrc.includes("STAFF_IDLE_LOGOUT_REASON") &&
+      guardSrc.includes("/api/auth/activity"),
+  );
+  const sessionGateSrc = read("lib/auth/session.ts");
+  check(
+    "Platform cookie gate enforces staff session freshness",
+    sessionGateSrc.includes("authCookieSessionGate") &&
+      sessionGateSrc.includes("enforceStaffSessionFreshness"),
+  );
+  const activityRoute = read("app/api/auth/activity/route.ts");
+  check(
+    "Activity heartbeat route exists",
+    activityRoute.includes("touchStaffSessionActivity"),
   );
 
   // 2) Platform purge guard (source)
