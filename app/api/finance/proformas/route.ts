@@ -1,12 +1,16 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
+import { isMissingRelationError } from "@/lib/db/missing-relation";
 import { isProformaKind, isProformaStatus } from "@/lib/proforma/types";
-import { serializeProformaListItem } from "@/lib/proforma/serialize";
+import { serializeProformaDetail, serializeProformaListItem } from "@/lib/proforma/serialize";
 import { parseCreateProformaInput } from "@/lib/proforma/validation";
-import { createProforma, listProformas } from "@/lib/repos/proformas";
-import { requirePermission } from "@/lib/rbac/guards";
+import { createProforma, getProforma, listProformas } from "@/lib/repos/proformas";
+import { requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
+
+const MIGRATION_HINT =
+  "Pro forma tables are missing on this database. Run npm run db:migrate (migration 0050_pro_formas), then refresh.";
 
 export async function GET(request: Request) {
   try {
@@ -19,8 +23,15 @@ export async function GET(request: Request) {
     const kind = kindRaw && isProformaKind(kindRaw) ? kindRaw : undefined;
     const clientId = url.searchParams.get("clientId")?.trim() || undefined;
 
-    const rows = await listProformas(firmId, { status, kind, clientId });
-    return jsonOk({ items: rows.map(serializeProformaListItem) });
+    try {
+      const rows = await listProformas(firmId, { status, kind, clientId });
+      return jsonOk({ items: rows.map(serializeProformaListItem), migrationNeeded: false });
+    } catch (err) {
+      if (isMissingRelationError(err)) {
+        return jsonOk({ items: [], migrationNeeded: true, migrationHint: MIGRATION_HINT });
+      }
+      throw err;
+    }
   } catch (err) {
     return jsonError(err, request);
   }
@@ -28,16 +39,25 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await requirePermission("finance.quote.manage");
+    const session = await requireAny(["finance.quote.manage", "billing.manage"]);
     const firmId = tenantFirmId(session);
     const body = await request.json();
     const input = parseCreateProformaInput(body);
-    const created = await createProforma(
-      firmId,
-      session.id,
-      input,
-      session.firm.defaultCurrency || "USD",
-    );
+
+    let created;
+    try {
+      created = await createProforma(
+        firmId,
+        session.id,
+        input,
+        session.firm.defaultCurrency || "USD",
+      );
+    } catch (err) {
+      if (isMissingRelationError(err)) {
+        throw new AuthError("validation", MIGRATION_HINT);
+      }
+      throw err;
+    }
 
     await writeAuditLog({
       action: "proformas.create",
@@ -52,12 +72,11 @@ export async function POST(request: Request) {
         clientId: created.clientId,
       },
       ipOrUserAgent: clientInfo(request),
-    });
+    }).catch(() => undefined);
 
-    const detail = await listProformas(firmId);
-    const row = detail.find((r) => r.proforma.id === created.id);
+    const row = await getProforma(firmId, created.id);
     if (!row) throw new AuthError("server", "Pro forma created but could not reload.");
-    return jsonOk({ proforma: serializeProformaListItem(row) }, { status: 201 });
+    return jsonOk({ proforma: serializeProformaDetail(row) }, { status: 201 });
   } catch (err) {
     return jsonError(err, request);
   }

@@ -49,45 +49,47 @@ export async function createProforma(
   const proformaNumber = await allocateProformaNumber(firmId);
   const currency = input.currency || defaultCurrency || "USD";
 
-  const [header] = await db
-    .insert(proFormas)
-    .values({
-      firmId,
-      clientId: input.clientId,
-      matterId: input.matterId,
-      proformaNumber,
-      kind: input.kind,
-      conveyancingCategory: input.conveyancingCategory,
-      propertyValueCents: input.propertyValueCents,
-      status: "draft",
-      currency,
-      notes: input.notes,
-      createdBy: userId,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    const [header] = await tx
+      .insert(proFormas)
+      .values({
+        firmId,
+        clientId: input.clientId,
+        matterId: input.matterId,
+        proformaNumber,
+        kind: input.kind,
+        conveyancingCategory: input.conveyancingCategory,
+        propertyValueCents: input.propertyValueCents,
+        status: "draft",
+        currency,
+        notes: input.notes,
+        createdBy: userId,
+      })
+      .returning();
 
-  if (!header) throw new AuthError("server", "Could not create pro forma.");
+    if (!header) throw new AuthError("server", "Could not create pro forma.");
 
-  await db.insert(proFormaLines).values(
-    input.lines.map((line) => ({
-      firmId,
-      proformaId: header.id,
-      lineCode: line.lineCode,
-      description: line.description,
-      included: line.included,
-      isOptional: line.isOptional,
-      qty: line.qty,
-      unitPriceCents: line.unitPriceCents,
-      lineTotalCents: line.included
-        ? Math.round(line.qty * line.unitPriceCents)
-        : 0,
-      ratePct: line.ratePct,
-      calcHint: line.calcHint,
-      sortOrder: line.sortOrder,
-    })),
-  );
+    await tx.insert(proFormaLines).values(
+      input.lines.map((line) => ({
+        firmId,
+        proformaId: header.id,
+        lineCode: line.lineCode,
+        description: line.description,
+        included: line.included,
+        isOptional: line.isOptional,
+        qty: line.qty,
+        unitPriceCents: line.unitPriceCents,
+        lineTotalCents: line.included
+          ? Math.round(line.qty * line.unitPriceCents)
+          : 0,
+        ratePct: line.ratePct,
+        calcHint: line.calcHint,
+        sortOrder: line.sortOrder,
+      })),
+    );
 
-  return header;
+    return header;
+  });
 }
 
 export type ListProformasOpts = {

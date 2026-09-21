@@ -50,12 +50,16 @@ export function ProFormaDetailView() {
         const res = await fetch(`/api/finance/proformas/${id}`, { credentials: "include" });
         const body = (await res.json()) as {
           ok: boolean;
+          requestId?: string;
           data?: { proforma: Detail };
-          error?: { message: string };
+          error?: { message: string; requestId?: string };
         };
         if (cancelled) return;
         if (!res.ok || !body.ok || !body.data?.proforma) {
-          setError(body.error?.message ?? "Could not load pro forma.");
+          setError(
+            body.error?.message ??
+              `Could not load pro forma.${body.error?.requestId || body.requestId ? ` Reference: ${body.error?.requestId ?? body.requestId}` : ""}`,
+          );
           setItem(null);
           return;
         }
@@ -73,72 +77,77 @@ export function ProFormaDetailView() {
   }, [id]);
 
   return (
-    <section className="view active scrollable finance-desk-view" aria-label="Pro forma detail">
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h1>{item?.proformaNumber ?? "Pro forma"}</h1>
-            <p className="muted">Estimate only. Not posted to debtors or the general ledger.</p>
-          </div>
-          <Link href="/finance/proforma" className="btn btn-outline btn-sm">
-            Back to list
-          </Link>
+    <section className="view active scrollable finance-desk-view proforma-page" aria-label="Pro forma detail">
+      <div className="proforma-hero">
+        <div>
+          <h1>{item?.proformaNumber ?? "Pro forma"}</h1>
+          <p className="lede">Estimate only. Not posted to debtors or the general ledger.</p>
         </div>
-        <div className="panel-body">
-          <FeeMoneyCallout />
-          {loading ? <p className="muted">Loading…</p> : null}
-          {error ? (
-            <p role="alert" style={{ color: "var(--danger)" }}>
-              {error}
-            </p>
-          ) : null}
-          {item ? (
-            <>
-              <div className="quote-form-grid">
-                <div>
-                  <div className="muted">Type</div>
-                  <div>{item.kindLabel}</div>
-                </div>
-                <div>
-                  <div className="muted">Category</div>
-                  <div>{item.conveyancingCategoryLabel ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="muted">Client</div>
-                  <div>{item.clientDisplayLabel}</div>
-                </div>
-                <div>
-                  <div className="muted">Matter</div>
-                  <div>
-                    {item.matterNumber
-                      ? `${item.matterNumber}${item.matterTitle ? ` · ${item.matterTitle}` : ""}`
-                      : "—"}
-                  </div>
-                </div>
-                <div>
-                  <div className="muted">Status</div>
-                  <Badge tone={item.status === "void" ? "closed" : "pending"}>
-                    {item.statusLabel}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="muted">Property value</div>
-                  <div>
-                    {item.propertyValueCents != null
-                      ? centsToDisplay(item.propertyValueCents, item.currency)
-                      : "—"}
-                  </div>
+        <Link href="/finance/proforma" className="btn btn-outline btn-sm">
+          Back to list
+        </Link>
+      </div>
+
+      <FeeMoneyCallout />
+      {loading ? <p className="muted">Loading…</p> : null}
+      {error ? (
+        <p role="alert" style={{ color: "var(--danger)", margin: 0 }}>
+          {error}
+        </p>
+      ) : null}
+
+      {item ? (
+        <>
+          <div className="proforma-section">
+            <div className="proforma-meta-grid">
+              <div>
+                <div className="meta-label">Type</div>
+                <div className="meta-value">{item.kindLabel}</div>
+              </div>
+              <div>
+                <div className="meta-label">Category</div>
+                <div className="meta-value">{item.conveyancingCategoryLabel ?? "—"}</div>
+              </div>
+              <div>
+                <div className="meta-label">Client</div>
+                <div className="meta-value">{item.clientDisplayLabel}</div>
+              </div>
+              <div>
+                <div className="meta-label">Matter</div>
+                <div className="meta-value">
+                  {item.matterNumber
+                    ? `${item.matterNumber}${item.matterTitle ? ` · ${item.matterTitle}` : ""}`
+                    : "—"}
                 </div>
               </div>
+              <div>
+                <div className="meta-label">Status</div>
+                <Badge tone={item.status === "void" ? "closed" : "pending"}>
+                  {item.statusLabel}
+                </Badge>
+              </div>
+              <div>
+                <div className="meta-label">Property value</div>
+                <div className="meta-value">
+                  {item.propertyValueCents != null
+                    ? centsToDisplay(item.propertyValueCents, item.currency)
+                    : "—"}
+                </div>
+              </div>
+            </div>
+          </div>
 
-              <table className="quote-lines-table" style={{ marginTop: "1rem" }}>
+          <div className="proforma-section">
+            <h2>Fee lines</h2>
+            <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table className="data quote-lines-table proforma-lines-table">
                 <thead>
                   <tr>
                     <th>Description</th>
-                    <th>Qty</th>
-                    <th>Rate %</th>
-                    <th>Amount</th>
-                    <th>Total</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Rate %</th>
+                    <th className="num">Amount</th>
+                    <th className="num">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -148,33 +157,42 @@ export function ProFormaDetailView() {
                       <tr key={line.id}>
                         <td>
                           {line.description}
-                          {line.calcHint ? (
-                            <div className="muted" style={{ fontSize: "0.8rem" }}>
-                              {line.calcHint}
-                            </div>
-                          ) : null}
+                          {line.calcHint ? <div className="hint">{line.calcHint}</div> : null}
                         </td>
-                        <td>{line.qty}</td>
-                        <td>{line.ratePct != null ? line.ratePct : "—"}</td>
-                        <td>{centsToDisplay(line.unitPriceCents, item.currency)}</td>
-                        <td>{centsToDisplay(line.lineTotalCents, item.currency)}</td>
+                        <td className="num">{line.qty}</td>
+                        <td className="num">{line.ratePct != null ? line.ratePct : "—"}</td>
+                        <td className="num">
+                          {centsToDisplay(line.unitPriceCents, item.currency)}
+                        </td>
+                        <td className="num">
+                          {centsToDisplay(line.lineTotalCents, item.currency)}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
               </table>
+            </div>
+          </div>
 
-              <p style={{ marginTop: "1rem" }}>
-                <strong>Total: {centsToDisplay(item.totalCents, item.currency)}</strong>
+          <div className="proforma-footer-bar">
+            <div>
+              <div className="total-label">Total</div>
+              <div className="total-value">
+                {centsToDisplay(item.totalCents, item.currency)}
+              </div>
+            </div>
+          </div>
+
+          {item.notes ? (
+            <div className="proforma-section">
+              <h2>Notes</h2>
+              <p className="muted" style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                {item.notes}
               </p>
-              {item.notes ? (
-                <p className="muted" style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap" }}>
-                  {item.notes}
-                </p>
-              ) : null}
-            </>
+            </div>
           ) : null}
-        </div>
-      </div>
+        </>
+      ) : null}
     </section>
   );
 }
