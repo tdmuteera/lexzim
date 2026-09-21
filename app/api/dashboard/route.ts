@@ -20,6 +20,7 @@ import {
 } from "@/lib/repos/lawyer-performance";
 import { syncMeetingRemindersForFirm } from "@/lib/calendar/meeting-notifications";
 import { getFinanceKpis } from "@/lib/repos/finance-kpis";
+import { sumOpenProformaPipeline } from "@/lib/repos/proformas";
 import { getReminders } from "@/lib/repos/reminders";
 import {
   canViewAllClients,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 import { prepareDbRetry } from "@/lib/db";
+import { isMissingRelationError } from "@/lib/db/missing-relation";
 
 export async function GET(request: Request) {
   try {
@@ -163,7 +165,7 @@ export async function GET(request: Request) {
         }).catch(() => null)
       : null;
 
-    const [calendarReminders, overdueInvoices, trustAttention, feeRevenue] =
+    const [calendarReminders, overdueInvoices, trustAttention, feeRevenue, proformaPipeline] =
       await Promise.all([
         canCalendar
           ? getReminders({
@@ -180,6 +182,18 @@ export async function GET(request: Request) {
         canTrust ? listDashboardTrustAttention(firmId) : Promise.resolve(null),
         canBilling || canViewRevenue
           ? getDashboardFeeRevenueByMonth(firmId, 6)
+          : Promise.resolve(null),
+        canBilling || canFinance
+          ? sumOpenProformaPipeline(firmId).catch((err) => {
+              if (isMissingRelationError(err)) {
+                return {
+                  firmIncomeCents: 0,
+                  clientCollectibleCents: 0,
+                  currency: session.firm.defaultCurrency || "USD",
+                };
+              }
+              throw err;
+            })
           : Promise.resolve(null),
       ]);
 
@@ -207,6 +221,10 @@ export async function GET(request: Request) {
         outstandingFeesCents: canBilling ? commandKpis.outstandingFeesCents : 0,
         hearingsThisWeek: canCalendar ? commandKpis.hearingsThisWeek : 0,
         nextHearingAt: canCalendar ? commandKpis.nextHearingAt : null,
+        proformaFirmFeesCents: proformaPipeline?.firmIncomeCents ?? 0,
+        proformaCollectibleCents: proformaPipeline?.clientCollectibleCents ?? 0,
+        proformaCurrency:
+          proformaPipeline?.currency || session.firm.defaultCurrency || "USD",
       },
       statusMix,
       feeRevenue: canBilling || canViewRevenue ? feeRevenue : null,

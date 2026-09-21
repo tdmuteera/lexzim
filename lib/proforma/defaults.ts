@@ -5,14 +5,17 @@ import {
   DEFAULT_CONVEYANCING_RATE_PCT,
   REGISTRATION_FEE_WITHOUT_STAMP_DUTY,
   REGISTRATION_FEE_WITH_STAMP_DUTY,
+  moneyClassForLineCode,
   type ConveyancingCategory,
   type ProformaLineCode,
+  type ProformaMoneyClass,
 } from "@/lib/proforma/types";
 
 export type ProformaDraftLine = {
   key: string;
   lineCode: ProformaLineCode;
   description: string;
+  moneyClass: ProformaMoneyClass;
   /** Optional lines start off; user clicks + to include. */
   included: boolean;
   isOptional: boolean;
@@ -28,11 +31,16 @@ function money(n: number): string {
 }
 
 function line(
-  partial: Omit<ProformaDraftLine, "key" | "qty"> & { qty?: number; key?: string },
+  partial: Omit<ProformaDraftLine, "key" | "qty" | "moneyClass"> & {
+    qty?: number;
+    key?: string;
+    moneyClass?: ProformaMoneyClass;
+  },
 ): ProformaDraftLine {
   return {
     key: partial.key ?? `line-${Math.random().toString(36).slice(2, 10)}`,
     qty: 1,
+    moneyClass: partial.moneyClass ?? moneyClassForLineCode(partial.lineCode),
     ...partial,
   };
 }

@@ -2320,6 +2320,8 @@ export const proFormas = pgTable(
     /** registered_title | cession | commercial (conveyancing only) */
     conveyancingCategory: text("conveyancing_category"),
     propertyValueCents: integer("property_value_cents"),
+    /** RE: subject line on the paper document */
+    subject: text("subject"),
     /** draft | sent | void */
     status: text("status").notNull().default("draft"),
     currency: text("currency").notNull().default("USD"),
@@ -2348,6 +2350,8 @@ export const proFormaLines = pgTable(
       .references(() => proFormas.id, { onDelete: "cascade" }),
     lineCode: text("line_code").notNull(),
     description: text("description").notNull(),
+    /** firm_income | client_collectible */
+    moneyClass: text("money_class").notNull().default("client_collectible"),
     included: boolean("included").notNull().default(true),
     isOptional: boolean("is_optional").notNull().default(false),
     qty: real("qty").notNull().default(1),

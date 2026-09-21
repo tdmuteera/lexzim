@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Can } from "@/components/auth/Can";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { centsToDisplay } from "@/lib/billing/money";
@@ -19,12 +20,17 @@ type Detail = {
   matterTitle: string | null;
   matterNumber: string | null;
   propertyValueCents: number | null;
+  subject: string | null;
   notes: string | null;
   totalCents: number;
+  firmIncomeCents: number;
+  clientCollectibleCents: number;
   createdAt: string;
   lines: Array<{
     id: string;
     description: string;
+    moneyClass: string;
+    moneyClassLabel: string;
     included: boolean;
     qty: number;
     unitPriceCents: number;
@@ -81,11 +87,39 @@ export function ProFormaDetailView() {
       <div className="proforma-hero">
         <div>
           <h1>{item?.proformaNumber ?? "Pro forma"}</h1>
-          <p className="lede">Estimate only. Not posted to debtors or the general ledger.</p>
+          <p className="lede">
+            Estimate only. Firm fees are expected earnings; collectibles are amounts to gather and
+            pay onward. Not posted to debtors or the general ledger.
+          </p>
         </div>
-        <Link href="/finance/proforma" className="btn btn-outline btn-sm">
-          Back to list
-        </Link>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <Link href="/finance/proforma" className="btn btn-outline btn-sm">
+            Back to list
+          </Link>
+          {item && item.status !== "void" ? (
+            <Can permissions={["finance.quote.manage", "billing.manage"]} mode="any">
+              <Link href={`/finance/proforma/${item.id}/edit`} className="btn btn-outline btn-sm">
+                Edit
+              </Link>
+            </Can>
+          ) : null}
+          {item ? (
+            <>
+              <a
+                className="btn btn-primary btn-sm"
+                href={`/api/finance/proformas/${item.id}/export?format=pdf`}
+              >
+                Download PDF
+              </a>
+              <a
+                className="btn btn-outline btn-sm"
+                href={`/api/finance/proformas/${item.id}/export?format=docx`}
+              >
+                Download Word
+              </a>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <FeeMoneyCallout />
@@ -134,11 +168,15 @@ export function ProFormaDetailView() {
                     : "—"}
                 </div>
               </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div className="meta-label">Subject</div>
+                <div className="meta-value">{item.subject ?? "—"}</div>
+              </div>
             </div>
           </div>
 
           <div className="proforma-section">
-            <h2>Fee lines</h2>
+            <h2>Firm fees (earnings)</h2>
             <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
               <table className="data quote-lines-table proforma-lines-table">
                 <thead>
@@ -152,7 +190,7 @@ export function ProFormaDetailView() {
                 </thead>
                 <tbody>
                   {item.lines
-                    .filter((l) => l.included)
+                    .filter((l) => l.included && l.moneyClass === "firm_income")
                     .map((line) => (
                       <tr key={line.id}>
                         <td>
@@ -169,14 +207,83 @@ export function ProFormaDetailView() {
                         </td>
                       </tr>
                     ))}
+                  {!item.lines.some((l) => l.included && l.moneyClass === "firm_income") ? (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        No firm fee lines
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
+            <p className="muted" style={{ marginTop: "0.5rem" }}>
+              Subtotal: {centsToDisplay(item.firmIncomeCents, item.currency)}
+            </p>
+          </div>
+
+          <div className="proforma-section">
+            <h2>Collectibles (pay onward)</h2>
+            <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table className="data quote-lines-table proforma-lines-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Rate %</th>
+                    <th className="num">Amount</th>
+                    <th className="num">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {item.lines
+                    .filter((l) => l.included && l.moneyClass !== "firm_income")
+                    .map((line) => (
+                      <tr key={line.id}>
+                        <td>
+                          {line.description}
+                          {line.calcHint ? <div className="hint">{line.calcHint}</div> : null}
+                        </td>
+                        <td className="num">{line.qty}</td>
+                        <td className="num">{line.ratePct != null ? line.ratePct : "—"}</td>
+                        <td className="num">
+                          {centsToDisplay(line.unitPriceCents, item.currency)}
+                        </td>
+                        <td className="num">
+                          {centsToDisplay(line.lineTotalCents, item.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  {!item.lines.some((l) => l.included && l.moneyClass !== "firm_income") ? (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        No collectible lines
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted" style={{ marginTop: "0.5rem" }}>
+              Subtotal: {centsToDisplay(item.clientCollectibleCents, item.currency)}
+            </p>
           </div>
 
           <div className="proforma-footer-bar">
             <div>
-              <div className="total-label">Total</div>
+              <div className="total-label">Firm fees</div>
+              <div className="meta-value">
+                {centsToDisplay(item.firmIncomeCents, item.currency)}
+              </div>
+              <div className="total-label" style={{ marginTop: "0.35rem" }}>
+                Collectibles
+              </div>
+              <div className="meta-value">
+                {centsToDisplay(item.clientCollectibleCents, item.currency)}
+              </div>
+              <div className="total-label" style={{ marginTop: "0.5rem" }}>
+                Grand total
+              </div>
               <div className="total-value">
                 {centsToDisplay(item.totalCents, item.currency)}
               </div>

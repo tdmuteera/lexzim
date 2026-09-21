@@ -1,12 +1,25 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { clients, matters, proFormaLines, proFormas } from "@/lib/db/schema";
 import { clientDisplayLabel } from "@/lib/clients/display";
 import type { CreateProformaInput } from "@/lib/proforma/validation";
 import type { ProformaStatus } from "@/lib/proforma/types";
+
+function lineTotals(lines: Array<{ included: boolean; lineTotalCents: number; moneyClass: string }>) {
+  let firmIncomeCents = 0;
+  let clientCollectibleCents = 0;
+  let totalCents = 0;
+  for (const l of lines) {
+    if (!l.included) continue;
+    totalCents += l.lineTotalCents;
+    if (l.moneyClass === "firm_income") firmIncomeCents += l.lineTotalCents;
+    else clientCollectibleCents += l.lineTotalCents;
+  }
+  return { firmIncomeCents, clientCollectibleCents, totalCents };
+}
 
 export async function allocateProformaNumber(firmId: string): Promise<string> {
   const db = getDb();
@@ -23,29 +36,37 @@ export async function allocateProformaNumber(firmId: string): Promise<string> {
   return `PF-${String(next).padStart(4, "0")}`;
 }
 
+async function assertClientMatter(
+  firmId: string,
+  clientId: string,
+  matterId: string | null,
+) {
+  const db = getDb();
+  const [client] = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(eq(clients.id, clientId), eq(clients.firmId, firmId)))
+    .limit(1);
+  if (!client) throw new AuthError("not_found", "Client not found.");
+
+  if (matterId) {
+    const [matter] = await db
+      .select({ id: matters.id })
+      .from(matters)
+      .where(and(eq(matters.id, matterId), eq(matters.firmId, firmId)))
+      .limit(1);
+    if (!matter) throw new AuthError("not_found", "Matter not found.");
+  }
+}
+
 export async function createProforma(
   firmId: string,
   userId: string,
   input: CreateProformaInput,
   defaultCurrency: string,
 ) {
+  await assertClientMatter(firmId, input.clientId, input.matterId);
   const db = getDb();
-  const [client] = await db
-    .select({ id: clients.id, firmId: clients.firmId })
-    .from(clients)
-    .where(and(eq(clients.id, input.clientId), eq(clients.firmId, firmId)))
-    .limit(1);
-  if (!client) throw new AuthError("not_found", "Client not found.");
-
-  if (input.matterId) {
-    const [matter] = await db
-      .select({ id: matters.id })
-      .from(matters)
-      .where(and(eq(matters.id, input.matterId), eq(matters.firmId, firmId)))
-      .limit(1);
-    if (!matter) throw new AuthError("not_found", "Matter not found.");
-  }
-
   const proformaNumber = await allocateProformaNumber(firmId);
   const currency = input.currency || defaultCurrency || "USD";
 
@@ -60,6 +81,7 @@ export async function createProforma(
         kind: input.kind,
         conveyancingCategory: input.conveyancingCategory,
         propertyValueCents: input.propertyValueCents,
+        subject: input.subject,
         status: "draft",
         currency,
         notes: input.notes,
@@ -75,13 +97,69 @@ export async function createProforma(
         proformaId: header.id,
         lineCode: line.lineCode,
         description: line.description,
+        moneyClass: line.moneyClass,
         included: line.included,
         isOptional: line.isOptional,
         qty: line.qty,
         unitPriceCents: line.unitPriceCents,
-        lineTotalCents: line.included
-          ? Math.round(line.qty * line.unitPriceCents)
-          : 0,
+        lineTotalCents: line.included ? Math.round(line.qty * line.unitPriceCents) : 0,
+        ratePct: line.ratePct,
+        calcHint: line.calcHint,
+        sortOrder: line.sortOrder,
+      })),
+    );
+
+    return header;
+  });
+}
+
+export async function updateProforma(
+  firmId: string,
+  id: string,
+  input: CreateProformaInput,
+) {
+  const existing = await getProforma(firmId, id);
+  if (!existing) throw new AuthError("not_found", "Pro forma not found.");
+  if (existing.proforma.status === "void") {
+    throw new AuthError("validation", "Voided pro formas cannot be edited.");
+  }
+
+  await assertClientMatter(firmId, input.clientId, input.matterId);
+  const db = getDb();
+  const currency = input.currency || existing.proforma.currency || "USD";
+
+  return db.transaction(async (tx) => {
+    const [header] = await tx
+      .update(proFormas)
+      .set({
+        clientId: input.clientId,
+        matterId: input.matterId,
+        kind: input.kind,
+        conveyancingCategory: input.conveyancingCategory,
+        propertyValueCents: input.propertyValueCents,
+        subject: input.subject,
+        currency,
+        notes: input.notes,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(proFormas.firmId, firmId), eq(proFormas.id, id)))
+      .returning();
+
+    if (!header) throw new AuthError("server", "Could not update pro forma.");
+
+    await tx.delete(proFormaLines).where(eq(proFormaLines.proformaId, id));
+    await tx.insert(proFormaLines).values(
+      input.lines.map((line) => ({
+        firmId,
+        proformaId: id,
+        lineCode: line.lineCode,
+        description: line.description,
+        moneyClass: line.moneyClass,
+        included: line.included,
+        isOptional: line.isOptional,
+        qty: line.qty,
+        unitPriceCents: line.unitPriceCents,
+        lineTotalCents: line.included ? Math.round(line.qty * line.unitPriceCents) : 0,
         ratePct: line.ratePct,
         calcHint: line.calcHint,
         sortOrder: line.sortOrder,
@@ -97,6 +175,43 @@ export type ListProformasOpts = {
   kind?: string;
   clientId?: string;
 };
+
+async function hydrateRow(row: {
+  proforma: typeof proFormas.$inferSelect;
+  clientNumber: string | null;
+  clientType: string;
+  clientFirstName: string | null;
+  clientSurname: string | null;
+  clientFullName: string | null;
+  clientLegalName: string | null;
+  clientRegisteredName: string | null;
+  clientTradingName: string | null;
+  matterTitle: string | null;
+  matterNumber: string | null;
+}) {
+  const db = getDb();
+  const lines = await db
+    .select()
+    .from(proFormaLines)
+    .where(eq(proFormaLines.proformaId, row.proforma.id))
+    .orderBy(asc(proFormaLines.sortOrder));
+  const sums = lineTotals(lines);
+  return {
+    ...row,
+    lines,
+    ...sums,
+    clientDisplayLabel: clientDisplayLabel({
+      clientType: row.clientType,
+      firstName: row.clientFirstName,
+      surname: row.clientSurname,
+      fullName: row.clientFullName,
+      legalName: row.clientLegalName,
+      registeredName: row.clientRegisteredName,
+      tradingName: row.clientTradingName,
+      clientNumber: row.clientNumber,
+    }),
+  };
+}
 
 export async function listProformas(firmId: string, opts?: ListProformasOpts) {
   const db = getDb();
@@ -128,29 +243,7 @@ export async function listProformas(firmId: string, opts?: ListProformasOpts) {
 
   const results = [];
   for (const row of rows) {
-    const lines = await db
-      .select()
-      .from(proFormaLines)
-      .where(eq(proFormaLines.proformaId, row.proforma.id))
-      .orderBy(asc(proFormaLines.sortOrder));
-    const totalCents = lines
-      .filter((l) => l.included)
-      .reduce((sum, l) => sum + l.lineTotalCents, 0);
-    results.push({
-      ...row,
-      lines,
-      totalCents,
-      clientDisplayLabel: clientDisplayLabel({
-        clientType: row.clientType,
-        firstName: row.clientFirstName,
-        surname: row.clientSurname,
-        fullName: row.clientFullName,
-        legalName: row.clientLegalName,
-        registeredName: row.clientRegisteredName,
-        tradingName: row.clientTradingName,
-        clientNumber: row.clientNumber,
-      }),
-    });
+    results.push(await hydrateRow(row));
   }
   return results;
 }
@@ -178,27 +271,35 @@ export async function getProforma(firmId: string, id: string) {
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  const lines = await db
-    .select()
+  return hydrateRow(row);
+}
+
+/** Open (non-void) pro forma pipeline totals for dashboard. */
+export async function sumOpenProformaPipeline(firmId: string): Promise<{
+  firmIncomeCents: number;
+  clientCollectibleCents: number;
+  currency: string;
+}> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      currency: proFormas.currency,
+      moneyClass: proFormaLines.moneyClass,
+      lineTotalCents: proFormaLines.lineTotalCents,
+      included: proFormaLines.included,
+    })
     .from(proFormaLines)
-    .where(eq(proFormaLines.proformaId, row.proforma.id))
-    .orderBy(asc(proFormaLines.sortOrder));
-  const totalCents = lines
-    .filter((l) => l.included)
-    .reduce((sum, l) => sum + l.lineTotalCents, 0);
-  return {
-    ...row,
-    lines,
-    totalCents,
-    clientDisplayLabel: clientDisplayLabel({
-      clientType: row.clientType,
-      firstName: row.clientFirstName,
-      surname: row.clientSurname,
-      fullName: row.clientFullName,
-      legalName: row.clientLegalName,
-      registeredName: row.clientRegisteredName,
-      tradingName: row.clientTradingName,
-      clientNumber: row.clientNumber,
-    }),
-  };
+    .innerJoin(proFormas, eq(proFormas.id, proFormaLines.proformaId))
+    .where(and(eq(proFormas.firmId, firmId), ne(proFormas.status, "void")));
+
+  let firmIncomeCents = 0;
+  let clientCollectibleCents = 0;
+  let currency = "USD";
+  for (const r of rows) {
+    if (!r.included) continue;
+    if (r.currency) currency = r.currency;
+    if (r.moneyClass === "firm_income") firmIncomeCents += r.lineTotalCents;
+    else clientCollectibleCents += r.lineTotalCents;
+  }
+  return { firmIncomeCents, clientCollectibleCents, currency };
 }

@@ -24,6 +24,8 @@ type ProformaItem = {
   matterTitle: string | null;
   matterNumber: string | null;
   totalCents: number;
+  firmIncomeCents: number;
+  clientCollectibleCents: number;
   createdAt: string;
 };
 
@@ -95,6 +97,8 @@ export function ProFormaListView() {
       type: (r: ProformaItem) => r.kindLabel,
       client: (r: ProformaItem) => r.clientDisplayLabel,
       status: (r: ProformaItem) => r.statusLabel,
+      firm: (r: ProformaItem) => r.firmIncomeCents ?? 0,
+      collectible: (r: ProformaItem) => r.clientCollectibleCents ?? 0,
       total: (r: ProformaItem) => r.totalCents,
       created: (r: ProformaItem) => r.createdAt,
     }),
@@ -111,8 +115,9 @@ export function ProFormaListView() {
         <div>
           <h1>Pro forma invoices</h1>
           <p className="lede">
-            Draft estimates for legal fees and conveyancing. Saved pro formas are not money owed and
-            do not post to the ledger.
+            Draft estimates for legal fees and conveyancing. Firm fees are pipeline earnings;
+            collectibles are amounts to gather and pay onward. Nothing posts to the ledger until
+            converted later.
           </p>
         </div>
         <Can
@@ -217,6 +222,24 @@ export function ProFormaListView() {
                     onSort={toggleSort}
                   />
                   <SortableTh
+                    label="Firm fees"
+                    columnKey="firm"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                    align="right"
+                    className="num"
+                  />
+                  <SortableTh
+                    label="Collectibles"
+                    columnKey="collectible"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                    align="right"
+                    className="num"
+                  />
+                  <SortableTh
                     label="Total"
                     columnKey="total"
                     activeKey={sortKey}
@@ -250,6 +273,12 @@ export function ProFormaListView() {
                     </td>
                     <td>
                       <Badge tone={statusTone(row.status)}>{row.statusLabel}</Badge>
+                    </td>
+                    <td className="num">
+                      {centsToDisplay(row.firmIncomeCents ?? 0, row.currency)}
+                    </td>
+                    <td className="num">
+                      {centsToDisplay(row.clientCollectibleCents ?? 0, row.currency)}
                     </td>
                     <td className="num">{centsToDisplay(row.totalCents, row.currency)}</td>
                     <td>

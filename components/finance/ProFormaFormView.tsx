@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ClientMatterPicker } from "@/components/finance/ClientMatterPicker";
 import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
@@ -19,9 +19,13 @@ import {
   COMMERCIAL_VAT_RATE_PCT,
   CONVEYANCING_CATEGORIES,
   conveyancingCategoryLabel,
+  defaultProformaSubject,
   DEFAULT_CONVEYANCING_RATE_PCT,
+  moneyClassForLineCode,
   type ConveyancingCategory,
   type ProformaKind,
+  type ProformaLineCode,
+  type ProformaMoneyClass,
 } from "@/lib/proforma/types";
 
 function newCustomLine(): ProformaDraftLine {
@@ -29,6 +33,7 @@ function newCustomLine(): ProformaDraftLine {
     key: crypto.randomUUID(),
     lineCode: "custom",
     description: "Other fees",
+    moneyClass: moneyClassForLineCode("custom"),
     included: true,
     isOptional: true,
     qty: 1,
@@ -36,6 +41,10 @@ function newCustomLine(): ProformaDraftLine {
     ratePct: null,
     calcHint: null,
   };
+}
+
+function centsToDollarsInput(cents: number): string {
+  return (cents / 100).toFixed(2);
 }
 
 const KIND_CARDS: Array<{ id: ProformaKind; title: string; copy: string }> = [
@@ -57,18 +66,51 @@ const CATEGORY_COPY: Record<ConveyancingCategory, string> = {
   commercial: "Commercial property. Progressive stamp duty. Optional VAT 15.5%.",
 };
 
-export function ProFormaFormView() {
+type LoadedDetail = {
+  id: string;
+  kind: ProformaKind;
+  conveyancingCategory: ConveyancingCategory | null;
+  clientId: string;
+  matterId: string | null;
+  propertyValueCents: number | null;
+  subject: string | null;
+  notes: string | null;
+  status: string;
+  lines: Array<{
+    id: string;
+    lineCode: string;
+    description: string;
+    moneyClass: ProformaMoneyClass;
+    included: boolean;
+    isOptional: boolean;
+    qty: number;
+    unitPriceCents: number;
+    ratePct: number | null;
+    calcHint: string | null;
+  }>;
+};
+
+export function ProFormaFormView({ mode = "create" }: { mode?: "create" | "edit" }) {
   const router = useRouter();
+  const params = useParams();
+  const editId = mode === "edit" && typeof params.id === "string" ? params.id : "";
+
   const [kind, setKind] = useState<ProformaKind>("conveyancing");
   const [category, setCategory] = useState<ConveyancingCategory>("registered_title");
   const [clientId, setClientId] = useState("");
   const [matterId, setMatterId] = useState("");
   const [propertyValue, setPropertyValue] = useState("");
+  const [subject, setSubject] = useState(() =>
+    defaultProformaSubject("conveyancing", "registered_title"),
+  );
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<ProformaDraftLine[]>(() =>
     buildConveyancingLines({ category: "registered_title", propertyValueDollars: 0 }),
   );
+  const [hydrated, setHydrated] = useState(mode === "create");
+  const [suppressRebuild, setSuppressRebuild] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(mode === "edit");
   const [error, setError] = useState<string | null>(null);
   const [errorRef, setErrorRef] = useState<string | null>(null);
 
@@ -76,6 +118,24 @@ export function ProFormaFormView() {
     const n = Number(String(propertyValue).replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
   }, [propertyValue]);
+
+  const firmIncomeCents = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        if (!line.included || line.moneyClass !== "firm_income") return sum;
+        return sum + draftLineTotalCents(line);
+      }, 0),
+    [lines],
+  );
+  const collectibleCents = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        if (!line.included || line.moneyClass === "firm_income") return sum;
+        return sum + draftLineTotalCents(line);
+      }, 0),
+    [lines],
+  );
+  const totalCents = firmIncomeCents + collectibleCents;
 
   const rebuildConveyancing = useCallback(
     (nextCategory: ConveyancingCategory, valueDollars: number) => {
@@ -85,16 +145,82 @@ export function ProFormaFormView() {
   );
 
   useEffect(() => {
+    if (mode !== "edit" || !editId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingEdit(true);
+      try {
+        const res = await fetch(`/api/finance/proformas/${editId}`, { credentials: "include" });
+        const body = (await res.json()) as {
+          ok: boolean;
+          requestId?: string;
+          data?: { proforma: LoadedDetail };
+          error?: { message: string; requestId?: string };
+        };
+        if (cancelled) return;
+        if (!res.ok || !body.ok || !body.data?.proforma) {
+          setError(body.error?.message ?? "Could not load pro forma for editing.");
+          setErrorRef(body.error?.requestId ?? body.requestId ?? null);
+          return;
+        }
+        const row = body.data.proforma;
+        if (row.status === "void") {
+          setError("Voided pro formas cannot be edited.");
+          return;
+        }
+        setSuppressRebuild(true);
+        setKind(row.kind);
+        setCategory(row.conveyancingCategory ?? "registered_title");
+        setClientId(row.clientId);
+        setMatterId(row.matterId ?? "");
+        setPropertyValue(
+          row.propertyValueCents != null ? centsToDollarsInput(row.propertyValueCents) : "",
+        );
+        setSubject(
+          row.subject?.trim() ||
+            defaultProformaSubject(row.kind, row.conveyancingCategory),
+        );
+        setNotes(row.notes ?? "");
+        setLines(
+          row.lines.map((l) => ({
+            key: l.id,
+            lineCode: (l.lineCode as ProformaLineCode) || "custom",
+            description: l.description,
+            moneyClass: l.moneyClass || moneyClassForLineCode((l.lineCode as ProformaLineCode) || "custom"),
+            included: l.included,
+            isOptional: l.isOptional,
+            qty: l.qty,
+            unitPriceDollars: centsToDollarsInput(l.unitPriceCents),
+            ratePct: l.ratePct != null ? String(l.ratePct) : null,
+            calcHint: l.calcHint,
+          })),
+        );
+        setHydrated(true);
+      } catch {
+        if (!cancelled) setError("Could not load pro forma for editing.");
+      } finally {
+        if (!cancelled) setLoadingEdit(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, editId]);
+
+  useEffect(() => {
+    if (!hydrated || suppressRebuild) return;
     if (kind === "legal_fees") {
       setLines(buildLegalFeesStarterLines());
+      setSubject(defaultProformaSubject("legal_fees", null));
       return;
     }
     rebuildConveyancing(category, propertyValueDollars);
+    setSubject(defaultProformaSubject("conveyancing", category));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- value updates handled separately
-  }, [kind, category, rebuildConveyancing]);
+  }, [kind, category, rebuildConveyancing, hydrated, suppressRebuild]);
 
   useEffect(() => {
-    if (kind !== "conveyancing") return;
+    if (!hydrated || kind !== "conveyancing") return;
     setLines((prev) =>
       prev.map((line) => {
         if (line.lineCode === "stamp_duty") {
@@ -127,12 +253,7 @@ export function ProFormaFormView() {
         return line;
       }),
     );
-  }, [kind, propertyValueDollars]);
-
-  const totalCents = useMemo(
-    () => lines.reduce((sum, line) => sum + draftLineTotalCents(line), 0),
-    [lines],
-  );
+  }, [kind, propertyValueDollars, hydrated]);
 
   function updateLine(key: string, patch: Partial<ProformaDraftLine>) {
     setLines((prev) =>
@@ -171,10 +292,12 @@ export function ProFormaFormView() {
         clientId,
         matterId: matterId || null,
         propertyValueDollars: kind === "conveyancing" ? propertyValue : null,
+        subject: subject.trim() || defaultProformaSubject(kind, kind === "conveyancing" ? category : null),
         notes: notes.trim() || null,
         lines: lines.map((line) => ({
           lineCode: line.lineCode,
           description: line.description,
+          moneyClass: line.moneyClass,
           included: line.included,
           isOptional: line.isOptional,
           qty: line.qty,
@@ -183,8 +306,12 @@ export function ProFormaFormView() {
           calcHint: line.calcHint,
         })),
       };
-      const res = await fetch("/api/finance/proformas", {
-        method: "POST",
+      const url =
+        mode === "edit" && editId
+          ? `/api/finance/proformas/${editId}`
+          : "/api/finance/proformas";
+      const res = await fetch(url, {
+        method: mode === "edit" ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -196,13 +323,20 @@ export function ProFormaFormView() {
         error?: { message: string; requestId?: string };
       };
       if (!res.ok || !body.ok || !body.data?.proforma?.id) {
-        setError(body.error?.message ?? "Could not create pro forma.");
+        setError(
+          body.error?.message ??
+            (mode === "edit" ? "Could not update pro forma." : "Could not create pro forma."),
+        );
         setErrorRef(body.error?.requestId ?? body.requestId ?? null);
         return;
       }
       router.push(`/finance/proforma/${body.data.proforma.id}`);
     } catch {
-      setError("Could not create pro forma. Check your connection and try again.");
+      setError(
+        mode === "edit"
+          ? "Could not update pro forma. Check your connection and try again."
+          : "Could not create pro forma. Check your connection and try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -210,12 +344,16 @@ export function ProFormaFormView() {
 
   const faintOptional = lines.filter((l) => l.isOptional && !l.included);
   const visibleLines = lines.filter((l) => l.included || !l.isOptional);
+  const backHref = mode === "edit" && editId ? `/finance/proforma/${editId}` : "/finance/proforma";
 
   return (
-    <section className="view active scrollable finance-desk-view proforma-page" aria-label="New pro forma">
+    <section
+      className="view active scrollable finance-desk-view proforma-page"
+      aria-label={mode === "edit" ? "Edit pro forma" : "New pro forma"}
+    >
       <div className="proforma-hero">
         <div>
-          <h1>New pro forma</h1>
+          <h1>{mode === "edit" ? "Edit pro forma" : "New pro forma"}</h1>
           <p className="lede">
             One form for legal-fees drafts and conveyancing estimates. Figures are prefilled from
             locked rules, then fully editable. Nothing posts to debtors or the ledger.
@@ -232,12 +370,14 @@ export function ProFormaFormView() {
             </span>
           </div>
         </div>
-        <Link href="/finance/proforma" className="btn btn-outline btn-sm">
-          Back to list
+        <Link href={backHref} className="btn btn-outline btn-sm">
+          Back
         </Link>
       </div>
 
       <FeeMoneyCallout />
+
+      {loadingEdit ? <p className="muted">Loading…</p> : null}
 
       {error ? (
         <p role="alert" style={{ color: "var(--danger)", margin: 0 }}>
@@ -250,222 +390,258 @@ export function ProFormaFormView() {
         </p>
       ) : null}
 
-      <form className="quote-form" onSubmit={onSubmit}>
-        <div className="proforma-section">
-          <h2>1. Pro forma type</h2>
-          <p className="section-help">Choose the document kind first. This switches the fee template.</p>
-          <div className="proforma-choice-grid">
-            {KIND_CARDS.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                className={["proforma-choice", kind === card.id ? "active" : ""].filter(Boolean).join(" ")}
-                onClick={() => setKind(card.id)}
-                disabled={saving}
-              >
-                <span className="choice-title">{card.title}</span>
-                <span className="choice-copy">{card.copy}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {kind === "conveyancing" ? (
+      {hydrated && !loadingEdit ? (
+        <form className="quote-form" onSubmit={onSubmit}>
           <div className="proforma-section">
-            <h2>2. Property category</h2>
-            <p className="section-help">
-              Registered title, cession (includes under-developer), or commercial.
-            </p>
+            <h2>1. Pro forma type</h2>
+            <p className="section-help">Choose the document kind first. This switches the fee template.</p>
             <div className="proforma-choice-grid">
-              {CONVEYANCING_CATEGORIES.map((c) => (
+              {KIND_CARDS.map((card) => (
                 <button
-                  key={c}
+                  key={card.id}
                   type="button"
-                  className={["proforma-choice", category === c ? "active" : ""].filter(Boolean).join(" ")}
-                  onClick={() => setCategory(c)}
+                  className={["proforma-choice", kind === card.id ? "active" : ""].filter(Boolean).join(" ")}
+                  onClick={() => {
+                    setSuppressRebuild(false);
+                    setKind(card.id);
+                  }}
                   disabled={saving}
                 >
-                  <span className="choice-title">{conveyancingCategoryLabel(c)}</span>
-                  <span className="choice-copy">{CATEGORY_COPY[c]}</span>
+                  <span className="choice-title">{card.title}</span>
+                  <span className="choice-copy">{card.copy}</span>
                 </button>
               ))}
             </div>
           </div>
-        ) : null}
 
-        <div className="proforma-section">
-          <h2>{kind === "conveyancing" ? "3. Client and property" : "2. Client"}</h2>
-          <p className="section-help">
-            Link the estimate to a client. Property value drives stamp duty and percentage fees.
-          </p>
-          <div className="quote-form-grid">
-            <ClientSearchPicker
-              value={clientId}
-              onChange={(id) => {
-                setClientId(id);
-                setMatterId("");
-              }}
-              disabled={saving}
-            />
-            <ClientMatterPicker
-              clientId={clientId}
-              value={matterId}
-              onChange={(id) => setMatterId(id)}
-              disabled={saving}
-            />
-            {kind === "conveyancing" ? (
-              <label>
-                <span className="muted">Property value (USD)</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={propertyValue}
-                  onChange={(e) => setPropertyValue(e.target.value)}
-                  placeholder="e.g. 50000"
-                  required
-                  disabled={saving}
-                />
-              </label>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="proforma-section">
-          <h2>{kind === "conveyancing" ? "4. Fee lines" : "3. Fee lines"}</h2>
-          <p className="section-help">
-            Prefills update when you change category or property value. Edit any amount, or add
-            optional lines with +.
-          </p>
-          <div className="table-wrap">
-            <table className="data quote-lines-table proforma-lines-table">
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th className="num">Qty</th>
-                  <th className="num">Rate %</th>
-                  <th className="num">Amount</th>
-                  <th className="num">Line total</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {visibleLines.map((line) => (
-                  <tr key={line.key}>
-                    <td>
-                      <input
-                        value={line.description}
-                        onChange={(e) => updateLine(line.key, { description: e.target.value })}
-                        required={line.included}
-                        disabled={saving}
-                      />
-                      {line.calcHint ? <div className="hint">{line.calcHint}</div> : null}
-                    </td>
-                    <td className="num">
-                      <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={line.qty}
-                        onChange={(e) => updateLine(line.key, { qty: Number(e.target.value) || 0 })}
-                        disabled={saving}
-                      />
-                    </td>
-                    <td className="num">
-                      {line.ratePct != null ? (
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          value={line.ratePct}
-                          onChange={(e) => updateLine(line.key, { ratePct: e.target.value })}
-                          disabled={saving}
-                        />
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td className="num">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={line.unitPriceDollars}
-                        onChange={(e) => updateLine(line.key, { unitPriceDollars: e.target.value })}
-                        disabled={saving}
-                        placeholder="0.00"
-                      />
-                    </td>
-                    <td className="num">{centsToDisplay(draftLineTotalCents(line))}</td>
-                    <td>
-                      {line.isOptional && line.included ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => updateLine(line.key, { included: false })}
-                          disabled={saving}
-                        >
-                          Hide
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
+          {kind === "conveyancing" ? (
+            <div className="proforma-section">
+              <h2>2. Property category</h2>
+              <p className="section-help">
+                Registered title, cession (includes under-developer), or commercial.
+              </p>
+              <div className="proforma-choice-grid">
+                {CONVEYANCING_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={["proforma-choice", category === c ? "active" : ""].filter(Boolean).join(" ")}
+                    onClick={() => {
+                      setSuppressRebuild(false);
+                      setCategory(c);
+                    }}
+                    disabled={saving}
+                  >
+                    <span className="choice-title">{conveyancingCategoryLabel(c)}</span>
+                    <span className="choice-copy">{CATEGORY_COPY[c]}</span>
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {faintOptional.length ? (
-            <div className="proforma-optional-row">
-              {faintOptional.map((line) => (
-                <button
-                  key={line.key}
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => updateLine(line.key, { included: true })}
-                  disabled={saving}
-                >
-                  + {line.description || line.lineCode}
-                </button>
-              ))}
+              </div>
             </div>
           ) : null}
 
-          <div style={{ marginTop: "0.85rem" }}>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setLines((p) => [...p, newCustomLine()])}
-              disabled={saving}
-            >
-              + Add custom fee
+          <div className="proforma-section">
+            <h2>{kind === "conveyancing" ? "3. Client and property" : "2. Client"}</h2>
+            <p className="section-help">
+              Link the estimate to a client. Property value drives stamp duty and percentage fees.
+            </p>
+            <div className="quote-form-grid">
+              <ClientSearchPicker
+                value={clientId}
+                onChange={(id) => {
+                  setClientId(id);
+                  setMatterId("");
+                }}
+                disabled={saving}
+              />
+              <ClientMatterPicker
+                clientId={clientId}
+                value={matterId}
+                onChange={(id) => setMatterId(id)}
+                disabled={saving}
+              />
+              {kind === "conveyancing" ? (
+                <label>
+                  <span className="muted">Property value (USD)</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={propertyValue}
+                    onChange={(e) => setPropertyValue(e.target.value)}
+                    placeholder="e.g. 50000"
+                    required
+                    disabled={saving}
+                  />
+                </label>
+              ) : null}
+              <label style={{ gridColumn: "1 / -1" }}>
+                <span className="muted">Subject (printed on document)</span>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="RE: PRO FORMA — …"
+                  disabled={saving}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="proforma-section">
+            <h2>{kind === "conveyancing" ? "4. Fee lines" : "3. Fee lines"}</h2>
+            <p className="section-help">
+              Prefills update when you change category or property value. Edit any amount, or add
+              optional lines with +. Conveyancing fees count as firm earnings; other lines are
+              collectibles to pay onward.
+            </p>
+            <div className="table-wrap">
+              <table className="data quote-lines-table proforma-lines-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Rate %</th>
+                    <th className="num">Amount</th>
+                    <th className="num">Line total</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleLines.map((line) => (
+                    <tr key={line.key}>
+                      <td>
+                        <input
+                          value={line.description}
+                          onChange={(e) => updateLine(line.key, { description: e.target.value })}
+                          required={line.included}
+                          disabled={saving}
+                        />
+                        {line.calcHint ? <div className="hint">{line.calcHint}</div> : null}
+                        <div className="hint">
+                          {line.moneyClass === "firm_income"
+                            ? "Firm fees (earnings)"
+                            : "Collectibles (pay onward)"}
+                        </div>
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={line.qty}
+                          onChange={(e) => updateLine(line.key, { qty: Number(e.target.value) || 0 })}
+                          disabled={saving}
+                        />
+                      </td>
+                      <td className="num">
+                        {line.ratePct != null ? (
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            value={line.ratePct}
+                            onChange={(e) => updateLine(line.key, { ratePct: e.target.value })}
+                            disabled={saving}
+                          />
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={line.unitPriceDollars}
+                          onChange={(e) => updateLine(line.key, { unitPriceDollars: e.target.value })}
+                          disabled={saving}
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="num">{centsToDisplay(draftLineTotalCents(line))}</td>
+                      <td>
+                        {line.isOptional && line.included ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => updateLine(line.key, { included: false })}
+                            disabled={saving}
+                          >
+                            Hide
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {faintOptional.length ? (
+              <div className="proforma-optional-row">
+                {faintOptional.map((line) => (
+                  <button
+                    key={line.key}
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => updateLine(line.key, { included: true })}
+                    disabled={saving}
+                  >
+                    + {line.description || line.lineCode}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: "0.85rem" }}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setLines((p) => [...p, newCustomLine()])}
+                disabled={saving}
+              >
+                + Add custom fee
+              </Button>
+            </div>
+          </div>
+
+          <div className="proforma-section">
+            <h2>Notes</h2>
+            <label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Optional notes for the client or file"
+                disabled={saving}
+              />
+            </label>
+          </div>
+
+          <div className="proforma-footer-bar">
+            <div>
+              <div className="total-label">Firm fees</div>
+              <div className="meta-value">{centsToDisplay(firmIncomeCents)}</div>
+              <div className="total-label" style={{ marginTop: "0.5rem" }}>
+                Collectibles
+              </div>
+              <div className="meta-value">{centsToDisplay(collectibleCents)}</div>
+              <div className="total-label" style={{ marginTop: "0.5rem" }}>
+                Total (included lines)
+              </div>
+              <div className="total-value">{centsToDisplay(totalCents)}</div>
+            </div>
+            <Button type="submit" disabled={saving}>
+              {saving
+                ? "Saving…"
+                : mode === "edit"
+                  ? "Save changes"
+                  : "Save pro forma"}
             </Button>
           </div>
-        </div>
-
-        <div className="proforma-section">
-          <h2>Notes</h2>
-          <label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Optional notes for the client or file"
-              disabled={saving}
-            />
-          </label>
-        </div>
-
-        <div className="proforma-footer-bar">
-          <div>
-            <div className="total-label">Total (included lines)</div>
-            <div className="total-value">{centsToDisplay(totalCents)}</div>
-          </div>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save pro forma"}
-          </Button>
-        </div>
-      </form>
+        </form>
+      ) : null}
     </section>
   );
 }

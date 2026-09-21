@@ -1,17 +1,22 @@
 import { AuthError } from "@/lib/auth/types";
 import { dollarsToCents } from "@/lib/billing/money";
 import {
+  defaultProformaSubject,
   isConveyancingCategory,
   isProformaKind,
+  moneyClassForLineCode,
   PROFORMA_LINE_CODES,
+  PROFORMA_MONEY_CLASSES,
   type ConveyancingCategory,
   type ProformaKind,
   type ProformaLineCode,
+  type ProformaMoneyClass,
 } from "@/lib/proforma/types";
 
 export type CreateProformaLineInput = {
   lineCode: ProformaLineCode;
   description: string;
+  moneyClass: ProformaMoneyClass;
   included: boolean;
   isOptional: boolean;
   qty: number;
@@ -27,6 +32,7 @@ export type CreateProformaInput = {
   clientId: string;
   matterId: string | null;
   propertyValueCents: number | null;
+  subject: string;
   notes: string | null;
   currency: string | null;
   lines: CreateProformaLineInput[];
@@ -67,6 +73,10 @@ function isLineCode(value: string): value is ProformaLineCode {
   return (PROFORMA_LINE_CODES as readonly string[]).includes(value);
 }
 
+function isMoneyClass(value: string): value is ProformaMoneyClass {
+  return (PROFORMA_MONEY_CLASSES as readonly string[]).includes(value);
+}
+
 export function parseCreateProformaInput(body: unknown): CreateProformaInput {
   const raw = asRecord(body);
   const kindRaw = typeof raw.kind === "string" ? raw.kind.trim() : "";
@@ -98,6 +108,11 @@ export function parseCreateProformaInput(body: unknown): CreateProformaInput {
       throw new AuthError("validation", "Enter the property value.");
     }
   }
+
+  const subjectRaw =
+    typeof raw.subject === "string" && raw.subject.trim()
+      ? raw.subject.trim().slice(0, 240)
+      : defaultProformaSubject(kindRaw, conveyancingCategory);
 
   const notes =
     typeof raw.notes === "string" && raw.notes.trim() ? raw.notes.trim().slice(0, 4000) : null;
@@ -149,9 +164,15 @@ export function parseCreateProformaInput(body: unknown): CreateProformaInput {
         ? row.calcHint.trim().slice(0, 240)
         : null;
 
+    let moneyClass = moneyClassForLineCode(codeRaw);
+    if (typeof row.moneyClass === "string" && isMoneyClass(row.moneyClass.trim())) {
+      moneyClass = row.moneyClass.trim() as ProformaMoneyClass;
+    }
+
     return {
       lineCode: codeRaw,
       description: description || codeRaw.replace(/_/g, " "),
+      moneyClass,
       included,
       isOptional,
       qty,
@@ -173,8 +194,13 @@ export function parseCreateProformaInput(body: unknown): CreateProformaInput {
     clientId,
     matterId,
     propertyValueCents,
+    subject: subjectRaw,
     notes,
     currency,
     lines,
   };
+}
+
+export function parseUpdateProformaInput(body: unknown): CreateProformaInput {
+  return parseCreateProformaInput(body);
 }

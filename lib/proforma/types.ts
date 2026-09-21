@@ -30,6 +30,28 @@ export const PROFORMA_LINE_CODES = [
 ] as const;
 export type ProformaLineCode = (typeof PROFORMA_LINE_CODES)[number];
 
+export const PROFORMA_MONEY_CLASSES = ["firm_income", "client_collectible"] as const;
+export type ProformaMoneyClass = (typeof PROFORMA_MONEY_CLASSES)[number];
+
+export function moneyClassForLineCode(code: ProformaLineCode): ProformaMoneyClass {
+  if (code === "conveyancing_fee" || code === "fee") return "firm_income";
+  return "client_collectible";
+}
+
+export function defaultProformaSubject(
+  kind: ProformaKind,
+  category: ConveyancingCategory | null,
+): string {
+  if (kind === "legal_fees") return "RE: PRO FORMA — LEGAL FEES";
+  if (category === "cession") return "RE: PRO FORMA — CESSION";
+  if (category === "commercial") return "RE: PRO FORMA — COMMERCIAL PROPERTY";
+  return "RE: PRO FORMA — REGISTERED TITLE";
+}
+
+export function moneyClassLabel(cls: ProformaMoneyClass): string {
+  return cls === "firm_income" ? "Firm fees (earnings)" : "Collectibles (pay onward)";
+}
+
 export const DEFAULT_CONVEYANCING_RATE_PCT = 3;
 export const COMMERCIAL_VAT_RATE_PCT = 15.5;
 

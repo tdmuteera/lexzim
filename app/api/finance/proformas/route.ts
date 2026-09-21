@@ -5,12 +5,13 @@ import { isMissingRelationError } from "@/lib/db/missing-relation";
 import { isProformaKind, isProformaStatus } from "@/lib/proforma/types";
 import { serializeProformaDetail, serializeProformaListItem } from "@/lib/proforma/serialize";
 import { parseCreateProformaInput } from "@/lib/proforma/validation";
+import { createFirmTask } from "@/lib/repos/firm-tasks";
 import { createProforma, getProforma, listProformas } from "@/lib/repos/proformas";
 import { requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 const MIGRATION_HINT =
-  "Pro forma tables are missing on this database. Run npm run db:migrate (migration 0050_pro_formas), then refresh.";
+  "Pro forma tables are missing on this database. Run npm run db:migrate (migration 0050_pro_formas / 0051_proforma_money_class), then refresh.";
 
 export async function GET(request: Request) {
   try {
@@ -59,6 +60,30 @@ export async function POST(request: Request) {
       throw err;
     }
 
+    const row = await getProforma(firmId, created.id);
+    if (!row) throw new AuthError("server", "Pro forma created but could not reload.");
+
+    const clientLabel = row.clientDisplayLabel;
+    try {
+      await createFirmTask(firmId, session.id, {
+        title: `Pro forma ${created.proformaNumber} — ${clientLabel}`,
+        description: [
+          row.proforma.subject,
+          `Kind: ${created.kind}`,
+          created.conveyancingCategory
+            ? `Category: ${created.conveyancingCategory}`
+            : null,
+          `Open: /finance/proforma/${created.id}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        assigneeUserId: session.id,
+        priority: "normal",
+      });
+    } catch {
+      // Task creation must not block saving the estimate.
+    }
+
     await writeAuditLog({
       action: "proformas.create",
       firmId,
@@ -74,8 +99,6 @@ export async function POST(request: Request) {
       ipOrUserAgent: clientInfo(request),
     }).catch(() => undefined);
 
-    const row = await getProforma(firmId, created.id);
-    if (!row) throw new AuthError("server", "Pro forma created but could not reload.");
     return jsonOk({ proforma: serializeProformaDetail(row) }, { status: 201 });
   } catch (err) {
     return jsonError(err, request);

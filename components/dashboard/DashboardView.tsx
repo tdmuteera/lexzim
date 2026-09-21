@@ -64,6 +64,9 @@ type DashboardData = {
     nextHearingAt: string | null;
     outstandingFeesCents: number;
     outstandingCurrency: string;
+    proformaFirmFeesCents?: number;
+    proformaCollectibleCents?: number;
+    proformaCurrency?: string;
   };
   statusMix: { byStatus: Record<string, number>; total: number };
   feeRevenue: Array<{
@@ -672,7 +675,7 @@ export function DashboardView() {
             label="Outstanding fees"
             value={commandKpis.outstandingFeesCents}
             format={(n) => centsToDisplay(n, commandKpis.outstandingCurrency)}
-            hint={`${overdueInvCount} overdue`}
+            hint={`${overdueInvCount} overdue · invoice AR only`}
             delay={3}
           />
         ) : permissions.matters ? (
@@ -683,6 +686,32 @@ export function DashboardView() {
             value={stats.closedMatters}
             hint="Closed or archived"
             delay={3}
+          />
+        ) : null}
+        {permissions.billing || permissions.finance ? (
+          <KpiCard
+            href="/finance/proforma"
+            icon="invoice"
+            label="Pro forma firm fees"
+            value={commandKpis.proformaFirmFeesCents ?? 0}
+            format={(n) =>
+              centsToDisplay(n, commandKpis.proformaCurrency || commandKpis.outstandingCurrency)
+            }
+            hint="Expected firm earnings (pipeline)"
+            delay={4}
+          />
+        ) : null}
+        {permissions.billing || permissions.finance ? (
+          <KpiCard
+            href="/finance/proforma"
+            icon="invoice"
+            label="Pro forma collectibles"
+            value={commandKpis.proformaCollectibleCents ?? 0}
+            format={(n) =>
+              centsToDisplay(n, commandKpis.proformaCurrency || commandKpis.outstandingCurrency)
+            }
+            hint="To collect and pay onward"
+            delay={5}
           />
         ) : null}
         {permissions.calendar || permissions.matters ? (
@@ -696,7 +725,7 @@ export function DashboardView() {
               stats.overdueProcedures
             }
             hint={`${stats.overdueProcedures} overdue procedures`}
-            delay={4}
+            delay={6}
           />
         ) : null}
       </div>
