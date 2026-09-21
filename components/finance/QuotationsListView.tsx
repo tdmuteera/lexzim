@@ -7,8 +7,10 @@ import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
 import { QUOTE_STATUSES, quoteStatusLabel } from "@/lib/quotes/totals";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type QuotationItem = {
   id: string;
@@ -94,6 +96,24 @@ export function QuotationsListView() {
     void load();
   }, [load]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      quoteNumber: (r: QuotationItem) => r.quoteNumber,
+      client: (r: QuotationItem) => r.clientDisplayLabel,
+      matter: (r: QuotationItem) =>
+        [r.matterNumber, r.matterTitle].filter(Boolean).join(" · ") || "",
+      status: (r: QuotationItem) => r.statusLabel,
+      validUntil: (r: QuotationItem) => r.validUntil,
+      total: (r: QuotationItem) => r.totalCents,
+      created: (r: QuotationItem) => r.createdAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "created",
+    dir: "desc",
+  });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Quotations">
       <div className="panel">
@@ -178,17 +198,61 @@ export function QuotationsListView() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Quote #</th>
-                  <th>Client</th>
-                  <th>Matter</th>
-                  <th>Status</th>
-                  <th>Valid until</th>
-                  <th className="num">Total</th>
-                  <th>Created</th>
+                  <SortableTh
+                    label="Quote #"
+                    columnKey="quoteNumber"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Client"
+                    columnKey="client"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Matter"
+                    columnKey="matter"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Valid until"
+                    columnKey="validUntil"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Total"
+                    columnKey="total"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                    className="num"
+                    align="right"
+                  />
+                  <SortableTh
+                    label="Created"
+                    columnKey="created"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                 </tr>
               </thead>
               <tbody>
-                {items.map((q) => (
+                {sortedRows.map((q) => (
                   <tr key={q.id}>
                     <td>
                       <Link href={`/finance/quotations/${q.id}`} className="table-link">

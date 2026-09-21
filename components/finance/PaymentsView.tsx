@@ -7,6 +7,7 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
 import {
   FEE_CATEGORIES,
@@ -15,6 +16,7 @@ import {
   type FeeCategory,
   type PaymentDestination,
 } from "@/lib/finance/payment-intake-validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type FeeCategoryOption = { id: FeeCategory; label: string };
 
@@ -402,6 +404,22 @@ export function PaymentsView() {
       setSaving(false);
     }
   }
+
+  const sortAccessors = useMemo(
+    () => ({
+      receipt: (r: IntakeItem) => r.receiptNumber ?? "",
+      date: (r: IntakeItem) => r.receivedAt,
+      client: (r: IntakeItem) => r.clientName,
+      destination: (r: IntakeItem) => destinationLabel(r.destination),
+      amount: (r: IntakeItem) => r.amountCents,
+      lines: (r: IntakeItem) => r.lineCount,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "date",
+    dir: "desc",
+  });
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Payments">
@@ -810,17 +828,57 @@ export function PaymentsView() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Receipt</th>
-                    <th>Date</th>
-                    <th>Client</th>
-                    <th>Destination</th>
-                    <th className="num">Amount</th>
-                    <th className="num">Lines</th>
+                    <SortableTh
+                      label="Receipt"
+                      columnKey="receipt"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Date"
+                      columnKey="date"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Client"
+                      columnKey="client"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Destination"
+                      columnKey="destination"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Amount"
+                      columnKey="amount"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                      className="num"
+                      align="right"
+                    />
+                    <SortableTh
+                      label="Lines"
+                      columnKey="lines"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                      className="num"
+                      align="right"
+                    />
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
+                  {sortedRows.map((item) => (
                     <tr key={item.id}>
                       <td>
                         <strong>{item.receiptNumber ?? "—"}</strong>

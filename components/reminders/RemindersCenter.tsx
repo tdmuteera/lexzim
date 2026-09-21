@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getModuleCache, setModuleCache } from "@/lib/client/module-cache";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 const REMINDERS_CACHE_KEY = "module:/api/reminders";
 
@@ -115,6 +117,20 @@ export function RemindersCenter() {
             ? data?.meetings ?? []
             : data?.hearings ?? [];
 
+  const sortAccessors = useMemo(
+    () => ({
+      item: (r: ReminderItem) => r.title,
+      when: (r: ReminderItem) => r.dueAt,
+      matter: (r: ReminderItem) => r.matterTitle ?? "",
+      type: (r: ReminderItem) => r.kind,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "when",
+    dir: "asc",
+  });
+
   return (
     <section className="view active scrollable" aria-label="Reminders">
       <div className="panel">
@@ -200,14 +216,38 @@ export function RemindersCenter() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th>When</th>
-                  <th>Matter</th>
-                  <th>Type</th>
+                  <SortableTh
+                    label="Item"
+                    columnKey="item"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="When"
+                    columnKey="when"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Matter"
+                    columnKey="matter"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Type"
+                    columnKey="type"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {sortedRows.map((item) => (
                   <tr
                     key={item.id}
                     style={

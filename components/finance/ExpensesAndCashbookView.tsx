@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
@@ -8,7 +8,9 @@ import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ExpenseItem = {
   id: string;
@@ -315,6 +317,41 @@ export function ExpensesAndCashbookView() {
       : null;
   const currency = expenses[0]?.currency ?? "USD";
 
+  const expenseAccessors = useMemo(
+    () => ({
+      date: (r: ExpenseItem) => r.expenseDate,
+      category: (r: ExpenseItem) => r.categoryLabel,
+      payee: (r: ExpenseItem) => r.payee,
+      matter: (r: ExpenseItem) => r.matterTitle ?? "",
+      amount: (r: ExpenseItem) => r.amountCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedExpenses,
+    sortKey: expKey,
+    sortDir: expDir,
+    toggleSort: toggleExp,
+  } = useTableSort(expenses, expenseAccessors, { key: "date", dir: "desc" });
+
+  const cashbookAccessors = useMemo(
+    () => ({
+      date: (r: CashbookItem) => r.entryDate,
+      type: (r: CashbookItem) => r.entryType,
+      amount: (r: CashbookItem) => r.amountCents,
+      reference: (r: CashbookItem) => r.reference ?? "",
+      links: (r: CashbookItem) =>
+        [r.expenseId ? "expense" : "", r.feePaymentId ? "fee" : ""].filter(Boolean).join(" "),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedCashbook,
+    sortKey: cbKey,
+    sortDir: cbDir,
+    toggleSort: toggleCb,
+  } = useTableSort(cashbook, cashbookAccessors, { key: "date", dir: "desc" });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Expenses and cashbook">
       <div className="panel">
@@ -447,15 +484,45 @@ export function ExpensesAndCashbookView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Category</th>
-                      <th>Payee</th>
-                      <th>Matter</th>
-                      <th>Amount</th>
+                      <SortableTh
+                        label="Date"
+                        columnKey="date"
+                        activeKey={expKey}
+                        direction={expDir}
+                        onSort={toggleExp}
+                      />
+                      <SortableTh
+                        label="Category"
+                        columnKey="category"
+                        activeKey={expKey}
+                        direction={expDir}
+                        onSort={toggleExp}
+                      />
+                      <SortableTh
+                        label="Payee"
+                        columnKey="payee"
+                        activeKey={expKey}
+                        direction={expDir}
+                        onSort={toggleExp}
+                      />
+                      <SortableTh
+                        label="Matter"
+                        columnKey="matter"
+                        activeKey={expKey}
+                        direction={expDir}
+                        onSort={toggleExp}
+                      />
+                      <SortableTh
+                        label="Amount"
+                        columnKey="amount"
+                        activeKey={expKey}
+                        direction={expDir}
+                        onSort={toggleExp}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {expenses.map((row) => (
+                    {sortedExpenses.map((row) => (
                       <tr key={row.id}>
                         <td>{new Date(row.expenseDate).toLocaleDateString()}</td>
                         <td>{row.categoryLabel}</td>
@@ -545,15 +612,45 @@ export function ExpensesAndCashbookView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Amount</th>
-                      <th>Reference</th>
-                      <th>Links</th>
+                      <SortableTh
+                        label="Date"
+                        columnKey="date"
+                        activeKey={cbKey}
+                        direction={cbDir}
+                        onSort={toggleCb}
+                      />
+                      <SortableTh
+                        label="Type"
+                        columnKey="type"
+                        activeKey={cbKey}
+                        direction={cbDir}
+                        onSort={toggleCb}
+                      />
+                      <SortableTh
+                        label="Amount"
+                        columnKey="amount"
+                        activeKey={cbKey}
+                        direction={cbDir}
+                        onSort={toggleCb}
+                      />
+                      <SortableTh
+                        label="Reference"
+                        columnKey="reference"
+                        activeKey={cbKey}
+                        direction={cbDir}
+                        onSort={toggleCb}
+                      />
+                      <SortableTh
+                        label="Links"
+                        columnKey="links"
+                        activeKey={cbKey}
+                        direction={cbDir}
+                        onSort={toggleCb}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {cashbook.map((row) => (
+                    {sortedCashbook.map((row) => (
                       <tr key={row.id}>
                         <td>{new Date(row.entryDate).toLocaleDateString()}</td>
                         <td>

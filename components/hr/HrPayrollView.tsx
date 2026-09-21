@@ -9,7 +9,9 @@ import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type PeriodItem = {
   id: string;
@@ -216,6 +218,22 @@ export function HrPayrollView() {
     ];
   }, [periods.length, lines, loading]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      staff: (r: PayrollLine) => r.staffName,
+      gross: (r: PayrollLine) => r.grossCents,
+      advances: (r: PayrollLine) => r.advancesOutstandingCents,
+      deduction: (r: PayrollLine) => r.deductionsCents,
+      net: (r: PayrollLine) => r.netPayableCents,
+      status: (r: PayrollLine) => (r.paidAt ? "Paid" : "Unpaid"),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(lines, sortAccessors, {
+    key: "staff",
+    dir: "asc",
+  });
+
   return (
     <HrPageShell
       title="Payroll"
@@ -327,17 +345,53 @@ export function HrPayrollView() {
           <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
-                  <th>Staff</th>
-                  <th>Gross</th>
-                  <th>Advances out.</th>
-                  <th>Deduction</th>
-                  <th>Net payable</th>
-                  <th>Status</th>
+                  <SortableTh
+                    label="Staff"
+                    columnKey="staff"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Gross"
+                    columnKey="gross"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Advances out."
+                    columnKey="advances"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Deduction"
+                    columnKey="deduction"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Net payable"
+                    columnKey="net"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {lines.map((row) => (
+                {sortedRows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <div className="hr-cell-primary">{row.staffName}</div>

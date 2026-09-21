@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { AREA_OF_LAW_OPTIONS } from "@/lib/db/mvp-types";
 import { MATTER_STATUSES, statusLabel } from "@/lib/matters/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type SerializedMatter = {
   id: string;
@@ -108,6 +110,23 @@ export function MattersListView({
     return () => window.clearTimeout(timer);
   }, [load, q]);
 
+  const accessors = useMemo(
+    () => ({
+      matter: (m: SerializedMatter) => m.matterNumber || m.title,
+      title: (m: SerializedMatter) => m.title,
+      client: (m: SerializedMatter) => m.clientDisplayName,
+      area: (m: SerializedMatter) => m.areaOfLaw,
+      status: (m: SerializedMatter) => m.statusLabel,
+      lawyer: (m: SerializedMatter) => m.responsibleLawyerName,
+      hearing: (m: SerializedMatter) => m.nextHearingAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "matter",
+    dir: "asc",
+  });
+
   const newHref = clientId
     ? `/matters/new?clientId=${encodeURIComponent(clientId)}`
     : "/matters/new";
@@ -198,12 +217,48 @@ export function MattersListView({
             <table className="data">
               <thead>
                 <tr>
-                  <th>Matter</th>
-                  <th>Client</th>
-                  <th>Area</th>
-                  <th>Status</th>
-                  <th>Lawyer</th>
-                  <th>Next hearing</th>
+                  <SortableTh
+                    label="Matter"
+                    columnKey="title"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Client"
+                    columnKey="client"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Area"
+                    columnKey="area"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Lawyer"
+                    columnKey="lawyer"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Next hearing"
+                    columnKey="hearing"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -213,7 +268,7 @@ export function MattersListView({
                       Loading matters…
                     </td>
                   </tr>
-                ) : items.length === 0 ? (
+                ) : sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={6}>
                       <EmptyState
@@ -224,7 +279,7 @@ export function MattersListView({
                     </td>
                   </tr>
                 ) : (
-                  items.map((matter) => (
+                  sortedRows.map((matter) => (
                     <tr key={matter.id}>
                       <td>
                         <Link href={`/matters/${matter.id}`} style={{ fontWeight: 600 }}>

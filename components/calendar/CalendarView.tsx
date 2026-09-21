@@ -9,6 +9,7 @@ import { CalendarSharePeoplePicker } from "@/components/calendar/CalendarSharePe
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
+import { SortableTh } from "@/components/ui/SortableTh";
 import type { CalendarEventType } from "@/lib/db/ops-types";
 import {
   CALENDAR_EVENT_TYPES,
@@ -18,6 +19,7 @@ import {
   type CalendarRecurrenceRule,
   type CalendarVisibility,
 } from "@/lib/calendar/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type GuestDraft = {
   email: string;
@@ -439,6 +441,23 @@ export function CalendarView() {
 
   const selected = items.find((e) => e.id === selectedId) ?? null;
   const formValid = Boolean(form.title.trim() && form.location.trim());
+  const agendaAccessors = useMemo(
+    () => ({
+      when: (ev: SerializedEvent) => ev.startsAt,
+      type: (ev: SerializedEvent) => ev.eventType,
+      title: (ev: SerializedEvent) => ev.title,
+      visibility: (ev: SerializedEvent) => ev.visibility ?? "private",
+      matter: (ev: SerializedEvent) => ev.matterNumber || ev.matterTitle,
+      location: (ev: SerializedEvent) => ev.location,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAgenda,
+    sortKey: agendaSortKey,
+    sortDir: agendaSortDir,
+    toggleSort: toggleAgendaSort,
+  } = useTableSort(items, agendaAccessors, { key: "when", dir: "asc" });
   const shareCandidates = useMemo(
     () => assignees.filter((a) => a.id !== user?.id),
     [assignees, user?.id],
@@ -745,6 +764,32 @@ export function CalendarView() {
       !selected.id.startsWith("holiday:")
     : false;
 
+  const agendaAccessors = useMemo(
+    () => ({
+      when: (r: SerializedEvent) => r.startsAt,
+      type: (r: SerializedEvent) => EVENT_TYPE_LABELS[r.eventType] ?? r.eventType,
+      title: (r: SerializedEvent) => r.title,
+      visibility: (r: SerializedEvent) =>
+        VISIBILITY_LABELS[(r.visibility as keyof typeof VISIBILITY_LABELS) ?? "firm"] ??
+        r.visibility ??
+        "",
+      matter: (r: SerializedEvent) =>
+        r.matterNumber
+          ? r.matterTitle
+            ? `${r.matterNumber} · ${r.matterTitle}`
+            : r.matterNumber
+          : r.matterTitle ?? "",
+      location: (r: SerializedEvent) => r.location ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAgenda,
+    sortKey: agendaKey,
+    sortDir: agendaDir,
+    toggleSort: toggleAgenda,
+  } = useTableSort(items, agendaAccessors, { key: "when", dir: "asc" });
+
   return (
     <section className="view active scrollable" aria-label="Court Calendar">
       <div className="panel">
@@ -950,16 +995,52 @@ export function CalendarView() {
                 <table className="data">
                   <thead>
                     <tr>
-                      <th>When</th>
-                      <th>Type</th>
-                      <th>Title</th>
-                      <th>Visibility</th>
-                      <th>Matter</th>
-                      <th>Location</th>
+                      <SortableTh
+                        label="When"
+                        columnKey="when"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
+                      <SortableTh
+                        label="Type"
+                        columnKey="type"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
+                      <SortableTh
+                        label="Title"
+                        columnKey="title"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
+                      <SortableTh
+                        label="Visibility"
+                        columnKey="visibility"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
+                      <SortableTh
+                        label="Matter"
+                        columnKey="matter"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
+                      <SortableTh
+                        label="Location"
+                        columnKey="location"
+                        activeKey={agendaSortKey}
+                        direction={agendaSortDir}
+                        onSort={toggleAgendaSort}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((ev) => (
+                    {sortedAgenda.map((ev) => (
                       <tr
                         key={ev.id}
                         onClick={() => setSelectedId(ev.id)}

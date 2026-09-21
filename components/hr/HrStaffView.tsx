@@ -9,8 +9,10 @@ import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { HR_JOB_CATEGORIES } from "@/lib/hr/job-categories";
 import { dollarsToCents } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 const ID_DOCUMENT_OPTIONS = [
   { value: "national_id", label: "National ID" },
@@ -409,6 +411,21 @@ export function HrStaffView() {
     ];
   }, [items, loading]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      name: (r: StaffItem) => r.fullName,
+      title: (r: StaffItem) => r.jobTitle ?? r.jobCategory ?? "",
+      login: (r: StaffItem) => r.userEmail ?? r.userFullName ?? "",
+      start: (r: StaffItem) => r.startDate,
+      status: (r: StaffItem) => (r.isActive ? "Active" : "Inactive"),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "name",
+    dir: "asc",
+  });
+
   return (
     <HrPageShell
       title="Staff records"
@@ -670,16 +687,46 @@ export function HrStaffView() {
           <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Title</th>
-                  <th>Login</th>
-                  <th>Start</th>
-                  <th>Status</th>
+                  <SortableTh
+                    label="Name"
+                    columnKey="name"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Title"
+                    columnKey="title"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Login"
+                    columnKey="login"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Start"
+                    columnKey="start"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                   {canManage ? <th /> : null}
                 </tr>
               </thead>
               <tbody>
-                {items.map((row) => (
+                {sortedRows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <div className="hr-staff-card">

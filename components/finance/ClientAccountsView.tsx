@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type IndexRow = {
   clientId: string;
@@ -103,6 +105,13 @@ type AccountDetail = {
     paidAt: string | null;
   }>;
 };
+
+type TrustMovement = AccountDetail["trust"]["recentMovements"][number];
+type FeeInvoice = AccountDetail["fees"]["invoices"][number];
+type FeePayment = AccountDetail["fees"]["feePayments"][number];
+type UnbilledDisbursement = AccountDetail["disbursements"]["unbilled"][number];
+type PaymentIntake = AccountDetail["paymentIntakes"][number];
+type RecoverableReq = AccountDetail["recoverableRequisitions"][number];
 
 function destinationLabel(destination: string): string {
   if (destination === "trust_bank") return "Trust bank";
@@ -208,6 +217,132 @@ export function ClientAccountsView() {
     };
   }, [selectedId]);
 
+  const indexAccessors = useMemo(
+    () => ({
+      client: (r: IndexRow) => r.displayName,
+      trust: (r: IndexRow) => r.trustBalanceCents,
+      fees: (r: IndexRow) => r.feesOutstandingCents,
+      disbursements: (r: IndexRow) => r.unbilledDisbursementCents,
+      intakes: (r: IndexRow) => r.intakeCount,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedIndex,
+    sortKey: indexKey,
+    sortDir: indexDir,
+    toggleSort: toggleIndex,
+  } = useTableSort(items, indexAccessors, { key: "client", dir: "asc" });
+
+  const movements = detail?.trust.recentMovements ?? [];
+  const movementAccessors = useMemo(
+    () => ({
+      date: (r: TrustMovement) => r.occurredAt,
+      type: (r: TrustMovement) => r.entryType,
+      amount: (r: TrustMovement) => r.amountCents,
+      running: (r: TrustMovement) => r.runningBalanceCents,
+      account: (r: TrustMovement) => r.accountName,
+      ref: (r: TrustMovement) => r.referenceNumber ?? r.narrative ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedMovements,
+    sortKey: moveKey,
+    sortDir: moveDir,
+    toggleSort: toggleMove,
+  } = useTableSort(movements, movementAccessors, { key: "date", dir: "desc" });
+
+  const invoices = detail?.fees.invoices ?? [];
+  const invoiceAccessors = useMemo(
+    () => ({
+      invoice: (r: FeeInvoice) => r.invoiceNumber,
+      status: (r: FeeInvoice) => r.status,
+      total: (r: FeeInvoice) => r.totalCents,
+      paid: (r: FeeInvoice) => r.paidCents,
+      balance: (r: FeeInvoice) => r.balanceCents,
+      matter: (r: FeeInvoice) => r.matterNumber ?? r.matterTitle ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedInvoices,
+    sortKey: invKey,
+    sortDir: invDir,
+    toggleSort: toggleInv,
+  } = useTableSort(invoices, invoiceAccessors, { key: "invoice", dir: "asc" });
+
+  const feePayments = detail?.fees.feePayments ?? [];
+  const feePayAccessors = useMemo(
+    () => ({
+      receipt: (r: FeePayment) => r.receiptNumber ?? "",
+      invoice: (r: FeePayment) => r.invoiceNumber ?? "",
+      date: (r: FeePayment) => r.paidAt,
+      amount: (r: FeePayment) => r.amountCents,
+      method: (r: FeePayment) => r.method ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedFeePayments,
+    sortKey: feePayKey,
+    sortDir: feePayDir,
+    toggleSort: toggleFeePay,
+  } = useTableSort(feePayments, feePayAccessors, { key: "date", dir: "desc" });
+
+  const unbilled = detail?.disbursements.unbilled ?? [];
+  const unbilledAccessors = useMemo(
+    () => ({
+      date: (r: UnbilledDisbursement) => r.incurredAt,
+      description: (r: UnbilledDisbursement) => r.description,
+      amount: (r: UnbilledDisbursement) => r.amountCents,
+      matter: (r: UnbilledDisbursement) => r.matterNumber ?? r.matterTitle ?? "",
+      paidFrom: (r: UnbilledDisbursement) => r.paidFrom ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedUnbilled,
+    sortKey: unbilledKey,
+    sortDir: unbilledDir,
+    toggleSort: toggleUnbilled,
+  } = useTableSort(unbilled, unbilledAccessors, { key: "date", dir: "desc" });
+
+  const intakes = detail?.paymentIntakes ?? [];
+  const intakeAccessors = useMemo(
+    () => ({
+      receipt: (r: PaymentIntake) => r.receiptNumber ?? "",
+      date: (r: PaymentIntake) => r.receivedAt,
+      destination: (r: PaymentIntake) => destinationLabel(r.destination),
+      amount: (r: PaymentIntake) => r.amountCents,
+      lines: (r: PaymentIntake) => r.lineCount,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedIntakes,
+    sortKey: intakeKey,
+    sortDir: intakeDir,
+    toggleSort: toggleIntake,
+  } = useTableSort(intakes, intakeAccessors, { key: "date", dir: "desc" });
+
+  const recoverables = detail?.recoverableRequisitions ?? [];
+  const recoverableAccessors = useMemo(
+    () => ({
+      paid: (r: RecoverableReq) => r.paidAt,
+      description: (r: RecoverableReq) => r.description,
+      amount: (r: RecoverableReq) => r.amountCents,
+      matter: (r: RecoverableReq) => r.matterNumber ?? r.matterTitle ?? "",
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedRecoverables,
+    sortKey: recKey,
+    sortDir: recDir,
+    toggleSort: toggleRec,
+  } = useTableSort(recoverables, recoverableAccessors, { key: "paid", dir: "desc" });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Client accounts">
       <div className="panel">
@@ -275,16 +410,46 @@ export function ClientAccountsView() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        <th>Trust balance</th>
-                        <th>Fees outstanding</th>
-                        <th>Unbilled disbursements</th>
-                        <th>Intakes</th>
+                        <SortableTh
+                          label="Client"
+                          columnKey="client"
+                          activeKey={indexKey}
+                          direction={indexDir}
+                          onSort={toggleIndex}
+                        />
+                        <SortableTh
+                          label="Trust balance"
+                          columnKey="trust"
+                          activeKey={indexKey}
+                          direction={indexDir}
+                          onSort={toggleIndex}
+                        />
+                        <SortableTh
+                          label="Fees outstanding"
+                          columnKey="fees"
+                          activeKey={indexKey}
+                          direction={indexDir}
+                          onSort={toggleIndex}
+                        />
+                        <SortableTh
+                          label="Unbilled disbursements"
+                          columnKey="disbursements"
+                          activeKey={indexKey}
+                          direction={indexDir}
+                          onSort={toggleIndex}
+                        />
+                        <SortableTh
+                          label="Intakes"
+                          columnKey="intakes"
+                          activeKey={indexKey}
+                          direction={indexDir}
+                          onSort={toggleIndex}
+                        />
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((row) => (
+                      {sortedIndex.map((row) => (
                         <tr key={row.clientId}>
                           <td>
                             <strong>{row.displayName}</strong>
@@ -388,16 +553,16 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Date</th>
-                              <th>Type</th>
-                              <th>Amount</th>
-                              <th>Running</th>
-                              <th>Account</th>
-                              <th>Ref</th>
+                              <SortableTh label="Date" columnKey="date" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
+                              <SortableTh label="Type" columnKey="type" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
+                              <SortableTh label="Amount" columnKey="amount" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
+                              <SortableTh label="Running" columnKey="running" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
+                              <SortableTh label="Account" columnKey="account" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
+                              <SortableTh label="Ref" columnKey="ref" activeKey={moveKey} direction={moveDir} onSort={toggleMove} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.trust.recentMovements.map((m) => (
+                            {sortedMovements.map((m) => (
                               <tr key={m.id}>
                                 <td>
                                   {new Date(m.occurredAt).toLocaleDateString(undefined, {
@@ -435,16 +600,16 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Invoice</th>
-                              <th>Status</th>
-                              <th>Total</th>
-                              <th>Paid</th>
-                              <th>Balance</th>
-                              <th>Matter</th>
+                              <SortableTh label="Invoice" columnKey="invoice" activeKey={invKey} direction={invDir} onSort={toggleInv} />
+                              <SortableTh label="Status" columnKey="status" activeKey={invKey} direction={invDir} onSort={toggleInv} />
+                              <SortableTh label="Total" columnKey="total" activeKey={invKey} direction={invDir} onSort={toggleInv} />
+                              <SortableTh label="Paid" columnKey="paid" activeKey={invKey} direction={invDir} onSort={toggleInv} />
+                              <SortableTh label="Balance" columnKey="balance" activeKey={invKey} direction={invDir} onSort={toggleInv} />
+                              <SortableTh label="Matter" columnKey="matter" activeKey={invKey} direction={invDir} onSort={toggleInv} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.fees.invoices.map((inv) => (
+                            {sortedInvoices.map((inv) => (
                               <tr key={inv.id}>
                                 <td>
                                   <Link href={`/finance/invoicing/invoices/${inv.id}`}>
@@ -477,15 +642,15 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Receipt</th>
-                              <th>Invoice</th>
-                              <th>Date</th>
-                              <th>Amount</th>
-                              <th>Method</th>
+                              <SortableTh label="Receipt" columnKey="receipt" activeKey={feePayKey} direction={feePayDir} onSort={toggleFeePay} />
+                              <SortableTh label="Invoice" columnKey="invoice" activeKey={feePayKey} direction={feePayDir} onSort={toggleFeePay} />
+                              <SortableTh label="Date" columnKey="date" activeKey={feePayKey} direction={feePayDir} onSort={toggleFeePay} />
+                              <SortableTh label="Amount" columnKey="amount" activeKey={feePayKey} direction={feePayDir} onSort={toggleFeePay} />
+                              <SortableTh label="Method" columnKey="method" activeKey={feePayKey} direction={feePayDir} onSort={toggleFeePay} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.fees.feePayments.map((p) => (
+                            {sortedFeePayments.map((p) => (
                               <tr key={p.id}>
                                 <td>
                                   {p.receiptNumber ? (
@@ -525,15 +690,15 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Date</th>
-                              <th>Description</th>
-                              <th>Amount</th>
-                              <th>Matter</th>
-                              <th>Paid from</th>
+                              <SortableTh label="Date" columnKey="date" activeKey={unbilledKey} direction={unbilledDir} onSort={toggleUnbilled} />
+                              <SortableTh label="Description" columnKey="description" activeKey={unbilledKey} direction={unbilledDir} onSort={toggleUnbilled} />
+                              <SortableTh label="Amount" columnKey="amount" activeKey={unbilledKey} direction={unbilledDir} onSort={toggleUnbilled} />
+                              <SortableTh label="Matter" columnKey="matter" activeKey={unbilledKey} direction={unbilledDir} onSort={toggleUnbilled} />
+                              <SortableTh label="Paid from" columnKey="paidFrom" activeKey={unbilledKey} direction={unbilledDir} onSort={toggleUnbilled} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.disbursements.unbilled.map((d) => (
+                            {sortedUnbilled.map((d) => (
                               <tr key={d.id}>
                                 <td>
                                   {new Date(d.incurredAt).toLocaleDateString(undefined, {
@@ -565,15 +730,15 @@ export function ClientAccountsView() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Receipt</th>
-                              <th>Date</th>
-                              <th>Destination</th>
-                              <th>Amount</th>
-                              <th>Lines</th>
+                              <SortableTh label="Receipt" columnKey="receipt" activeKey={intakeKey} direction={intakeDir} onSort={toggleIntake} />
+                              <SortableTh label="Date" columnKey="date" activeKey={intakeKey} direction={intakeDir} onSort={toggleIntake} />
+                              <SortableTh label="Destination" columnKey="destination" activeKey={intakeKey} direction={intakeDir} onSort={toggleIntake} />
+                              <SortableTh label="Amount" columnKey="amount" activeKey={intakeKey} direction={intakeDir} onSort={toggleIntake} />
+                              <SortableTh label="Lines" columnKey="lines" activeKey={intakeKey} direction={intakeDir} onSort={toggleIntake} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.paymentIntakes.map((intake) => (
+                            {sortedIntakes.map((intake) => (
                               <tr key={intake.id}>
                                 <td>
                                   {intake.receiptNumber ? (

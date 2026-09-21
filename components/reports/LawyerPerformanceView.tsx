@@ -7,7 +7,9 @@ import { AnimatedBarChart } from "@/components/dashboard/DashboardCharts";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type PerformanceRow = {
   lawyerId: string | null;
@@ -167,6 +169,27 @@ export function LawyerPerformanceView() {
     to: `${to}T23:59:59.999`,
   };
 
+  const performanceRows = report?.rows ?? [];
+  const sortAccessors = useMemo(
+    () => ({
+      lawyer: (r: PerformanceRow) => r.lawyerName,
+      openMatters: (r: PerformanceRow) => r.openMatters,
+      collected: (r: PerformanceRow) => r.collectedCents,
+      remaining: (r: PerformanceRow) =>
+        commissionByLawyer?.get(r.lawyerId ?? "unassigned")?.remainingToTargetCents ?? 0,
+      above: (r: PerformanceRow) =>
+        commissionByLawyer?.get(r.lawyerId ?? "unassigned")?.aboveTargetCents ?? 0,
+      commission: (r: PerformanceRow) =>
+        commissionByLawyer?.get(r.lawyerId ?? "unassigned")?.commissionDueCents ?? 0,
+    }),
+    [commissionByLawyer],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(
+    performanceRows,
+    sortAccessors,
+    { key: "lawyer", dir: "asc" },
+  );
+
   return (
     <section className="view active scrollable" aria-label="Lawyer performance">
       <div className="panel">
@@ -310,20 +333,56 @@ export function LawyerPerformanceView() {
                 <table className="data">
                   <thead>
                     <tr>
-                      <th>Lawyer</th>
-                      <th>Open matters</th>
-                      <th>Fees collected</th>
+                      <SortableTh
+                        label="Lawyer"
+                        columnKey="lawyer"
+                        activeKey={sortKey}
+                        direction={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortableTh
+                        label="Open matters"
+                        columnKey="openMatters"
+                        activeKey={sortKey}
+                        direction={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortableTh
+                        label="Fees collected"
+                        columnKey="collected"
+                        activeKey={sortKey}
+                        direction={sortDir}
+                        onSort={toggleSort}
+                      />
                       {commissionByLawyer ? (
                         <>
-                          <th>Remaining to target</th>
-                          <th>Above target</th>
-                          <th>Commission due</th>
+                          <SortableTh
+                            label="Remaining to target"
+                            columnKey="remaining"
+                            activeKey={sortKey}
+                            direction={sortDir}
+                            onSort={toggleSort}
+                          />
+                          <SortableTh
+                            label="Above target"
+                            columnKey="above"
+                            activeKey={sortKey}
+                            direction={sortDir}
+                            onSort={toggleSort}
+                          />
+                          <SortableTh
+                            label="Commission due"
+                            columnKey="commission"
+                            activeKey={sortKey}
+                            direction={sortDir}
+                            onSort={toggleSort}
+                          />
                         </>
                       ) : null}
                     </tr>
                   </thead>
                   <tbody>
-                    {report.rows.map((r) => {
+                    {sortedRows.map((r) => {
                       const c = commissionByLawyer?.get(r.lawyerId ?? "unassigned");
                       return (
                         <tr key={r.lawyerId ?? "unassigned"}>

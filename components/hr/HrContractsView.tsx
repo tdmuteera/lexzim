@@ -9,7 +9,9 @@ import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { HR_CONTRACT_STATUSES } from "@/lib/hr/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ContractItem = {
   id: string;
@@ -268,6 +270,21 @@ export function HrContractsView() {
     ];
   }, [contracts, loading]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      staff: (r: ContractItem) => r.staffName,
+      contract: (r: ContractItem) => r.title,
+      period: (r: ContractItem) => r.startDate,
+      status: (r: ContractItem) => r.status,
+      document: (r: ContractItem) => r.contractDocumentName ?? "",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(contracts, sortAccessors, {
+    key: "staff",
+    dir: "asc",
+  });
+
   return (
     <HrPageShell
       title="Contracts"
@@ -379,16 +396,46 @@ export function HrContractsView() {
           <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
-                  <th>Staff</th>
-                  <th>Contract</th>
-                  <th>Period</th>
-                  <th>Status</th>
-                  <th>Document</th>
+                  <SortableTh
+                    label="Staff"
+                    columnKey="staff"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Contract"
+                    columnKey="contract"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Period"
+                    columnKey="period"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Document"
+                    columnKey="document"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                   {canManage ? <th /> : null}
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((row) => (
+                {sortedRows.map((row) => (
                   <tr key={row.id}>
                     <td>{row.staffName}</td>
                     <td><div className="hr-cell-primary">{row.title}</div></td>

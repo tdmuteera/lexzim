@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { AREA_OF_LAW_OPTIONS } from "@/lib/db/mvp-types";
 import { canApproveTemplates } from "@/lib/rbac/permissions";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type TemplateItem = {
   id: string;
@@ -223,6 +225,21 @@ export function TemplatesLibraryView({ embedded = false }: TemplatesLibraryViewP
     }
   }
 
+  const sortAccessors = useMemo(
+    () => ({
+      title: (r: TemplateItem) => r.title,
+      area: (r: TemplateItem) => r.areaOfLaw,
+      version: (r: TemplateItem) => r.version,
+      status: (r: TemplateItem) =>
+        `${r.isApproved ? "Approved" : "Unapproved"} ${r.isActive ? "Active" : "Inactive"}`,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "title",
+    dir: "asc",
+  });
+
   const body = (
     <>
       {!embedded ? (
@@ -424,15 +441,39 @@ export function TemplatesLibraryView({ embedded = false }: TemplatesLibraryViewP
           <table className="data">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Area</th>
-                <th>Version</th>
-                <th>Status</th>
+                <SortableTh
+                  label="Title"
+                  columnKey="title"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Area"
+                  columnKey="area"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Version"
+                  columnKey="version"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Status"
+                  columnKey="status"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{item.title}</div>

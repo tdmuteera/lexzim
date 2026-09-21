@@ -8,7 +8,9 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Requisition = {
   id: string;
@@ -302,6 +304,22 @@ export function RequisitionsView() {
     }
   }
 
+  const sortAccessors = useMemo(
+    () => ({
+      type: (r: Requisition) => (r.type === "business" ? "Business" : "Disbursement"),
+      status: (r: Requisition) => r.status,
+      description: (r: Requisition) => r.description,
+      amount: (r: Requisition) => r.amountCents,
+      clientMatter: (r: Requisition) =>
+        [r.clientName, r.matterNumber ?? r.matterTitle].filter(Boolean).join(" / "),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "status",
+    dir: "asc",
+  });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Requisitions">
       <div className="panel">
@@ -494,16 +512,48 @@ export function RequisitionsView() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Description</th>
-                    <th className="num">Amount</th>
-                    <th>Client / matter</th>
+                    <SortableTh
+                      label="Type"
+                      columnKey="type"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Status"
+                      columnKey="status"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Description"
+                      columnKey="description"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Amount"
+                      columnKey="amount"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                      className="num"
+                      align="right"
+                    />
+                    <SortableTh
+                      label="Client / matter"
+                      columnKey="clientMatter"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((row) => (
+                  {sortedRows.map((row) => (
                     <tr
                       key={row.id}
                       className={selectedId === row.id ? "row-selected" : undefined}

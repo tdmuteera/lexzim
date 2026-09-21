@@ -9,6 +9,7 @@ import { DebtorCommunicationsPanel } from "@/components/finance/DebtorCommunicat
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import {
   AR_AGING_BUCKETS,
   agingBucketDisplay,
@@ -17,6 +18,7 @@ import {
 import { centsToDisplay } from "@/lib/billing/money";
 import { invoiceDetailPath } from "@/lib/billing/paths";
 import type { DebtorsReport, DebtorsRow } from "@/lib/repos/debtors";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type MatterOption = { id: string; title: string; matterNumber: string | null };
 
@@ -34,6 +36,76 @@ function statusTone(bucket: ArAgingBucket) {
   if (bucket === "61-90" || bucket === "31-60") return "pending" as const;
   if (bucket === "1-30") return "default" as const;
   return "open" as const;
+}
+
+type BucketSummaryRow = {
+  bucket: ArAgingBucket;
+  count: number;
+  balanceCents: number;
+};
+
+function DebtorsBucketSummaryTable({
+  buckets,
+  currency,
+}: {
+  buckets: BucketSummaryRow[];
+  currency: string;
+}) {
+  const visible = useMemo(
+    () => buckets.filter((b) => b.count > 0 || b.balanceCents > 0),
+    [buckets],
+  );
+  const sortAccessors = useMemo(
+    () => ({
+      bucket: (r: BucketSummaryRow) => agingBucketDisplay(r.bucket),
+      count: (r: BucketSummaryRow) => r.count,
+      balance: (r: BucketSummaryRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(visible, sortAccessors, {
+    key: "bucket",
+    dir: "asc",
+  });
+
+  return (
+    <table className="data data-dense debtors-bucket-table">
+      <thead>
+        <tr>
+          <SortableTh
+            label="Bucket"
+            columnKey="bucket"
+            activeKey={sortKey}
+            direction={sortDir}
+            onSort={toggleSort}
+          />
+          <SortableTh
+            label="Count"
+            columnKey="count"
+            activeKey={sortKey}
+            direction={sortDir}
+            onSort={toggleSort}
+          />
+          <SortableTh
+            label="Balance"
+            columnKey="balance"
+            activeKey={sortKey}
+            direction={sortDir}
+            onSort={toggleSort}
+          />
+        </tr>
+      </thead>
+      <tbody>
+        {sortedRows.map((b) => (
+          <tr key={b.bucket}>
+            <td>{agingBucketDisplay(b.bucket)}</td>
+            <td>{b.count}</td>
+            <td>{centsToDisplay(b.balanceCents, currency)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 export function DebtorsView() {
@@ -138,6 +210,22 @@ export function DebtorsView() {
     [bucket, matterId, clientIdFilter],
   );
 
+  const sortAccessors = useMemo(
+    () => ({
+      invoice: (r: DebtorsRow) => r.invoiceNumber,
+      client: (r: DebtorsRow) => r.clientName,
+      matter: (r: DebtorsRow) => r.matterNumber ?? r.matterTitle,
+      due: (r: DebtorsRow) => r.dueDate,
+      bucket: (r: DebtorsRow) => agingBucketDisplay(r.bucket),
+      balance: (r: DebtorsRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(rows, sortAccessors, {
+    key: "due",
+    dir: "asc",
+  });
+
   const expandedName =
     rows.find((r) => r.clientId === expandedClientId)?.clientName ??
     clientOptions.find((c) => c.id === expandedClientId)?.name;
@@ -179,26 +267,10 @@ export function DebtorsView() {
                       {centsToDisplay(summary.totalBalanceCents, summary.currency)} outstanding
                     </span>
                   </div>
-                  <table className="data data-dense debtors-bucket-table">
-                    <thead>
-                      <tr>
-                        <th>Bucket</th>
-                        <th>Count</th>
-                        <th>Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.buckets.map((b) =>
-                        b.count > 0 || b.balanceCents > 0 ? (
-                          <tr key={b.bucket}>
-                            <td>{agingBucketDisplay(b.bucket)}</td>
-                            <td>{b.count}</td>
-                            <td>{centsToDisplay(b.balanceCents, summary.currency)}</td>
-                          </tr>
-                        ) : null,
-                      )}
-                    </tbody>
-                  </table>
+                  <DebtorsBucketSummaryTable
+                    buckets={summary.buckets}
+                    currency={summary.currency}
+                  />
                 </div>
               ))}
             </div>
@@ -301,21 +373,57 @@ export function DebtorsView() {
                 <thead>
                   <tr>
                     <th />
-                    <th>Invoice</th>
-                    <th>Client</th>
-                    <th>Matter</th>
-                    <th>Due</th>
-                    <th>Bucket</th>
-                    <th>Balance</th>
+                    <SortableTh
+                      label="Invoice"
+                      columnKey="invoice"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Client"
+                      columnKey="client"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Matter"
+                      columnKey="matter"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Due"
+                      columnKey="due"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Bucket"
+                      columnKey="bucket"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Balance"
+                      columnKey="balance"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row: DebtorsRow, index: number) => {
+                  {sortedRows.map((row: DebtorsRow, index: number) => {
                     const isExpanded =
                       Boolean(row.clientId) && expandedClientId === row.clientId;
                     const showPanel =
                       isExpanded &&
-                      rows.findIndex((r) => r.clientId === row.clientId) === index;
+                      sortedRows.findIndex((r) => r.clientId === row.clientId) === index;
                     return (
                       <Fragment key={row.invoiceId}>
                         <tr className={row.bucket !== "current" ? "row-overdue" : ""}>

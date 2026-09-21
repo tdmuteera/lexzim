@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Can } from "@/components/auth/Can";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type CreditorRow = {
   id: string;
@@ -226,6 +228,54 @@ export function CreditorsView() {
 
   const totalOutstanding = aging.reduce((sum, r) => sum + r.balanceCents, 0);
 
+  const agingAccessors = useMemo(
+    () => ({
+      creditor: (r: AgingRow) => r.creditorName,
+      reference: (r: AgingRow) => r.reference ?? "",
+      due: (r: AgingRow) => r.dueDate,
+      age: (r: AgingRow) => BUCKET_LABELS[r.bucket] ?? r.bucket,
+      balance: (r: AgingRow) => r.balanceCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAging,
+    sortKey: agingKey,
+    sortDir: agingDir,
+    toggleSort: toggleAging,
+  } = useTableSort(aging, agingAccessors, { key: "due", dir: "asc" });
+
+  const billsAccessors = useMemo(
+    () => ({
+      creditor: (r: InvoiceRow) => r.creditorName,
+      date: (r: InvoiceRow) => r.invoiceDate,
+      reference: (r: InvoiceRow) => r.reference ?? "",
+      amount: (r: InvoiceRow) => r.amountCents,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBills,
+    sortKey: billsKey,
+    sortDir: billsDir,
+    toggleSort: toggleBills,
+  } = useTableSort(invoices, billsAccessors, { key: "date", dir: "desc" });
+
+  const creditorsAccessors = useMemo(
+    () => ({
+      name: (r: CreditorRow) => r.name,
+      email: (r: CreditorRow) => r.contactEmail ?? "",
+      status: (r: CreditorRow) => (r.isActive ? "Active" : "Inactive"),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedCreditors,
+    sortKey: creditorsKey,
+    sortDir: creditorsDir,
+    toggleSort: toggleCreditors,
+  } = useTableSort(creditors, creditorsAccessors, { key: "name", dir: "asc" });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Creditors">
       <div className="panel">
@@ -382,15 +432,45 @@ export function CreditorsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Creditor</th>
-                      <th>Reference</th>
-                      <th>Due</th>
-                      <th>Age</th>
-                      <th>Balance</th>
+                      <SortableTh
+                        label="Creditor"
+                        columnKey="creditor"
+                        activeKey={agingKey}
+                        direction={agingDir}
+                        onSort={toggleAging}
+                      />
+                      <SortableTh
+                        label="Reference"
+                        columnKey="reference"
+                        activeKey={agingKey}
+                        direction={agingDir}
+                        onSort={toggleAging}
+                      />
+                      <SortableTh
+                        label="Due"
+                        columnKey="due"
+                        activeKey={agingKey}
+                        direction={agingDir}
+                        onSort={toggleAging}
+                      />
+                      <SortableTh
+                        label="Age"
+                        columnKey="age"
+                        activeKey={agingKey}
+                        direction={agingDir}
+                        onSort={toggleAging}
+                      />
+                      <SortableTh
+                        label="Balance"
+                        columnKey="balance"
+                        activeKey={agingKey}
+                        direction={agingDir}
+                        onSort={toggleAging}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {aging.map((r) => (
+                    {sortedAging.map((r) => (
                       <tr key={r.invoiceId}>
                         <td>{r.creditorName}</td>
                         <td>{r.reference ?? ""}</td>
@@ -413,15 +493,39 @@ export function CreditorsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Creditor</th>
-                      <th>Date</th>
-                      <th>Reference</th>
-                      <th>Amount</th>
+                      <SortableTh
+                        label="Creditor"
+                        columnKey="creditor"
+                        activeKey={billsKey}
+                        direction={billsDir}
+                        onSort={toggleBills}
+                      />
+                      <SortableTh
+                        label="Date"
+                        columnKey="date"
+                        activeKey={billsKey}
+                        direction={billsDir}
+                        onSort={toggleBills}
+                      />
+                      <SortableTh
+                        label="Reference"
+                        columnKey="reference"
+                        activeKey={billsKey}
+                        direction={billsDir}
+                        onSort={toggleBills}
+                      />
+                      <SortableTh
+                        label="Amount"
+                        columnKey="amount"
+                        activeKey={billsKey}
+                        direction={billsDir}
+                        onSort={toggleBills}
+                      />
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map((inv) => (
+                    {sortedBills.map((inv) => (
                       <tr key={inv.id}>
                         <td>{inv.creditorName}</td>
                         <td>{new Date(inv.invoiceDate).toLocaleDateString()}</td>
@@ -450,13 +554,31 @@ export function CreditorsView() {
                 <table className="data data-dense">
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Status</th>
+                      <SortableTh
+                        label="Name"
+                        columnKey="name"
+                        activeKey={creditorsKey}
+                        direction={creditorsDir}
+                        onSort={toggleCreditors}
+                      />
+                      <SortableTh
+                        label="Email"
+                        columnKey="email"
+                        activeKey={creditorsKey}
+                        direction={creditorsDir}
+                        onSort={toggleCreditors}
+                      />
+                      <SortableTh
+                        label="Status"
+                        columnKey="status"
+                        activeKey={creditorsKey}
+                        direction={creditorsDir}
+                        onSort={toggleCreditors}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {creditors.map((c) => (
+                    {sortedCreditors.map((c) => (
                       <tr key={c.id}>
                         <td>{c.name}</td>
                         <td>{c.contactEmail ?? ""}</td>

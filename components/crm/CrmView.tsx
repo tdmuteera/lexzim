@@ -8,6 +8,8 @@ import { ExportMenu } from "@/components/export/ExportMenu";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type BirthdayRow = {
   clientId: string;
@@ -210,6 +212,45 @@ export function CrmView() {
   const tableRows =
     activeTable === "this" ? overview?.thisMonth.rows ?? [] : overview?.nextMonth.rows ?? [];
 
+  const birthdayAccessors = useMemo(
+    () => ({
+      day: (r: BirthdayRow) => r.dayOfMonth,
+      client: (r: BirthdayRow) => r.displayLabel,
+      turning: (r: BirthdayRow) => r.ageTurning ?? 0,
+      lawyers: (r: BirthdayRow) => r.responsibleLawyers.join(", "),
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedBirthdays,
+    sortKey: bdayKey,
+    sortDir: bdayDir,
+    toggleSort: toggleBday,
+  } = useTableSort(tableRows, birthdayAccessors, { key: "day", dir: "asc" });
+
+  const monthHolidays = overview?.holidaysThisMonth ?? [];
+  const holidayAccessors = useMemo(
+    () => ({
+      date: (r: HolidayRow) => r.holidayDate,
+      holiday: (r: HolidayRow) => r.name,
+      country: (r: HolidayRow) => r.country,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedMonthHolidays,
+    sortKey: monthHolKey,
+    sortDir: monthHolDir,
+    toggleSort: toggleMonthHol,
+  } = useTableSort(monthHolidays, holidayAccessors, { key: "date", dir: "asc" });
+
+  const {
+    sortedRows: sortedYearHolidays,
+    sortKey: yearHolKey,
+    sortDir: yearHolDir,
+    toggleSort: toggleYearHol,
+  } = useTableSort(yearHolidays, holidayAccessors, { key: "date", dir: "asc" });
+
   return (
     <section className="view active scrollable finance-desk-view crm-desk-view" aria-label="CRM">
       <div className="panel">
@@ -327,15 +368,39 @@ export function CrmView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>Day</th>
-                        <th>Client</th>
-                        <th>Turning</th>
-                        <th>Lawyer(s)</th>
+                        <SortableTh
+                          label="Day"
+                          columnKey="day"
+                          activeKey={bdayKey}
+                          direction={bdayDir}
+                          onSort={toggleBday}
+                        />
+                        <SortableTh
+                          label="Client"
+                          columnKey="client"
+                          activeKey={bdayKey}
+                          direction={bdayDir}
+                          onSort={toggleBday}
+                        />
+                        <SortableTh
+                          label="Turning"
+                          columnKey="turning"
+                          activeKey={bdayKey}
+                          direction={bdayDir}
+                          onSort={toggleBday}
+                        />
+                        <SortableTh
+                          label="Lawyer(s)"
+                          columnKey="lawyers"
+                          activeKey={bdayKey}
+                          direction={bdayDir}
+                          onSort={toggleBday}
+                        />
                         <th>Greeting</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {tableRows.map((row) => (
+                      {sortedBirthdays.map((row) => (
                         <tr key={row.clientId}>
                           <td>{row.dayOfMonth}</td>
                           <td>
@@ -434,14 +499,32 @@ export function CrmView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Holiday</th>
-                        <th>Country</th>
+                        <SortableTh
+                          label="Date"
+                          columnKey="date"
+                          activeKey={monthHolKey}
+                          direction={monthHolDir}
+                          onSort={toggleMonthHol}
+                        />
+                        <SortableTh
+                          label="Holiday"
+                          columnKey="holiday"
+                          activeKey={monthHolKey}
+                          direction={monthHolDir}
+                          onSort={toggleMonthHol}
+                        />
+                        <SortableTh
+                          label="Country"
+                          columnKey="country"
+                          activeKey={monthHolKey}
+                          direction={monthHolDir}
+                          onSort={toggleMonthHol}
+                        />
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {overview.holidaysThisMonth.map((h) => (
+                      {sortedMonthHolidays.map((h) => (
                         <tr key={h.id}>
                           <td>{new Date(h.holidayDate).toLocaleDateString()}</td>
                           <td>{h.name}</td>
@@ -512,14 +595,32 @@ export function CrmView() {
                   <table className="data data-dense">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Holiday</th>
-                        <th>Country</th>
+                        <SortableTh
+                          label="Date"
+                          columnKey="date"
+                          activeKey={yearHolKey}
+                          direction={yearHolDir}
+                          onSort={toggleYearHol}
+                        />
+                        <SortableTh
+                          label="Holiday"
+                          columnKey="holiday"
+                          activeKey={yearHolKey}
+                          direction={yearHolDir}
+                          onSort={toggleYearHol}
+                        />
+                        <SortableTh
+                          label="Country"
+                          columnKey="country"
+                          activeKey={yearHolKey}
+                          direction={yearHolDir}
+                          onSort={toggleYearHol}
+                        />
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {yearHolidays.map((h) => (
+                      {sortedYearHolidays.map((h) => (
                         <tr key={h.id}>
                           {editingHolidayId === h.id ? (
                             <>

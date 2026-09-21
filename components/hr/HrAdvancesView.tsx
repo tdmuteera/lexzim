@@ -12,7 +12,9 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay, dollarsToCents } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type AdvanceItem = {
   id: string;
@@ -334,6 +336,21 @@ export function HrAdvancesView() {
     ];
   }, [items, loading]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      employee: (r: AdvanceItem) => r.staffName || r.employeeName,
+      amount: (r: AdvanceItem) => r.amountCents,
+      balance: (r: AdvanceItem) => r.balanceRemainingCents,
+      status: (r: AdvanceItem) => r.status,
+      decision: (r: AdvanceItem) => r.decision ?? "",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "employee",
+    dir: "asc",
+  });
+
   return (
     <HrPageShell
       title="Salary advances"
@@ -415,16 +432,46 @@ export function HrAdvancesView() {
           <table className="data data-dense hr-data-table">
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th>Amount</th>
-                  <th>Balance</th>
-                  <th>Status</th>
-                  <th>Decision</th>
+                  <SortableTh
+                    label="Employee"
+                    columnKey="employee"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Amount"
+                    columnKey="amount"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Balance"
+                    columnKey="balance"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Decision"
+                    columnKey="decision"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {items.map((row) => (
+                {sortedRows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <div className="hr-cell-primary">{row.employeeName}</div>

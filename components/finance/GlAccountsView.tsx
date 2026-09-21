@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { AccountingSubNav } from "@/components/finance/AccountingSubNav";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type GlAccount = {
   id: string;
@@ -52,6 +54,21 @@ export function GlAccountsView() {
     void load();
   }, [load]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      code: (r: GlAccount) => r.code,
+      name: (r: GlAccount) => r.name,
+      type: (r: GlAccount) => r.type,
+      normalBalance: (r: GlAccount) => r.normalBalance,
+      status: (r: GlAccount) => (r.isActive ? "Active" : "Inactive"),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "code",
+    dir: "asc",
+  });
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Chart of accounts">
       <AccountingSubNav />
@@ -80,15 +97,45 @@ export function GlAccountsView() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Account</th>
-                  <th>Type</th>
-                  <th>Normal balance</th>
-                  <th>Status</th>
+                  <SortableTh
+                    label="Code"
+                    columnKey="code"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Account"
+                    columnKey="name"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Type"
+                    columnKey="type"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Normal balance"
+                    columnKey="normalBalance"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                 </tr>
               </thead>
               <tbody>
-                {items.map((a) => (
+                {sortedRows.map((a) => (
                   <tr key={a.id}>
                     <td>{a.code}</td>
                     <td>

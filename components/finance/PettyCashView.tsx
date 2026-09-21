@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Can } from "@/components/auth/Can";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type FloatRow = {
   id: string;
@@ -170,6 +172,20 @@ export function PettyCashView() {
   }
 
   const currency = float?.currency ?? "USD";
+
+  const sortAccessors = useMemo(
+    () => ({
+      date: (r: MovementRow) => r.movementDate,
+      type: (r: MovementRow) => MOVEMENT_LABELS[r.movementType] ?? r.movementType,
+      amount: (r: MovementRow) => r.amountCents,
+      notes: (r: MovementRow) => r.notes ?? r.reference ?? "",
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(movements, sortAccessors, {
+    key: "date",
+    dir: "desc",
+  });
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Petty cash">
@@ -360,14 +376,38 @@ export function PettyCashView() {
               <table className="data data-dense">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Notes</th>
+                    <SortableTh
+                      label="Date"
+                      columnKey="date"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Type"
+                      columnKey="type"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Amount"
+                      columnKey="amount"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Notes"
+                      columnKey="notes"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((m) => (
+                  {sortedRows.map((m) => (
                     <tr key={m.id}>
                       <td>{new Date(m.movementDate).toLocaleDateString()}</td>
                       <td>{MOVEMENT_LABELS[m.movementType] ?? m.movementType}</td>

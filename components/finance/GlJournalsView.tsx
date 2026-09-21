@@ -7,7 +7,9 @@ import { AccountingSubNav } from "@/components/finance/AccountingSubNav";
 import { FirmMoneyCallout } from "@/components/finance/FirmMoneyCallout";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type GlAccount = { id: string; code: string; name: string; isActive: boolean };
 type JournalItem = {
@@ -157,6 +159,22 @@ export function GlJournalsView() {
       setSaving(false);
     }
   }
+
+  const sortAccessors = useMemo(
+    () => ({
+      date: (r: JournalItem) => r.entryDate,
+      reference: (r: JournalItem) => r.reference ?? "",
+      memo: (r: JournalItem) => r.memo ?? "",
+      source: (r: JournalItem) => r.sourceType,
+      postedBy: (r: JournalItem) => r.postedByName ?? "",
+      amount: (r: JournalItem) => r.totalDebitCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "date",
+    dir: "desc",
+  });
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Journal entries">
@@ -314,16 +332,54 @@ export function GlJournalsView() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Reference</th>
-                  <th>Memo</th>
-                  <th>Source</th>
-                  <th>Posted by</th>
-                  <th className="align-right">Amount</th>
+                  <SortableTh
+                    label="Date"
+                    columnKey="date"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Reference"
+                    columnKey="reference"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Memo"
+                    columnKey="memo"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Source"
+                    columnKey="source"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Posted by"
+                    columnKey="postedBy"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Amount"
+                    columnKey="amount"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                    className="align-right"
+                    align="right"
+                  />
                 </tr>
               </thead>
               <tbody>
-                {items.map((j) => (
+                {sortedRows.map((j) => (
                   <tr key={j.id}>
                     <td>{formatShortDate(j.entryDate)}</td>
                     <td>{j.reference ?? "—"}</td>

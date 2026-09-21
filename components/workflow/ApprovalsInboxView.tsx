@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { WorkflowPageShell } from "@/components/workflow/WorkflowPageShell";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type InboxItem = {
   kind: "leave" | "salary_advance" | "invoice" | "password_reset" | "requisition";
@@ -72,6 +74,19 @@ export function ApprovalsInboxView() {
     void load();
   }, [load]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      type: (r: InboxItem) => kindLabel(r.kind),
+      item: (r: InboxItem) => r.title,
+      when: (r: InboxItem) => r.createdAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "when",
+    dir: "desc",
+  });
+
   return (
     <WorkflowPageShell
       title="Approvals inbox"
@@ -100,14 +115,32 @@ export function ApprovalsInboxView() {
           <table className="data data-dense wf-data-table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Item</th>
-                <th>When</th>
+                <SortableTh
+                  label="Type"
+                  columnKey="type"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Item"
+                  columnKey="item"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="When"
+                  columnKey="when"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
                 <th />
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedRows.map((item) => (
                 <tr key={`${item.kind}-${item.id}`}>
                   <td>
                     <Badge tone={kindTone(item.kind)}>{kindLabel(item.kind)}</Badge>

@@ -7,10 +7,12 @@ import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { ageingBucketLabel, daysPastDue } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
 import { INVOICING_LIST_PATH, invoiceDetailPath } from "@/lib/billing/paths";
 import { INVOICE_STATUSES } from "@/lib/billing/validation";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type InvoiceItem = {
   id: string;
@@ -82,6 +84,27 @@ export function BillingListView() {
       ),
     [items],
   );
+
+  const accessors = useMemo(
+    () => ({
+      number: (inv: InvoiceItem) => inv.invoiceNumber,
+      client: (inv: InvoiceItem) => inv.clientDisplayName,
+      matter: (inv: InvoiceItem) => inv.matterNumber || inv.matterTitle,
+      status: (inv: InvoiceItem) =>
+        inv.displayOverdue && inv.status === "sent" ? "overdue" : inv.status,
+      issued: (inv: InvoiceItem) => inv.issueDate,
+      due: (inv: InvoiceItem) => inv.dueDate,
+      ageing: (inv: InvoiceItem) =>
+        inv.displayOverdue || inv.status === "overdue" ? daysPastDue(inv.dueDate) : -1,
+      total: (inv: InvoiceItem) => inv.totalCents,
+      balance: (inv: InvoiceItem) => inv.balanceCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "number",
+    dir: "desc",
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -333,19 +356,75 @@ export function BillingListView() {
               <table className="data data-dense finance-invoice-table">
                 <thead>
                   <tr>
-                    <th>Number</th>
-                    <th>Client</th>
-                    <th>Matter</th>
-                    <th>Status</th>
-                    <th>Issued</th>
-                    <th>Due</th>
-                    <th>Ageing</th>
-                    <th>Total</th>
-                    <th>Balance</th>
+                    <SortableTh
+                      label="Number"
+                      columnKey="number"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Client"
+                      columnKey="client"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Matter"
+                      columnKey="matter"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Status"
+                      columnKey="status"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Issued"
+                      columnKey="issued"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Due"
+                      columnKey="due"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Ageing"
+                      columnKey="ageing"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Total"
+                      columnKey="total"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                      align="right"
+                    />
+                    <SortableTh
+                      label="Balance"
+                      columnKey="balance"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                      align="right"
+                    />
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((inv) => {
+                  {sortedRows.map((inv) => {
                     const overdue =
                       inv.displayOverdue || inv.status === "overdue";
                     const statusKey =

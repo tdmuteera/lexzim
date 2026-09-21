@@ -9,7 +9,9 @@ import { HrStatStrip } from "@/components/hr/HrStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { LEAVE_REQUEST_STATUSES } from "@/lib/hr/leave";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type LeaveType = { id: string; code: string; name: string; isPaid: boolean };
 type StaffOption = { id: string; fullName: string };
@@ -428,6 +430,57 @@ export function HrLeaveView() {
     annualBalance,
   ]);
 
+  const requestAccessors = useMemo(
+    () => ({
+      staff: (r: LeaveItem) => r.staffName,
+      type: (r: LeaveItem) => r.leaveTypeName,
+      dates: (r: LeaveItem) => r.fromDate,
+      days: (r: LeaveItem) => r.days,
+      status: (r: LeaveItem) => r.status,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedRequests,
+    sortKey: reqKey,
+    sortDir: reqDir,
+    toggleSort: toggleReq,
+  } = useTableSort(requests, requestAccessors, { key: "dates", dir: "desc" });
+
+  const ledgerAccessors = useMemo(
+    () => ({
+      type: (r: LedgerRow) => r.leaveTypeName,
+      entitlement: (r: LedgerRow) => r.entitlementDays,
+      used: (r: LedgerRow) => r.usedDays,
+      pending: (r: LedgerRow) => r.pendingDays,
+      remaining: (r: LedgerRow) => r.remainingDays,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedLedger,
+    sortKey: ledgerKey,
+    sortDir: ledgerDir,
+    toggleSort: toggleLedger,
+  } = useTableSort(ledgerRows, ledgerAccessors, { key: "type", dir: "asc" });
+
+  const awayAccessors = useMemo(
+    () => ({
+      staff: (r: LeaveItem) => r.staffName,
+      type: (r: LeaveItem) => r.leaveTypeName,
+      from: (r: LeaveItem) => r.fromDate,
+      to: (r: LeaveItem) => r.toDate,
+      days: (r: LeaveItem) => r.days,
+    }),
+    [],
+  );
+  const {
+    sortedRows: sortedAway,
+    sortKey: awayKey,
+    sortDir: awayDir,
+    toggleSort: toggleAway,
+  } = useTableSort(awayItems, awayAccessors, { key: "from", dir: "asc" });
+
   return (
     <HrPageShell
       title="Leave"
@@ -588,16 +641,46 @@ export function HrLeaveView() {
                   <table className="data data-dense hr-data-table">
                   <thead>
                     <tr>
-                      <th>Staff</th>
-                      <th>Type</th>
-                      <th>Dates</th>
-                      <th>Days</th>
-                      <th>Status</th>
+                      <SortableTh
+                        label="Staff"
+                        columnKey="staff"
+                        activeKey={reqKey}
+                        direction={reqDir}
+                        onSort={toggleReq}
+                      />
+                      <SortableTh
+                        label="Type"
+                        columnKey="type"
+                        activeKey={reqKey}
+                        direction={reqDir}
+                        onSort={toggleReq}
+                      />
+                      <SortableTh
+                        label="Dates"
+                        columnKey="dates"
+                        activeKey={reqKey}
+                        direction={reqDir}
+                        onSort={toggleReq}
+                      />
+                      <SortableTh
+                        label="Days"
+                        columnKey="days"
+                        activeKey={reqKey}
+                        direction={reqDir}
+                        onSort={toggleReq}
+                      />
+                      <SortableTh
+                        label="Status"
+                        columnKey="status"
+                        activeKey={reqKey}
+                        direction={reqDir}
+                        onSort={toggleReq}
+                      />
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {requests.map((row) => (
+                    {sortedRequests.map((row) => (
                       <tr key={row.id}>
                         <td>{row.staffName}</td>
                         <td>{row.leaveTypeName}</td>
@@ -673,16 +756,46 @@ export function HrLeaveView() {
                   <table className="data data-dense hr-data-table">
                   <thead>
                     <tr>
-                      <th>Type</th>
-                      <th>Entitlement</th>
-                      <th>Used</th>
-                      <th>Pending</th>
-                      <th>Remaining</th>
+                      <SortableTh
+                        label="Type"
+                        columnKey="type"
+                        activeKey={ledgerKey}
+                        direction={ledgerDir}
+                        onSort={toggleLedger}
+                      />
+                      <SortableTh
+                        label="Entitlement"
+                        columnKey="entitlement"
+                        activeKey={ledgerKey}
+                        direction={ledgerDir}
+                        onSort={toggleLedger}
+                      />
+                      <SortableTh
+                        label="Used"
+                        columnKey="used"
+                        activeKey={ledgerKey}
+                        direction={ledgerDir}
+                        onSort={toggleLedger}
+                      />
+                      <SortableTh
+                        label="Pending"
+                        columnKey="pending"
+                        activeKey={ledgerKey}
+                        direction={ledgerDir}
+                        onSort={toggleLedger}
+                      />
+                      <SortableTh
+                        label="Remaining"
+                        columnKey="remaining"
+                        activeKey={ledgerKey}
+                        direction={ledgerDir}
+                        onSort={toggleLedger}
+                      />
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {ledgerRows.map((row) => (
+                    {sortedLedger.map((row) => (
                       <tr key={row.leaveTypeId}>
                         <td>{row.leaveTypeName}</td>
                         <td>
@@ -764,15 +877,45 @@ export function HrLeaveView() {
                   <table className="data data-dense hr-data-table">
                   <thead>
                     <tr>
-                      <th>Staff</th>
-                      <th>Type</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Days</th>
+                      <SortableTh
+                        label="Staff"
+                        columnKey="staff"
+                        activeKey={awayKey}
+                        direction={awayDir}
+                        onSort={toggleAway}
+                      />
+                      <SortableTh
+                        label="Type"
+                        columnKey="type"
+                        activeKey={awayKey}
+                        direction={awayDir}
+                        onSort={toggleAway}
+                      />
+                      <SortableTh
+                        label="From"
+                        columnKey="from"
+                        activeKey={awayKey}
+                        direction={awayDir}
+                        onSort={toggleAway}
+                      />
+                      <SortableTh
+                        label="To"
+                        columnKey="to"
+                        activeKey={awayKey}
+                        direction={awayDir}
+                        onSort={toggleAway}
+                      />
+                      <SortableTh
+                        label="Days"
+                        columnKey="days"
+                        activeKey={awayKey}
+                        direction={awayDir}
+                        onSort={toggleAway}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {awayItems.map((row) => (
+                    {sortedAway.map((row) => (
                       <tr key={row.id}>
                         <td>{row.staffName}</td>
                         <td>{row.leaveTypeName}</td>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { formatBytes } from "@/lib/documents/serialize";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type ReportItem = {
   id: string;
@@ -144,6 +146,21 @@ export function KnowledgeReportsView() {
     }
   }
 
+  const sortAccessors = useMemo(
+    () => ({
+      title: (r: ReportItem) => r.title,
+      date: (r: ReportItem) => r.reportDate,
+      author: (r: ReportItem) => r.authorDisplay ?? "",
+      event: (r: ReportItem) => r.eventName ?? "",
+      file: (r: ReportItem) => r.fileName,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "date",
+    dir: "desc",
+  });
+
   return (
     <section className="view active scrollable" aria-label="Knowledge reports">
       <div className="panel">
@@ -238,16 +255,46 @@ export function KnowledgeReportsView() {
               <table className="data data-dense">
                 <thead>
                   <tr>
-                    <th>Title</th>
-                    <th>Date</th>
-                    <th>Author</th>
-                    <th>Event</th>
-                    <th>File</th>
+                    <SortableTh
+                      label="Title"
+                      columnKey="title"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Date"
+                      columnKey="date"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Author"
+                      columnKey="author"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="Event"
+                      columnKey="event"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortableTh
+                      label="File"
+                      columnKey="file"
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={toggleSort}
+                    />
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
+                  {sortedRows.map((item) => (
                     <tr key={item.id}>
                       <td>{item.title}</td>
                       <td>{item.reportDate}</td>

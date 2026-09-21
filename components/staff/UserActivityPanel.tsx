@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { formatDateTime } from "@/lib/format/dates";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type LoginOption = {
   id: string;
@@ -89,6 +91,21 @@ export function UserActivityPanel() {
     void load();
   }, [load]);
 
+  const sortAccessors = useMemo(
+    () => ({
+      when: (r: ActivityRow) => r.createdAt,
+      user: (r: ActivityRow) => r.userFullName ?? r.userEmail ?? "",
+      action: (r: ActivityRow) => r.action,
+      record: (r: ActivityRow) => entityLabel(r),
+      details: (r: ActivityRow) => formatMetadata(r.metadata),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "when",
+    dir: "desc",
+  });
+
   return (
     <div className="settings-form">
       <div className="settings-form-head">
@@ -148,15 +165,45 @@ export function UserActivityPanel() {
           <table className="hr-activity-table">
             <thead>
               <tr>
-                <th scope="col">When</th>
-                <th scope="col">User</th>
-                <th scope="col">Action</th>
-                <th scope="col">Record</th>
-                <th scope="col">Details</th>
+                <SortableTh
+                  label="When"
+                  columnKey="when"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="User"
+                  columnKey="user"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Action"
+                  columnKey="action"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Record"
+                  columnKey="record"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Details"
+                  columnKey="details"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
               </tr>
             </thead>
             <tbody>
-              {items.map((row) => {
+              {sortedRows.map((row) => {
                 const meta = formatMetadata(row.metadata);
                 return (
                   <tr key={row.id}>

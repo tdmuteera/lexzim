@@ -8,6 +8,8 @@ import { WorkflowStatStrip } from "@/components/workflow/WorkflowStatStrip";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type TaskItem = {
   id: string;
@@ -294,6 +296,22 @@ export function TasksShellView() {
         ? "Assigned by me"
         : "Completed";
 
+  const sortAccessors = useMemo(
+    () => ({
+      task: (r: TaskItem) => r.title,
+      assignee: (r: TaskItem) => r.assigneeName ?? "",
+      assigner: (r: TaskItem) => r.assignerName ?? "",
+      due: (r: TaskItem) => r.dueAt,
+      priority: (r: TaskItem) => r.priority,
+      status: (r: TaskItem) => r.status,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "due",
+    dir: "asc",
+  });
+
   return (
     <WorkflowPageShell
       title="Tasks"
@@ -452,17 +470,53 @@ export function TasksShellView() {
           <table className="data data-dense wf-data-table">
             <thead>
               <tr>
-                <th>Task</th>
-                <th>Assignee</th>
-                <th>Assigner</th>
-                <th>Due</th>
-                <th>Priority</th>
-                <th>Status</th>
+                <SortableTh
+                  label="Task"
+                  columnKey="task"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Assignee"
+                  columnKey="assignee"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Assigner"
+                  columnKey="assigner"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Due"
+                  columnKey="due"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Priority"
+                  columnKey="priority"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableTh
+                  label="Status"
+                  columnKey="status"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={toggleSort}
+                />
                 <th />
               </tr>
             </thead>
             <tbody>
-              {items.map((t) => (
+              {sortedRows.map((t) => (
                 <tr key={t.id}>
                   <td>
                     <div className="wf-cell-primary">{t.title}</div>

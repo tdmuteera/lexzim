@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { clientTypeLabel, normalizeClientType } from "@/lib/clients/kyc-types";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type SerializedClient = {
   id: string;
@@ -32,8 +34,6 @@ export function ClientsListView() {
   const [q, setQ] = useState("");
   const [clientType, setClientType] = useState("");
   const [archived, setArchived] = useState("active");
-  const [sort, setSort] = useState("name");
-  const [sortDir, setSortDir] = useState("asc");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,8 +43,8 @@ export function ClientsListView() {
       if (q.trim()) params.set("q", q.trim());
       if (clientType) params.set("clientType", clientType);
       if (archived) params.set("archived", archived);
-      params.set("sort", sort);
-      params.set("sortDir", sortDir);
+      params.set("sort", "name");
+      params.set("sortDir", "asc");
 
       const res = await fetch(`/api/clients?${params.toString()}`, {
         credentials: "include",
@@ -67,7 +67,7 @@ export function ClientsListView() {
     } finally {
       setLoading(false);
     }
-  }, [q, clientType, archived, sort, sortDir]);
+  }, [q, clientType, archived]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -75,6 +75,23 @@ export function ClientsListView() {
     }, 200);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const accessors = useMemo(
+    () => ({
+      number: (c: SerializedClient) => c.clientNumber,
+      name: (c: SerializedClient) => c.displayName,
+      type: (c: SerializedClient) => clientTypeLabel(c.clientType),
+      phone: (c: SerializedClient) => c.phone,
+      whatsapp: (c: SerializedClient) => c.whatsapp,
+      kyc: (c: SerializedClient) => c.kycStatus,
+      status: (c: SerializedClient) => (c.archivedAt ? "Archived" : "Active"),
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, accessors, {
+    key: "name",
+    dir: "asc",
+  });
 
   return (
     <section className="view active scrollable" aria-label="Client Management">
@@ -125,22 +142,6 @@ export function ClientsListView() {
               <option value="archived">Archived</option>
               <option value="all">All</option>
             </select>
-            <select
-              className="filter-select"
-              value={`${sort}:${sortDir}`}
-              onChange={(e) => {
-                const [s, d] = e.target.value.split(":");
-                setSort(s);
-                setSortDir(d);
-              }}
-              aria-label="Sort clients"
-            >
-              <option value="name:asc">Name A–Z</option>
-              <option value="name:desc">Name Z–A</option>
-              <option value="number:asc">Client number</option>
-              <option value="updated:desc">Recently updated</option>
-              <option value="created:desc">Recently created</option>
-            </select>
             <div className="toolbar-spacer" />
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               Refresh
@@ -153,13 +154,55 @@ export function ClientsListView() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>CL #</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Phone</th>
-                  <th>WhatsApp</th>
-                  <th>KYC</th>
-                  <th>Status</th>
+                  <SortableTh
+                    label="CL #"
+                    columnKey="number"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Name"
+                    columnKey="name"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Type"
+                    columnKey="type"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Phone"
+                    columnKey="phone"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="WhatsApp"
+                    columnKey="whatsapp"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="KYC"
+                    columnKey="kyc"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
+                    label="Status"
+                    columnKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -169,7 +212,7 @@ export function ClientsListView() {
                       Loading clients…
                     </td>
                   </tr>
-                ) : items.length === 0 ? (
+                ) : sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
                       <EmptyState
@@ -180,7 +223,7 @@ export function ClientsListView() {
                     </td>
                   </tr>
                 ) : (
-                  items.map((client) => (
+                  sortedRows.map((client) => (
                     <tr key={client.id}>
                       <td>{client.clientNumber}</td>
                       <td>

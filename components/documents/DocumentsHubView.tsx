@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { ClientDocumentsPanel } from "@/components/clients/ClientDocumentsPanel";
 import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { TemplatesLibraryView } from "@/components/templates/TemplatesLibraryView";
 import { formatBytes } from "@/lib/documents/serialize";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type HubTab = "client-docs" | "templates";
 
@@ -97,6 +99,27 @@ export function DocumentsHubView() {
   }
 
   const showMatterColumn = items.some((item) => Boolean(item.matterNumber));
+
+  const sortAccessors = useMemo(
+    () => ({
+      client: (r: ClientDocItem) => r.clientDisplayName ?? r.clientNumber ?? "",
+      matter: (r: ClientDocItem) =>
+        r.matterNumber
+          ? r.matterTitle
+            ? `${r.matterNumber} · ${r.matterTitle}`
+            : r.matterNumber
+          : "",
+      title: (r: ClientDocItem) => r.title,
+      file: (r: ClientDocItem) => r.fileName,
+      size: (r: ClientDocItem) => r.sizeBytes ?? 0,
+      added: (r: ClientDocItem) => r.createdAt,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
+    key: "added",
+    dir: "desc",
+  });
 
   return (
     <section className="view active scrollable" aria-label="Documents">
@@ -197,17 +220,55 @@ export function DocumentsHubView() {
                   <table className="data">
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        {showMatterColumn ? <th>Matter</th> : null}
-                        <th>Title</th>
-                        <th>File</th>
-                        <th>Size</th>
-                        <th>Added</th>
+                        <SortableTh
+                          label="Client"
+                          columnKey="client"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
+                        {showMatterColumn ? (
+                          <SortableTh
+                            label="Matter"
+                            columnKey="matter"
+                            activeKey={sortKey}
+                            direction={sortDir}
+                            onSort={toggleSort}
+                          />
+                        ) : null}
+                        <SortableTh
+                          label="Title"
+                          columnKey="title"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label="File"
+                          columnKey="file"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label="Size"
+                          columnKey="size"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label="Added"
+                          columnKey="added"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item) => (
+                      {sortedRows.map((item) => (
                         <tr key={item.id}>
                           <td>
                             {item.clientId ? (

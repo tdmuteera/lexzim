@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { centsToDisplay } from "@/lib/billing/money";
+import { useTableSort } from "@/lib/ui/table-sort";
 
 type Settings = {
   id: string;
@@ -168,6 +170,24 @@ export function CommissionView() {
 
   const currencyCode = report?.currency ?? currency ?? "USD";
 
+  const commissionRows = report?.rows ?? [];
+  const sortAccessors = useMemo(
+    () => ({
+      lawyer: (r: LawyerRow) => r.lawyerName,
+      collected: (r: LawyerRow) => r.collectedCents,
+      target: (r: LawyerRow) => r.monthlyTargetCents,
+      remaining: (r: LawyerRow) => r.remainingToTargetCents,
+      above: (r: LawyerRow) => r.aboveTargetCents,
+      commission: (r: LawyerRow) => r.commissionDueCents,
+    }),
+    [],
+  );
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(
+    commissionRows,
+    sortAccessors,
+    { key: "lawyer", dir: "asc" },
+  );
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Commission">
       <div className="panel">
@@ -324,16 +344,62 @@ export function CommissionView() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Lawyer</th>
-                        <th className="num">Collected</th>
-                        <th className="num">Target</th>
-                        <th className="num">Remaining to target</th>
-                        <th className="num">Above target</th>
-                        <th className="num">Commission due</th>
+                        <SortableTh
+                          label="Lawyer"
+                          columnKey="lawyer"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label="Collected"
+                          columnKey="collected"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                          className="num"
+                          align="right"
+                        />
+                        <SortableTh
+                          label="Target"
+                          columnKey="target"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                          className="num"
+                          align="right"
+                        />
+                        <SortableTh
+                          label="Remaining to target"
+                          columnKey="remaining"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                          className="num"
+                          align="right"
+                        />
+                        <SortableTh
+                          label="Above target"
+                          columnKey="above"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                          className="num"
+                          align="right"
+                        />
+                        <SortableTh
+                          label="Commission due"
+                          columnKey="commission"
+                          activeKey={sortKey}
+                          direction={sortDir}
+                          onSort={toggleSort}
+                          className="num"
+                          align="right"
+                        />
                       </tr>
                     </thead>
                     <tbody>
-                      {report.rows.map((r) => (
+                      {sortedRows.map((r) => (
                         <tr key={r.lawyerId ?? "unassigned"}>
                           <td>{r.lawyerName}</td>
                           <td className="num">
