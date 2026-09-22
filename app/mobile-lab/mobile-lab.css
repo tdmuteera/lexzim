@@ -1,0 +1,68 @@
+.mobile-lab-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #f4f6f8);
+  color: var(--text, #122433);
+}
+
+.mobile-lab-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-2, #fff);
+  border-bottom: 1px solid var(--border, #d8dee6);
+  font-size: 0.85rem;
+}
+
+.mobile-lab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mobile-lab-shell .btn {
+  border: 1px solid var(--border, #d8dee6);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+}
+
+.mobile-lab-shell .btn-gold {
+  background: #c5a45a;
+  border-color: #b8923f;
+  color: #1a1508;
+  font-weight: 600;
+}
+
+.mobile-lab-shell .module-tabs .tab {
+  border: 1px solid var(--border, #d8dee6);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+}
+
+.mobile-lab-shell .panel {
+  background: #fff;
+  border: 1px solid var(--border, #d8dee6);
+  border-radius: 10px;
+}
+
+.mobile-lab-shell .data {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mobile-lab-shell .data th,
+.mobile-lab-shell .data td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border, #d8dee6);
+  text-align: left;
+  white-space: nowrap;
+}

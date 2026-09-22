@@ -1211,7 +1211,7 @@ export function LegalResearchChatView() {
   const connBanner = connectivityBanner(status?.connectivity);
 
   return (
-    <div className="view active ai-chat" aria-label="AI Assistant">
+    <div className="view active ai-chat ai-chat-page" aria-label="AI Assistant">
       <div className="ai-chat-toolbar">
         <div>
           <h1>AI Legal Assistant</h1>
@@ -1576,7 +1576,7 @@ export function LegalResearchChatView() {
             ))}
 
             {loading ? (
-              <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+              <p className="ai-thinking muted" role="status">
                 {mode === "matter_assist"
                   ? "Reading the file…"
                   : extracting
@@ -1646,75 +1646,77 @@ export function LegalResearchChatView() {
               }}
             />
             </div>
-            <label className="ai-attach-btn">
-              <input
-                type="file"
-                multiple
-                hidden
-                accept=".pdf,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
-                onChange={(e) => {
-                  const next = Array.from(e.target.files ?? []);
-                  const tooBig = next.find((f) => f.size > ATTACH_MAX_BYTES_UI);
-                  if (tooBig) {
-                    const msg = `${tooBig.name} is larger than 25 MB. Compress it or split the pages.`;
-                    setError(msg);
-                    toast(msg);
-                  }
-                  setPendingFiles((prev) => {
-                    const merged = [...prev, ...next].slice(0, ATTACH_MAX_FILES_UI);
-                    if (prev.length + next.length > ATTACH_MAX_FILES_UI) {
-                      const msg = `You can attach up to ${ATTACH_MAX_FILES_UI} files at once.`;
+            <div className="ai-composer-actions">
+              <label className="ai-attach-btn">
+                <input
+                  type="file"
+                  multiple
+                  hidden
+                  accept=".pdf,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
+                  onChange={(e) => {
+                    const next = Array.from(e.target.files ?? []);
+                    const tooBig = next.find((f) => f.size > ATTACH_MAX_BYTES_UI);
+                    if (tooBig) {
+                      const msg = `${tooBig.name} is larger than 25 MB. Compress it or split the pages.`;
                       setError(msg);
                       toast(msg);
                     }
-                    return merged;
-                  });
-                  e.target.value = "";
-                }}
-              />
-              Attach
-            </label>
-            <button
-              type="button"
-              className={`ai-mic-btn${micState === "recording" ? " recording" : ""}`}
-              disabled={
-                loading ||
-                extracting ||
-                sendBlocked ||
-                micState === "transcribing" ||
-                (mode === "matter_assist" && !matterId)
-              }
-              onClick={() => void toggleMic()}
-              title="Dictate with microphone (does not auto-send)"
-            >
-              {micState === "recording"
-                ? "Recording…"
-                : micState === "transcribing"
-                  ? "Transcribing…"
-                  : "Mic"}
-            </button>
-            <Button
-              type="submit"
-              variant="gold"
-              disabled={
-                extracting ||
-                sendBlocked ||
-                !question.trim() ||
-                micState !== "idle" ||
-                (mode === "matter_assist" && !matterId)
-              }
-              title={sendBlocked ? sendBlockedReason ?? "AI send disabled" : undefined}
-            >
-              {extracting
-                ? "Reading…"
-                : loading
-                  ? question.trim()
-                    ? "Queue"
-                    : "Thinking…"
-                  : sendBlocked
-                    ? "Unavailable"
-                    : "Send"}
-            </Button>
+                    setPendingFiles((prev) => {
+                      const merged = [...prev, ...next].slice(0, ATTACH_MAX_FILES_UI);
+                      if (prev.length + next.length > ATTACH_MAX_FILES_UI) {
+                        const msg = `You can attach up to ${ATTACH_MAX_FILES_UI} files at once.`;
+                        setError(msg);
+                        toast(msg);
+                      }
+                      return merged;
+                    });
+                    e.target.value = "";
+                  }}
+                />
+                Attach
+              </label>
+              <button
+                type="button"
+                className={`ai-mic-btn${micState === "recording" ? " recording" : ""}`}
+                disabled={
+                  loading ||
+                  extracting ||
+                  sendBlocked ||
+                  micState === "transcribing" ||
+                  (mode === "matter_assist" && !matterId)
+                }
+                onClick={() => void toggleMic()}
+                title="Dictate with microphone (does not auto-send)"
+              >
+                {micState === "recording"
+                  ? "Recording…"
+                  : micState === "transcribing"
+                    ? "Transcribing…"
+                    : "Mic"}
+              </button>
+              <Button
+                type="submit"
+                variant="gold"
+                disabled={
+                  extracting ||
+                  sendBlocked ||
+                  !question.trim() ||
+                  micState !== "idle" ||
+                  (mode === "matter_assist" && !matterId)
+                }
+                title={sendBlocked ? sendBlockedReason ?? "AI send disabled" : undefined}
+              >
+                {extracting
+                  ? "Reading…"
+                  : loading
+                    ? question.trim()
+                      ? "Queue"
+                      : "Thinking…"
+                    : sendBlocked
+                      ? "Unavailable"
+                      : "Send"}
+              </Button>
+            </div>
           </form>
         </section>
       </div>

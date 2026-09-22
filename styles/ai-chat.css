@@ -486,6 +486,20 @@
   padding: 0.85rem;
   border-top: 1px solid var(--border);
   background: var(--bg-2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ai-composer-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.45rem;
+  align-items: flex-end;
+}
+
+.ai-thinking {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .ai-composer textarea {
