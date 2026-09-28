@@ -67,6 +67,7 @@ export function MyDayView() {
   const canPromote = can("calendar.manage");
   const [promoting, setPromoting] = useState<MyDayItemDto | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const [planDay, setPlanDay] = useState<string | null>(null);
   const today = api.today;
   const tomorrow = addDays(today, 1);
 
@@ -161,7 +162,7 @@ export function MyDayView() {
       </div>
 
       <p className="myday-hint">
-        Tip: drag an item onto another day to move it. Unfinished items roll over to the next day
+        Tip: click any day in the next 14 days to plan on it, or drag an item onto a day to move it. Unfinished items roll over to the next day
         automatically.
       </p>
 
@@ -234,16 +235,42 @@ export function MyDayView() {
           </div>
           <div className="myday-days">
             {groups.next.map(([day, list]) => (
-              <DropZone key={day} api={api} target={day} className="myday-day">
-                <div className="myday-day-head">
+              <DropZone
+                key={day}
+                api={api}
+                target={day}
+                className={`myday-day${planDay === day ? " is-planning" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="myday-day-head"
+                  onClick={() => setPlanDay(planDay === day ? null : day)}
+                  aria-expanded={planDay === day}
+                  title={`Plan something for ${friendlyDay(day, today)}`}
+                >
                   <strong>{friendlyDay(day, today)}</strong>
                   {list.length ? <span>{list.length}</span> : null}
-                </div>
+                  <em className="myday-day-plus" aria-hidden>
+                    +
+                  </em>
+                </button>
                 {list.length ? (
                   list.map((i) => row(i))
-                ) : (
+                ) : planDay === day ? null : (
                   <div className="myday-day-empty">Drop here</div>
                 )}
+                {planDay === day ? (
+                  <MyDayQuickAdd
+                    key={day}
+                    api={api}
+                    today={today}
+                    variant="hero"
+                    defaultDate={day}
+                    placeholder={`Add for ${friendlyDay(day, today)}… press Enter`}
+                    autoFocus
+                    onCancel={() => setPlanDay(null)}
+                  />
+                ) : null}
               </DropZone>
             ))}
           </div>

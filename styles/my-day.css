@@ -1245,8 +1245,74 @@ a.myday-pill:hover {
 .myday-day-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.15rem 0.1rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.myday-day-head strong {
+  flex: 1;
+}
+
+.myday-day-plus {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--gold-2, #9c7431);
+  background: var(--gold-dim, rgba(201, 164, 92, 0.16));
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.myday-day:hover .myday-day-plus,
+.myday-day-head:focus-visible .myday-day-plus,
+.myday-day.is-planning .myday-day-plus {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.myday-day.is-planning .myday-day-plus {
+  transform: rotate(45deg);
+}
+
+.myday-day-head:focus-visible {
+  outline: 2px solid #c9a45c;
+  outline-offset: 2px;
+}
+
+.myday-day:hover {
+  cursor: pointer;
+}
+
+.myday-day.is-planning {
+  background: rgba(201, 164, 92, 0.08);
+  border-color: rgba(201, 164, 92, 0.35);
+}
+
+.myday-day.is-planning .myday-day-head strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+@media (hover: none) {
+  .myday-day-plus {
+    opacity: 0.7;
+    transform: scale(1);
+  }
 }
 
 .myday-day-head strong {

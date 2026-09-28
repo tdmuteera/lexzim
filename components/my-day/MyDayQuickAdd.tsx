@@ -13,6 +13,8 @@ type Props = {
   variant?: "hero" | "page";
   defaultDate?: string | null;
   placeholder?: string;
+  autoFocus?: boolean;
+  onCancel?: () => void;
 };
 
 export function MyDayQuickAdd({
@@ -21,6 +23,8 @@ export function MyDayQuickAdd({
   variant = "page",
   defaultDate,
   placeholder,
+  autoFocus,
+  onCancel,
 }: Props) {
   const [title, setTitle] = useState("");
   const [more, setMore] = useState(false);
@@ -103,6 +107,13 @@ export function MyDayQuickAdd({
           placeholder={placeholder ?? "Add something for today… press Enter"}
           maxLength={300}
           aria-label="New to-do"
+          autoFocus={autoFocus}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && onCancel) {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
         />
         <button
           type="button"
