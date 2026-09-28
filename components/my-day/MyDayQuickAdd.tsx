@@ -15,7 +15,13 @@ type Props = {
   placeholder?: string;
 };
 
-export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, placeholder }: Props) {
+export function MyDayQuickAdd({
+  api,
+  today,
+  variant = "page",
+  defaultDate,
+  placeholder,
+}: Props) {
   const [title, setTitle] = useState("");
   const [more, setMore] = useState(false);
   const [when, setWhen] = useState<"today" | "tomorrow" | "date" | "someday">("today");
@@ -26,6 +32,8 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
   const [repeat, setRepeat] = useState("none");
   const [clientId, setClientId] = useState("");
   const [matterId, setMatterId] = useState("");
+  const [clientLabel, setClientLabel] = useState<string | null>(null);
+  const [matterLabel, setMatterLabel] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -42,33 +50,43 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
   async function submit(e: FormEvent) {
     e.preventDefault();
     const t = title.trim();
-    if (!t || busy) return;
-    setBusy(true);
+    if (!t) return;
     setErr(null);
+    const dueDate = resolveDate();
+    const repeating = more && repeat !== "none" && dueDate !== null;
+    const payload = {
+      title: t,
+      dueDate,
+      dueTime: more && time ? time : null,
+      tag: tag || null,
+      starred,
+      notes: more && notes.trim() ? notes.trim() : null,
+      clientId: more && clientId ? clientId : null,
+      matterId: more && matterId ? matterId : null,
+      recurrence: repeating ? { rule: repeat } : null,
+    };
+    const labels = {
+      clientLabel: payload.clientId ? clientLabel : null,
+      matterLabel: payload.matterId ? matterLabel : null,
+    };
+    setTitle("");
+    setNotes("");
+    setTime("");
+    setTag("");
+    setRepeat("none");
+    setStarred(false);
+    setClientId("");
+    setMatterId("");
+    setClientLabel(null);
+    setMatterLabel(null);
+    if (repeating) setBusy(true);
     try {
-      const dueDate = resolveDate();
-      await api.add({
-        title: t,
-        dueDate,
-        dueTime: more && time ? time : null,
-        tag: tag || null,
-        starred,
-        notes: more && notes.trim() ? notes.trim() : null,
-        clientId: more && clientId ? clientId : null,
-        matterId: more && matterId ? matterId : null,
-        recurrence: more && repeat !== "none" && dueDate !== null ? { rule: repeat } : null,
-      });
-      setTitle("");
-      setNotes("");
-      setTime("");
-      setRepeat("none");
-      setStarred(false);
-      setClientId("");
-      setMatterId("");
+      await api.add(payload, labels);
     } catch (e2) {
+      setTitle((cur) => cur || t);
       setErr(e2 instanceof Error ? e2.message : "Could not add.");
     } finally {
-      setBusy(false);
+      if (repeating) setBusy(false);
     }
   }
 
@@ -85,7 +103,6 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
           placeholder={placeholder ?? "Add something for today… press Enter"}
           maxLength={300}
           aria-label="New to-do"
-          disabled={busy}
         />
         <button
           type="button"
@@ -104,26 +121,26 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
         >
           {more ? "Less" : "Options"}
         </button>
-        <button type="submit" className="myday-add-go" disabled={!title.trim() || busy}>
+        <button type="submit" className="myday-add-go" disabled={!title.trim()}>
           {busy ? "Adding…" : "Add"}
         </button>
       </div>
 
       {variant === "page" || more || title.trim() ? (
-      <div className="myday-add-tags" role="group" aria-label="Tag">
-        {MY_DAY_TAGS.map((t) => (
-          <button
-            key={t.code}
-            type="button"
-            className={`myday-tagpick${tag === t.code ? " is-on" : ""}`}
-            style={{ "--myday-tag": t.color } as React.CSSProperties}
-            onClick={() => setTag((cur) => (cur === t.code ? "" : t.code))}
-          >
-            <i />
-            {t.label}
-          </button>
-        ))}
-      </div>
+        <div className="myday-add-tags" role="group" aria-label="Tag">
+          {MY_DAY_TAGS.map((t) => (
+            <button
+              key={t.code}
+              type="button"
+              className={`myday-tagpick${tag === t.code ? " is-on" : ""}`}
+              style={{ "--myday-tag": t.color } as React.CSSProperties}
+              onClick={() => setTag((cur) => (cur === t.code ? "" : t.code))}
+            >
+              <i />
+              {t.label}
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {more ? (
@@ -153,7 +170,12 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
             {when === "date" ? (
               <label>
                 <span>Date</span>
-                <input type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />
+                <input
+                  type="date"
+                  min={today}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
               </label>
             ) : null}
             <label>
@@ -180,14 +202,25 @@ export function MyDayQuickAdd({ api, today, variant = "page", defaultDate, place
             <div>
               <ClientSearchPicker
                 value={clientId}
-                onChange={(id) => setClientId(id)}
+                onChange={(id, opt) => {
+                  setClientId(id);
+                  setClientLabel(opt ? opt.title.replace(/^CL\d+\s*\u00b7\s*/, "") : null);
+                }}
                 label="Link a client (optional)"
                 inputId={`myday-client-${uid}`}
               />
             </div>
             <div>
               <span className="myday-field-label">Link a matter (optional)</span>
-              <MatterSearchPicker value={matterId} onChange={(id) => setMatterId(id)} />
+              <MatterSearchPicker
+                value={matterId}
+                onChange={(id, opt) => {
+                  setMatterId(id);
+                  setMatterLabel(
+                    opt ? (opt.matterNumber ? `${opt.matterNumber} \u00b7 ${opt.title}` : opt.title) : null,
+                  );
+                }}
+              />
             </div>
           </div>
           <label className="myday-add-notes">

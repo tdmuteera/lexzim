@@ -186,9 +186,9 @@ async function hydrate(rows: ItemRow[]): Promise<MyDayItemDto[]> {
   const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))] as string[];
   const matterIds = [...new Set(rows.map((r) => r.matterId).filter(Boolean))] as string[];
 
-  const clientLabels = new Map<string, string>();
-  if (clientIds.length) {
-    const cs = await db
+  const [cs, ms] = await Promise.all([
+    clientIds.length
+      ? db
       .select({
         id: clients.id,
         clientType: clients.clientType,
@@ -200,19 +200,21 @@ async function hydrate(rows: ItemRow[]): Promise<MyDayItemDto[]> {
         tradingName: clients.tradingName,
       })
       .from(clients)
-      .where(inArray(clients.id, clientIds));
-    for (const c of cs) clientLabels.set(c.id, clientDisplayName(c));
-  }
+      .where(inArray(clients.id, clientIds))
+      : Promise.resolve([]),
+    matterIds.length
+      ? db
+          .select({ id: matters.id, title: matters.title, matterNumber: matters.matterNumber })
+          .from(matters)
+          .where(inArray(matters.id, matterIds))
+      : Promise.resolve([]),
+  ]);
 
+  const clientLabels = new Map<string, string>();
+  for (const c of cs) clientLabels.set(c.id, clientDisplayName(c));
   const matterLabels = new Map<string, string>();
-  if (matterIds.length) {
-    const ms = await db
-      .select({ id: matters.id, title: matters.title, matterNumber: matters.matterNumber })
-      .from(matters)
-      .where(inArray(matters.id, matterIds));
-    for (const m of ms) {
-      matterLabels.set(m.id, m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title);
-    }
+  for (const m of ms) {
+    matterLabels.set(m.id, m.matterNumber ? `${m.matterNumber} · ${m.title}` : m.title);
   }
 
   return rows.map((r) => ({
@@ -266,8 +268,10 @@ export async function getMyDayPayload(
 ): Promise<MyDayPayload> {
   const prefs = await syncMyDay(firmId, userId, today);
   const db = getDb();
+  const lastReviewOn = prefs?.lastReviewOn ?? null;
+  const since = lastReviewOn ?? addDays(today, -1);
 
-  const rows = await db
+  const rowsQuery = db
     .select()
     .from(myDayItems)
     .where(
@@ -288,16 +292,13 @@ export async function getMyDayPayload(
     )
     .limit(500);
 
-  const recRows = await db
+  const recQuery = db
     .select()
     .from(myDayRecurrences)
     .where(and(eq(myDayRecurrences.firmId, firmId), eq(myDayRecurrences.userId, userId)))
     .orderBy(asc(myDayRecurrences.createdAt));
 
-  const lastReviewOn = (await getPrefs(firmId, userId))?.lastReviewOn ?? prefs?.lastReviewOn ?? null;
-  const since = lastReviewOn ?? addDays(today, -1);
-
-  const [doneRow] = await db
+  const doneQuery = db
     .select({ n: sql<number>`count(*)::int` })
     .from(myDayItems)
     .where(
@@ -308,7 +309,7 @@ export async function getMyDayPayload(
         lt(myDayItems.completedOn, today),
       ),
     );
-  const [missedRow] = await db
+  const missedQuery = db
     .select({ n: sql<number>`count(*)::int` })
     .from(myDayItems)
     .where(
@@ -319,6 +320,14 @@ export async function getMyDayPayload(
         sql`${myDayItems.recurrenceId} IS NOT NULL`,
       ),
     );
+
+  const [rows, recRows, [doneRow], [missedRow], streak] = await Promise.all([
+    rowsQuery,
+    recQuery,
+    doneQuery,
+    missedQuery,
+    computeStreak(firmId, userId, today),
+  ]);
 
   const items = await hydrate(rows);
   const carried = items.filter(
@@ -348,7 +357,7 @@ export async function getMyDayPayload(
       carried,
       missedRecurring,
     },
-    streak: await computeStreak(firmId, userId, today),
+    streak,
   };
 }
 
@@ -388,13 +397,8 @@ export async function createMyDayItem(
       .returning();
     if (!rec) throw new AuthError("server", "Could not create repeating item.");
     await generateRecurrences(firmId, userId, today);
-    return { recurrenceId: rec.id };
+    return { recurrenceId: rec.id, item: null };
   }
-
-  const [maxRow] = await db
-    .select({ m: sql<number>`coalesce(max(${myDayItems.sortOrder}), 0)::int` })
-    .from(myDayItems)
-    .where(ownerScope(firmId, userId));
 
   const [row] = await db
     .insert(myDayItems)
@@ -410,11 +414,12 @@ export async function createMyDayItem(
       starred: input.starred,
       clientId: input.clientId,
       matterId: input.matterId,
-      sortOrder: (maxRow?.m ?? 0) + 1,
+      sortOrder: Math.floor(Date.now() / 1000),
     })
     .returning();
   if (!row) throw new AuthError("server", "Could not add item.");
-  return { itemId: row.id };
+  const [dto] = await hydrate([row]);
+  return { itemId: row.id, item: dto };
 }
 
 export async function getMyDayItem(firmId: string, userId: string, id: string) {

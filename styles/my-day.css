@@ -175,6 +175,36 @@ a.myday-pill:hover {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  max-height: 372px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 14px 2px;
+  margin: -2px -4px -10px -2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(230, 194, 122, 0.45) transparent;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
+
+.myday-hero-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.myday-hero-list::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: rgba(230, 194, 122, 0.45);
+}
+
+.myday-scroll-hint {
+  margin-top: -0.35rem;
+  font-size: 0.72rem;
+  color: var(--md-ink-3);
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .myday-hero-list {
+    max-height: 440px;
+  }
 }
 
 .myday-hero-foot {
@@ -307,6 +337,22 @@ a.myday-pill:hover {
 .myday-item:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 22px -14px rgba(20, 16, 8, 0.35);
+}
+
+.myday-item.is-pending {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.myday-item.is-pending .myday-tick {
+  border-style: dashed;
+  animation: myday-spin 1.2s linear infinite;
+}
+
+@keyframes myday-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .myday-item:has(.myday-menu),
@@ -560,6 +606,15 @@ a.myday-pill:hover {
   box-shadow: 0 18px 40px -16px rgba(20, 16, 8, 0.4);
   color: var(--text);
   animation: myday-menu-in 0.14s ease-out;
+}
+
+.myday-menu.is-floating {
+  position: fixed;
+  right: auto;
+  width: 220px;
+  z-index: 1000;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .myday-menu button {
@@ -1615,4 +1670,104 @@ a.myday-pill:hover {
   .myday-review {
     animation: none !important;
   }
+}
+
+/* Inline edit */
+.myday-item.is-editing {
+  display: block;
+  cursor: default;
+}
+
+.myday-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  animation: myday-menu-in 0.16s ease-out;
+}
+
+.myday-edit-title,
+.myday-edit-notes,
+.myday-edit-time {
+  width: 100%;
+  border: 1px solid var(--border-2, rgba(0, 0, 0, 0.14));
+  border-radius: 10px;
+  background: var(--bg, #fff);
+  color: var(--text);
+  font: inherit;
+  padding: 0.45rem 0.65rem;
+}
+
+.myday-edit-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.myday-edit-notes {
+  font-size: 0.82rem;
+  resize: vertical;
+  min-height: 2.6rem;
+}
+
+.myday-edit-time {
+  width: auto;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.myday-edit-title:focus,
+.myday-edit-notes:focus,
+.myday-edit-time:focus {
+  outline: none;
+  border-color: #c9a45c;
+  box-shadow: 0 0 0 3px rgba(201, 164, 92, 0.22);
+}
+
+.myday-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.myday-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.myday-edit-cancel {
+  height: 34px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-2, rgba(0, 0, 0, 0.14));
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-hero .myday-edit-title,
+.myday-hero .myday-edit-notes,
+.myday-hero .myday-edit-time {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--md-ink, #fff);
+  color-scheme: dark;
+}
+
+.myday-hero .myday-edit-cancel {
+  color: var(--md-ink-2);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.myday-item-title {
+  cursor: text;
+}
+
+.myday-item.is-done .myday-item-title,
+.myday-item.is-dropped .myday-item-title,
+.myday-item.is-moved .myday-item-title {
+  cursor: default;
 }

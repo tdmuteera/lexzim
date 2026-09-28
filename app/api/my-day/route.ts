@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     const recurrence = parseRecurrence(body.recurrence, input.dueDate ?? today);
     try {
       const created = await createMyDayItem(firmId, session.id, input, recurrence, today);
-      return jsonOk({ created, ...(await getMyDayPayload(firmId, session.id, today)) }, { status: 201 });
+      if (created.item) return jsonOk({ item: created.item }, { status: 201 });
+      return jsonOk({ payload: await getMyDayPayload(firmId, session.id, today) }, { status: 201 });
     } catch (err) {
       if (isMissingRelationError(err)) throw new AuthError("validation", MIGRATION_HINT);
       throw err;

@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { CheckMark, RepeatIcon, StarIcon, useOutsideClose } from "@/components/my-day/MyDayBits";
+import { CheckMark, RepeatIcon, StarIcon } from "@/components/my-day/MyDayBits";
+import { MyDayItemEditor } from "@/components/my-day/MyDayItemEditor";
 import type { MyDayApi } from "@/components/my-day/useMyDay";
 import { addDays, friendlyDay, nextMonday, tagMeta, type MyDayItemDto } from "@/lib/my-day/shared";
 
@@ -17,6 +19,26 @@ type Props = {
   canPromote?: boolean;
 };
 
+type MenuPos = { top: number; left: number; maxHeight: number };
+
+const MENU_WIDTH = 220;
+const EDGE = 8;
+
+function placeMenu(button: HTMLElement, menuHeight = 330): MenuPos {
+  const r = button.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const h = Math.min(menuHeight, vh - EDGE * 2);
+  let top: number;
+  if (vh - r.bottom - EDGE >= h + 6) top = r.bottom + 6;
+  else if (r.top - 6 - h >= EDGE) top = r.top - 6 - h;
+  else top = vh - h - EDGE;
+  return {
+    top: Math.max(EDGE, top),
+    left: Math.max(EDGE, Math.min(r.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - EDGE)),
+    maxHeight: vh - EDGE * 2,
+  };
+}
+
 export function MyDayItemRow({
   item,
   api,
@@ -28,12 +50,58 @@ export function MyDayItemRow({
   canPromote,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
   const [pop, setPop] = useState(false);
-  const close = useCallback(() => setMenuOpen(false), []);
-  const menuRef = useOutsideClose<HTMLDivElement>(menuOpen, close);
+  const [editing, setEditing] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuElRef = useRef<HTMLDivElement | null>(null);
+  const moreRef = useRef<HTMLButtonElement | null>(null);
+
+  function openMenu() {
+    if (!moreRef.current) return;
+    moreRef.current.scrollIntoView({ block: "nearest" });
+    setMenuPos(placeMenu(moreRef.current));
+    setMenuOpen(true);
+  }
+
+  useLayoutEffect(() => {
+    if (!menuOpen || !moreRef.current || !menuElRef.current) return;
+    const next = placeMenu(moreRef.current, menuElRef.current.scrollHeight);
+    setMenuPos((prev) => (prev && prev.top === next.top && prev.left === next.left ? prev : next));
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || menuElRef.current?.contains(t)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const follow = (e: Event) => {
+      if (e.target instanceof Node && menuElRef.current?.contains(e.target)) return;
+      const btn = moreRef.current;
+      if (!btn) return close();
+      const r = btn.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) return close();
+      setMenuPos(placeMenu(btn, menuElRef.current?.scrollHeight));
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+  }, [menuOpen]);
   const tag = tagMeta(item.tag);
   const closed = item.status !== "open";
   const done = item.status === "done";
+  const pending = item.id.startsWith("tmp-");
 
   function toggle() {
     if (item.status === "moved") return;
@@ -51,6 +119,14 @@ export function MyDayItemRow({
     void api.act(item.id, { action: "move", dueDate });
   }
 
+  if (editing) {
+    return (
+      <div className={`myday-item is-editing${compact ? " is-compact" : ""}`}>
+        <MyDayItemEditor item={item} api={api} compact={compact} onDone={() => setEditing(false)} />
+      </div>
+    );
+  }
+
   return (
     <div
       className={[
@@ -60,8 +136,10 @@ export function MyDayItemRow({
         item.status === "dropped" ? "is-dropped" : "",
         item.status === "moved" ? "is-moved" : "",
         pop ? "is-pop" : "",
+        pending ? "is-pending" : "",
       ].join(" ")}
-      draggable={draggable && !closed}
+      aria-busy={pending || undefined}
+      draggable={draggable && !closed && !pending}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/myday-item", item.id);
         e.dataTransfer.effectAllowed = "move";
@@ -82,7 +160,13 @@ export function MyDayItemRow({
       </button>
 
       <div className="myday-item-body">
-        <div className="myday-item-title">{item.title}</div>
+        <div
+          className="myday-item-title"
+          onDoubleClick={() => !closed && !pending && setEditing(true)}
+          title={closed ? undefined : "Double-click to edit"}
+        >
+          {item.title}
+        </div>
         <div className="myday-item-meta">
           {item.status === "moved" ? <span className="myday-chip is-cal">On calendar</span> : null}
           {item.status === "dropped" ? <span className="myday-chip">Won&apos;t do</span> : null}
@@ -138,7 +222,8 @@ export function MyDayItemRow({
         <button
           type="button"
           className="myday-more"
-          onClick={() => setMenuOpen((v) => !v)}
+          ref={moreRef}
+          onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
           aria-label="More actions"
           aria-expanded={menuOpen}
         >
@@ -146,10 +231,26 @@ export function MyDayItemRow({
           <span />
           <span />
         </button>
-        {menuOpen ? (
-          <div className="myday-menu" role="menu">
+        {menuOpen && menuPos ? createPortal(
+          <div
+            ref={menuElRef}
+            className="myday-menu is-floating"
+            role="menu"
+            style={{ top: menuPos.top, left: menuPos.left, maxHeight: menuPos.maxHeight }}
+          >
             {!closed ? (
               <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setEditing(true);
+                  }}
+                >
+                  Edit
+                </button>
+                <div className="myday-menu-sep" />
                 <div className="myday-menu-label">Push to</div>
                 {item.dueDate !== addDays(today, 1) ? (
                   <button type="button" role="menuitem" onClick={() => move(addDays(today, 1))}>
@@ -224,7 +325,8 @@ export function MyDayItemRow({
             >
               Delete
             </button>
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     </div>

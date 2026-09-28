@@ -70,6 +70,20 @@ export type MyDayPayload = {
   streak: number;
 };
 
+/** Same order as the server query, so optimistic edits never make rows jump on the next refresh. */
+export function sortMyDayItems(items: MyDayItemDto[]): MyDayItemDto[] {
+  return [...items].sort((a, b) => {
+    const da = a.dueDate ?? "9999-12-31";
+    const db = b.dueDate ?? "9999-12-31";
+    if (da !== db) return da < db ? -1 : 1;
+    if (a.starred !== b.starred) return a.starred ? -1 : 1;
+    const ta = a.dueTime ?? "99:99";
+    const tb = b.dueTime ?? "99:99";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return a.sortOrder - b.sortOrder;
+  });
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isIsoDate(value: unknown): value is string {

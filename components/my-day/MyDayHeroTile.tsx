@@ -11,7 +11,7 @@ import { MyDayReviewPanel } from "@/components/my-day/MyDayReviewPanel";
 import { useMyDay } from "@/components/my-day/useMyDay";
 import { addDays, friendlyDay, tagMeta, type MyDayItemDto } from "@/lib/my-day/shared";
 
-const MAX_VISIBLE = 6;
+const SCROLL_HINT_AT = 6;
 
 function longDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
@@ -117,9 +117,7 @@ export function MyDayHeroTile() {
               <div className="myday-skel" />
             </>
           ) : todayItems.length ? (
-            todayItems
-              .slice(0, MAX_VISIBLE)
-              .map((item) => (
+            todayItems.map((item) => (
                 <MyDayItemRow
                   key={item.id}
                   item={item}
@@ -136,12 +134,12 @@ export function MyDayHeroTile() {
               <span>Add the first thing you want to get done. Unfinished items roll over to tomorrow.</span>
             </div>
           )}
-          {todayItems.length > MAX_VISIBLE ? (
-            <Link className="myday-more-link" href="/workflow/my-day">
-              +{todayItems.length - MAX_VISIBLE} more on My Day
-            </Link>
-          ) : null}
         </div>
+        {todayItems.length > SCROLL_HINT_AT ? (
+          <div className="myday-scroll-hint">
+            {todayItems.length} items today. Scroll the list to see them all.
+          </div>
+        ) : null}
 
         <MyDayQuickAdd api={api} today={today} variant="hero" />
 

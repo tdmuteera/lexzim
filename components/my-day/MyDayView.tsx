@@ -40,14 +40,21 @@ function DropZone({
   return (
     <div
       className={`${className ?? ""}${over ? " is-over" : ""}`}
-      onDragOver={(e) => {
+      onDragOverCapture={(e) => {
         if (!e.dataTransfer.types.includes("text/myday-item")) return;
         e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = "move";
         setOver(true);
       }}
-      onDragLeave={() => setOver(false)}
-      onDrop={onDrop}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDropCapture={(e) => {
+        if (!e.dataTransfer.types.includes("text/myday-item")) return;
+        e.stopPropagation();
+        onDrop(e);
+      }}
     >
       {children}
     </div>
