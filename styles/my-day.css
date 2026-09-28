@@ -1,0 +1,1618 @@
+/* ==========================================================================
+   My Day: private personal to-do (dashboard hero, page board, calendar strip)
+   ========================================================================== */
+
+.myday-hero {
+  --md-ink: #f6f1e7;
+  --md-ink-2: rgba(246, 241, 231, 0.72);
+  --md-ink-3: rgba(246, 241, 231, 0.5);
+  --md-gold: #e6c27a;
+  --md-glass: rgba(255, 255, 255, 0.055);
+  --md-glass-2: rgba(255, 255, 255, 0.09);
+  --md-line: rgba(255, 255, 255, 0.09);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 1.45fr);
+  gap: 1.5rem;
+  margin: 0.25rem 0 1.1rem;
+  padding: 1.5rem 1.6rem 1.35rem;
+  border-radius: 22px;
+  color: var(--md-ink);
+  background:
+    radial-gradient(120% 150% at 0% 0%, #4a3a1f 0%, rgba(74, 58, 31, 0) 55%),
+    radial-gradient(90% 120% at 100% 100%, #23304a 0%, rgba(35, 48, 74, 0) 60%),
+    linear-gradient(135deg, #1d1f27 0%, #16181f 100%);
+  border: 1px solid rgba(230, 194, 122, 0.22);
+  box-shadow:
+    0 24px 60px -28px rgba(18, 14, 6, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: myday-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.myday-hero-glow {
+  position: absolute;
+  inset: -40% auto auto -10%;
+  width: 55%;
+  height: 160%;
+  background: radial-gradient(closest-side, rgba(230, 194, 122, 0.22), transparent 70%);
+  filter: blur(20px);
+  z-index: -1;
+  animation: myday-drift 12s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.myday-hero.is-complete {
+  border-color: rgba(127, 182, 154, 0.5);
+  box-shadow:
+    0 24px 60px -28px rgba(18, 14, 6, 0.6),
+    0 0 0 4px rgba(127, 182, 154, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.myday-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.myday-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--md-gold);
+}
+
+.myday-kicker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e6c27a;
+  box-shadow: 0 0 0 0 rgba(230, 194, 122, 0.6);
+  animation: myday-pulse 2.4s ease-out infinite;
+  flex: none;
+}
+
+.myday-hero-date {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-serif, Georgia, "Times New Roman", serif);
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--md-ink);
+  letter-spacing: -0.01em;
+}
+
+.myday-hero-headline {
+  margin: 0.1rem 0 0.6rem;
+  font-size: 0.95rem;
+  color: var(--md-ink-2);
+  max-width: 34ch;
+}
+
+.myday-hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin-top: 0.25rem;
+}
+
+.myday-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.myday-hero-stats .myday-hero-pills {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.myday-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--md-ink);
+  background: var(--md-glass-2);
+  border: 1px solid var(--md-line);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+a.myday-pill:hover {
+  background: rgba(230, 194, 122, 0.18);
+  transform: translateY(-1px);
+}
+
+.myday-pill.is-streak {
+  color: #ffd08a;
+  background: linear-gradient(135deg, rgba(255, 140, 60, 0.22), rgba(230, 194, 122, 0.16));
+  border-color: rgba(255, 170, 90, 0.35);
+}
+
+.myday-pill.is-streak.is-zero {
+  color: var(--md-ink-2);
+  background: var(--md-glass-2);
+  border-color: var(--md-line);
+}
+
+.myday-pill.is-carried {
+  color: #ffcf8f;
+  border-color: rgba(255, 190, 110, 0.3);
+}
+
+.myday-hero-private {
+  margin: auto 0 0;
+  padding-top: 0.9rem;
+  font-size: 0.72rem;
+  color: var(--md-ink-3);
+}
+
+.myday-hero-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: var(--md-glass);
+  border: 1px solid var(--md-line);
+  backdrop-filter: blur(6px);
+}
+
+.myday-hero-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.myday-hero-foot {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 0.8rem;
+}
+
+.myday-hero-foot a,
+.myday-more-link {
+  color: var(--md-gold);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.myday-hero-foot a:hover,
+.myday-more-link:hover {
+  text-decoration: underline;
+}
+
+.myday-more-link {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.myday-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(230, 194, 122, 0.35);
+  color: var(--md-ink-2);
+  font-size: 0.85rem;
+}
+
+.myday-empty strong {
+  color: var(--md-ink);
+  font-size: 0.95rem;
+}
+
+/* ---------- Progress ring ---------- */
+
+.myday-ring {
+  position: relative;
+  flex: none;
+}
+
+.myday-ring svg {
+  display: block;
+}
+
+.myday-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.myday-ring-fill {
+  fill: none;
+  stroke: url(#myday-ring-grad);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  filter: drop-shadow(0 0 6px rgba(230, 194, 122, 0.45));
+}
+
+.myday-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.myday-ring-label strong {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--md-ink, var(--text));
+}
+
+.myday-ring-label strong span {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.55;
+}
+
+.myday-ring-label em {
+  margin-top: 0.3rem;
+  font-style: normal;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-ink-3, var(--text-3));
+}
+
+/* ---------- Item row ---------- */
+
+.myday-item {
+  --myday-tag: var(--gold, #a07c38);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.6rem 0.65rem 0.6rem 0.75rem;
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 1px 2px rgba(20, 16, 8, 0.04);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.2s ease,
+    opacity 0.3s ease;
+  animation: myday-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.myday-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--myday-tag);
+  opacity: 0.85;
+}
+
+.myday-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px -14px rgba(20, 16, 8, 0.35);
+}
+
+.myday-item:has(.myday-menu),
+.myday-item:focus-within {
+  z-index: 30;
+}
+
+.myday-item[draggable="true"] {
+  cursor: grab;
+}
+
+.myday-item.is-dragging {
+  opacity: 0.45;
+  transform: scale(0.98);
+}
+
+.myday-hero .myday-item {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  color: var(--md-ink);
+}
+
+.myday-hero .myday-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.6);
+}
+
+.myday-item.is-compact {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.myday-tick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--myday-tag);
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.myday-tick:hover {
+  color: var(--myday-tag);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--myday-tag) 18%, transparent);
+}
+
+.myday-item.is-done .myday-tick {
+  background: linear-gradient(135deg, #e6c27a, #b8862f);
+  border-color: transparent;
+  color: #fff;
+}
+
+.myday-item.is-pop .myday-tick {
+  animation: myday-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.myday-item.is-pop::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(230, 194, 122, 0.7);
+  animation: myday-ripple 0.6s ease-out;
+  pointer-events: none;
+}
+
+.myday-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.myday-item-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+  transition: color 0.2s ease;
+}
+
+.myday-item.is-done .myday-item-title,
+.myday-item.is-dropped .myday-item-title,
+.myday-item.is-moved .myday-item-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  opacity: 0.55;
+}
+
+.myday-item.is-done,
+.myday-item.is-dropped,
+.myday-item.is-moved {
+  opacity: 0.78;
+}
+
+.myday-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.myday-item-meta:empty {
+  display: none;
+}
+
+.myday-item-notes {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+
+.myday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--bg-3, rgba(0, 0, 0, 0.05));
+  text-decoration: none;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.myday-hero .myday-chip {
+  color: var(--md-ink-2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.myday-chip.is-tag i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.myday-chip.is-carried {
+  color: #9a5b12;
+  background: rgba(233, 150, 50, 0.16);
+}
+
+.myday-hero .myday-chip.is-carried {
+  color: #ffcf8f;
+  background: rgba(255, 170, 80, 0.16);
+}
+
+.myday-chip.is-time,
+.myday-chip.is-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.myday-chip.is-cal {
+  color: #2f6fed;
+  background: rgba(47, 111, 237, 0.12);
+}
+
+.myday-chip.is-link:hover {
+  text-decoration: underline;
+}
+
+.myday-star,
+.myday-more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.myday-hero .myday-star,
+.myday-hero .myday-more {
+  color: var(--md-ink-3);
+}
+
+.myday-star:hover,
+.myday-more:hover {
+  background: var(--bg-3, rgba(0, 0, 0, 0.06));
+  color: var(--text);
+}
+
+.myday-hero .myday-star:hover,
+.myday-hero .myday-more:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--md-ink);
+}
+
+.myday-star.is-on {
+  color: #e0a526;
+}
+
+.myday-star.is-on:hover {
+  color: #e0a526;
+  transform: scale(1.1);
+}
+
+.myday-more {
+  grid-auto-flow: column;
+  gap: 3px;
+}
+
+.myday-more span {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.myday-menu-wrap {
+  position: relative;
+  flex: none;
+}
+
+.myday-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 200px;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-2, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 18px 40px -16px rgba(20, 16, 8, 0.4);
+  color: var(--text);
+  animation: myday-menu-in 0.14s ease-out;
+}
+
+.myday-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.myday-menu button:hover {
+  background: var(--gold-dim, rgba(160, 124, 56, 0.14));
+}
+
+.myday-menu button.is-danger {
+  color: var(--danger);
+}
+
+.myday-menu-label {
+  padding: 0.35rem 0.6rem 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.myday-menu-sep {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  background: var(--border);
+}
+
+.myday-menu-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.84rem;
+}
+
+.myday-menu-date input {
+  max-width: 140px;
+  font-size: 0.8rem;
+}
+
+/* ---------- Quick add ---------- */
+
+.myday-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.myday-add-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.35rem 0.3rem 0.7rem;
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-2, rgba(0, 0, 0, 0.12));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.myday-add-row:focus-within {
+  border-color: var(--gold, #a07c38);
+  box-shadow: 0 0 0 4px var(--gold-dim, rgba(160, 124, 56, 0.14));
+}
+
+.myday-hero .myday-add-row {
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.myday-hero .myday-add-row:focus-within {
+  border-color: rgba(230, 194, 122, 0.7);
+  box-shadow: 0 0 0 4px rgba(230, 194, 122, 0.14);
+}
+
+.myday-add-plus {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--gold, #a07c38);
+}
+
+.myday-hero .myday-add-plus {
+  color: var(--md-gold);
+}
+
+.myday-add-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.2rem;
+  border: none !important;
+  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.myday-hero .myday-add-input {
+  color: var(--md-ink);
+}
+
+.myday-hero .myday-add-input::placeholder {
+  color: var(--md-ink-3);
+}
+
+.myday-add-star,
+.myday-add-more {
+  flex: none;
+  height: 32px;
+  padding: 0 0.55rem;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-hero .myday-add-star,
+.myday-hero .myday-add-more {
+  color: var(--md-ink-3);
+}
+
+.myday-add-star:hover,
+.myday-add-more:hover,
+.myday-add-more.is-on {
+  background: var(--bg-3, rgba(0, 0, 0, 0.06));
+  color: var(--text);
+}
+
+.myday-hero .myday-add-star:hover,
+.myday-hero .myday-add-more:hover,
+.myday-hero .myday-add-more.is-on {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--md-ink);
+}
+
+.myday-add-star.is-on {
+  color: #e0a526 !important;
+}
+
+.myday-add-go {
+  flex: none;
+  height: 34px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c9a45c, #9c7431);
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -8px rgba(156, 116, 49, 0.8);
+  transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.myday-add-go:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.myday-add-go:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+.myday-add-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.myday-tagpick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-2, rgba(0, 0, 0, 0.12));
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.myday-tagpick i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--myday-tag);
+}
+
+.myday-tagpick:hover {
+  border-color: var(--myday-tag);
+}
+
+.myday-tagpick.is-on {
+  background: var(--myday-tag);
+  border-color: var(--myday-tag);
+  color: #fff;
+}
+
+.myday-tagpick.is-on i {
+  background: #fff;
+}
+
+.myday-hero .myday-tagpick {
+  color: var(--md-ink-2);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.myday-hero .myday-tagpick.is-on {
+  color: #fff;
+  border-color: var(--myday-tag);
+}
+
+.myday-add-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 14px;
+  background: var(--bg-1, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--border);
+  color: var(--text);
+  animation: myday-menu-in 0.18s ease-out;
+}
+
+.myday-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 11px;
+  background: var(--bg-3, rgba(0, 0, 0, 0.06));
+  align-self: flex-start;
+}
+
+.myday-seg button {
+  padding: 0.35rem 0.8rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-seg button.is-on {
+  background: var(--surface, #fff);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.myday-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.myday-add-grid.is-links {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.myday-add-grid label,
+.myday-add-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.myday-add-grid label > span,
+.myday-add-notes > span,
+.myday-field-label {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 0.25rem;
+}
+
+.myday-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: var(--danger);
+  background: var(--danger-bg, rgba(168, 83, 69, 0.12));
+}
+
+.myday-hero .myday-error {
+  color: #ffb4a6;
+  background: rgba(255, 120, 100, 0.12);
+}
+
+/* ---------- Review panel ---------- */
+
+.myday-review {
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(230, 194, 122, 0.18), rgba(230, 194, 122, 0.06));
+  border: 1px solid rgba(230, 194, 122, 0.4);
+  animation: myday-rise 0.45s ease both;
+  color: var(--text);
+}
+
+.myday-hero .myday-review {
+  color: var(--md-ink);
+}
+
+.myday-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.myday-review-kicker {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-2, #7e5f28);
+}
+
+.myday-hero .myday-review-kicker {
+  color: var(--md-gold);
+}
+
+.myday-review h4 {
+  margin: 0.2rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.myday-review p {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.myday-review-done {
+  flex: none;
+  padding: 0.45rem 0.85rem;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c9a45c, #9c7431);
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.myday-review-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.myday-review-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.myday-hero .myday-review-list li {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.myday-review-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.myday-review-title em {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.74rem;
+  color: #c07a1c;
+}
+
+.myday-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  flex: none;
+}
+
+.myday-review-actions button {
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(160, 124, 56, 0.35);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-review-actions button:hover {
+  background: rgba(230, 194, 122, 0.2);
+}
+
+.myday-review-actions button.is-muted {
+  opacity: 0.65;
+}
+
+/* ---------- Skeleton ---------- */
+
+.myday-skel {
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(127, 127, 127, 0.1) 0%,
+    rgba(127, 127, 127, 0.2) 50%,
+    rgba(127, 127, 127, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: myday-shimmer 1.3s linear infinite;
+}
+
+/* ---------- Confetti ---------- */
+
+.myday-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.myday-confetti span {
+  position: absolute;
+  top: -12px;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: myday-fall 2.2s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
+}
+
+/* ---------- Page ---------- */
+
+.myday-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.myday-page .myday-hero {
+  margin: 0;
+}
+
+.myday-hero.is-page {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.myday-hero-ringwrap {
+  padding-right: 0.5rem;
+}
+
+.myday-card {
+  padding: 1rem;
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(20, 16, 8, 0.04);
+}
+
+.myday-hint {
+  margin: -0.4rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-3);
+}
+
+.myday-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.myday-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: var(--bg-1, #f6f3ee);
+  border: 1px solid var(--border);
+  min-height: 180px;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.myday-col.is-today {
+  background: linear-gradient(180deg, rgba(230, 194, 122, 0.16), rgba(230, 194, 122, 0.04));
+  border-color: rgba(160, 124, 56, 0.3);
+}
+
+.myday-col.is-over,
+.myday-day.is-over,
+.myday-someday.is-over {
+  border-color: var(--gold, #a07c38);
+  box-shadow: 0 0 0 3px var(--gold-dim, rgba(160, 124, 56, 0.14));
+  background: var(--gold-dim, rgba(160, 124, 56, 0.1));
+}
+
+.myday-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.myday-col-head h4 {
+  margin: 0;
+  font-family: var(--font-serif, Georgia, "Times New Roman", serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.myday-col-head span {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.myday-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.myday-col-empty {
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px dashed var(--border-2);
+  font-size: 0.8rem;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.myday-done-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-2);
+}
+
+.myday-done-toggle {
+  align-self: flex-start;
+  padding: 0.25rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--gold-2, #7e5f28);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-col .myday-add.is-hero .myday-add-row,
+.myday-someday .myday-add.is-hero .myday-add-row {
+  background: transparent;
+  border-style: dashed;
+}
+
+.myday-days {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 640px;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.myday-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.myday-day:hover {
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.myday-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.myday-day-head strong {
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.myday-day-head span {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--gold-dim);
+  color: var(--gold-2);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.myday-day-empty {
+  display: none;
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.myday-day.is-over .myday-day-empty {
+  display: block;
+}
+
+.myday-day:not(:has(.myday-item)) {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+.myday-day:not(:has(.myday-item)) .myday-day-head strong {
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.myday-col .myday-add-star,
+.myday-col .myday-add-more,
+.myday-someday .myday-add-more {
+  display: none;
+}
+
+.myday-upnext {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.myday-upnext-title {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--md-ink-3);
+}
+
+.myday-upnext-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.8rem;
+  color: var(--md-ink-2);
+  min-width: 0;
+}
+
+.myday-upnext-row i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--md-gold);
+}
+
+.myday-upnext-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.myday-upnext-row em {
+  flex: none;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--md-gold);
+}
+
+.myday-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.myday-someday {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.myday-repeats ul {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.myday-repeats li {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+}
+
+.myday-repeats li > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.myday-repeats li strong {
+  font-size: 0.86rem;
+}
+
+.myday-repeats li span {
+  font-size: 0.74rem;
+  color: var(--text-3);
+}
+
+.myday-repeats li button {
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.myday-repeats li button:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.myday-repeat-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--gold-dim);
+  color: var(--gold-2);
+  flex: none;
+}
+
+/* ---------- Calendar strip ---------- */
+
+.myday-strip {
+  margin: 0 0 0.85rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1f2129, #262a35);
+  border: 1px solid rgba(230, 194, 122, 0.25);
+  color: #f6f1e7;
+}
+
+.myday-strip-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.myday-strip-head strong {
+  color: #e6c27a;
+  letter-spacing: 0.04em;
+}
+
+.myday-strip-count {
+  font-weight: 600;
+}
+
+.myday-strip-private {
+  font-size: 0.72rem;
+  color: rgba(246, 241, 231, 0.5);
+}
+
+.myday-strip-open {
+  margin-left: auto;
+  color: #e6c27a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.myday-strip-items {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+}
+
+.myday-strip-chip {
+  --myday-tag: #e6c27a;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  max-width: 260px;
+  padding: 0.3rem 0.65rem 0.3rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.myday-strip-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.myday-strip-chip em {
+  font-style: normal;
+  color: rgba(246, 241, 231, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.myday-strip-tick {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--myday-tag);
+  color: transparent;
+  flex: none;
+}
+
+.myday-strip-tick svg {
+  width: 10px;
+  height: 10px;
+}
+
+.myday-strip-chip.is-done {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.myday-strip-chip.is-done .myday-strip-tick {
+  background: #e6c27a;
+  border-color: #e6c27a;
+  color: #1f2129;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1100px) {
+  .myday-board {
+    grid-template-columns: 1fr 1fr;
+  }
+  .myday-col.is-plan {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .myday-hero {
+    grid-template-columns: 1fr;
+    padding: 1.2rem;
+  }
+  .myday-hero.is-page {
+    grid-template-columns: 1fr auto;
+  }
+  .myday-board,
+  .myday-lower {
+    grid-template-columns: 1fr;
+  }
+  .myday-review-head,
+  .myday-review-list li {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .myday-hero.is-page {
+    grid-template-columns: 1fr;
+  }
+  .myday-add-more {
+    display: none;
+  }
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes myday-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes myday-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes myday-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes myday-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes myday-ripple {
+  to {
+    box-shadow: 0 0 0 16px rgba(230, 194, 122, 0);
+  }
+}
+
+@keyframes myday-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(230, 194, 122, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(230, 194, 122, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(230, 194, 122, 0);
+  }
+}
+
+@keyframes myday-drift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(18%, 8%);
+  }
+}
+
+@keyframes myday-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes myday-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(260px) rotate(540deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .myday-hero,
+  .myday-hero-glow,
+  .myday-item,
+  .myday-kicker-dot,
+  .myday-confetti span,
+  .myday-review {
+    animation: none !important;
+  }
+}

@@ -1502,6 +1502,97 @@ export const firmTasks = pgTable(
 );
 
 /**
+ * My Day: private personal to-do items (never emailed, never on the shared calendar).
+ * Every query MUST filter by both firm_id and user_id (owner-only privacy).
+ * status: open | done | dropped | moved (promoted to a calendar event)
+ * dueDate null = Someday. originalDate is the first planned day and never changes.
+ */
+export const myDayItems = pgTable(
+  "my_day_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    dueDate: date("due_date", { mode: "string" }),
+    dueTime: text("due_time"),
+    originalDate: date("original_date", { mode: "string" }),
+    tag: text("tag"),
+    starred: boolean("starred").notNull().default(false),
+    status: text("status").notNull().default("open"),
+    carriedCount: integer("carried_count").notNull().default(0),
+    lastCarriedOn: date("last_carried_on", { mode: "string" }),
+    completedOn: date("completed_on", { mode: "string" }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    calendarEventId: uuid("calendar_event_id").references(() => calendarEvents.id, {
+      onDelete: "set null",
+    }),
+    recurrenceId: uuid("recurrence_id").references(() => myDayRecurrences.id, {
+      onDelete: "set null",
+    }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("my_day_items_owner_status_due_idx").on(t.firmId, t.userId, t.status, t.dueDate),
+    index("my_day_items_owner_completed_idx").on(t.firmId, t.userId, t.completedOn),
+    unique("my_day_items_recurrence_occurrence_uid").on(t.recurrenceId, t.originalDate),
+  ],
+);
+
+/** rule: daily | weekdays | weekly | monthly */
+export const myDayRecurrences = pgTable(
+  "my_day_recurrences",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    tag: text("tag"),
+    dueTime: text("due_time"),
+    starred: boolean("starred").notNull().default(false),
+    rule: text("rule").notNull(),
+    weekday: integer("weekday"),
+    monthDay: integer("month_day"),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    lastGeneratedOn: date("last_generated_on", { mode: "string" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("my_day_recurrences_owner_idx").on(t.firmId, t.userId)],
+);
+
+export const myDayPrefs = pgTable(
+  "my_day_prefs",
+  {
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReviewOn: date("last_review_on", { mode: "string" }),
+    lastSyncOn: date("last_sync_on", { mode: "string" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.firmId, t.userId] })],
+);
+
+/**
  * Web session registry for firm admin (replaces desktop device pairing).
  * sessionId matches Supabase Auth JWT `session_id` claim when available.
  */

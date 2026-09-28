@@ -8,6 +8,7 @@ import {
   AnimatedDonutChart,
 } from "@/components/dashboard/DashboardCharts";
 import { FinanceKpisPanel } from "@/components/finance/FinanceKpisPanel";
+import { MyDayHeroTile } from "@/components/my-day/MyDayHeroTile";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { Icon } from "@/components/ui/Icon";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -561,6 +562,8 @@ export function DashboardView() {
           ) : null}
         </div>
       </div>
+
+      <MyDayHeroTile />
 
       <div className="alert-pills motion-pills">
         {permissions.calendar ? (

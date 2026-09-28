@@ -186,6 +186,12 @@ export const navSections: NavSection[] = [
     title: "Workflow",
     items: [
       {
+        href: "/workflow/my-day",
+        label: "My Day",
+        icon: "pin",
+        permission: "dashboard.view",
+      },
+      {
         href: "/workflow/tasks",
         label: "Tasks",
         icon: "check",
@@ -401,6 +407,12 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "Periods · deductions · mark paid",
     purpose: "Payroll MVP with advance recovery. Full statutory payroll remains deferred.",
     phaseBadge: "Phase 10",
+  },
+  "/workflow/my-day": {
+    title: "My Day",
+    subtitle: "Private to-do · roll-over · 14-day plan",
+    purpose: "Personal to-do list. No emails and not on the shared calendar unless moved there.",
+    phaseBadge: "Phase 11",
   },
   "/workflow/tasks": {
     title: "Tasks",

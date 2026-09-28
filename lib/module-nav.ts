@@ -104,6 +104,7 @@ export const HR_TABS: ModuleTab[] = [
 ];
 
 export const WORKFLOW_TABS: ModuleTab[] = [
+  { href: "/workflow/my-day", label: "My Day", permission: "dashboard.view" },
   { href: "/workflow/tasks", label: "Tasks", permission: "dashboard.view" },
   { href: "/workflow/approvals", label: "Approvals", permission: "dashboard.view" },
 ];
@@ -161,6 +162,7 @@ export const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     prefix: "/hr",
     anyOf: ["hr.view", "hr.leave.request", "hr.advances.request"],
   },
+  { prefix: "/workflow/my-day", permission: "dashboard.view" },
   { prefix: "/workflow/tasks", permission: "dashboard.view" },
   { prefix: "/workflow/approvals", permission: "dashboard.view" },
   { prefix: "/workflow", permission: "dashboard.view" },

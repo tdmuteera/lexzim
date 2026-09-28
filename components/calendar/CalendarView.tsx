@@ -6,6 +6,7 @@ import { Can } from "@/components/auth/Can";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ClientSearchPicker } from "@/components/finance/ClientSearchPicker";
 import { CalendarSharePeoplePicker } from "@/components/calendar/CalendarSharePeoplePicker";
+import { MyDayCalendarStrip } from "@/components/my-day/MyDayCalendarStrip";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
@@ -786,6 +787,8 @@ export function CalendarView() {
             with you. Colour follows the person who created the event (set yours below). Private
             events stay private to their creator. Click a day to create.
           </p>
+
+          <MyDayCalendarStrip />
 
           <div
             className="toolbar"
