@@ -4,7 +4,7 @@ import { AuthError } from "@/lib/auth/types";
 import { isMissingRelationError } from "@/lib/db/missing-relation";
 import { serializeProformaDetail } from "@/lib/proforma/serialize";
 import { parseUpdateProformaInput } from "@/lib/proforma/validation";
-import { getProforma, updateProforma } from "@/lib/repos/proformas";
+import { deleteProforma, getProforma, updateProforma } from "@/lib/repos/proformas";
 import { requireAny, requirePermission } from "@/lib/rbac/guards";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
@@ -69,6 +69,42 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const row = await getProforma(firmId, updated.id);
     if (!row) throw new AuthError("server", "Pro forma updated but could not reload.");
     return jsonOk({ proforma: serializeProformaDetail(row) });
+  } catch (err) {
+    return jsonError(err, request);
+  }
+}
+
+export async function DELETE(request: Request, ctx: Ctx) {
+  try {
+    const session = await requirePermission("finance.proforma.delete");
+    const firmId = tenantFirmId(session);
+    const { id } = await ctx.params;
+
+    let deleted;
+    try {
+      deleted = await deleteProforma(firmId, id);
+    } catch (err) {
+      if (isMissingRelationError(err)) {
+        throw new AuthError("validation", MIGRATION_HINT);
+      }
+      throw err;
+    }
+
+    await writeAuditLog({
+      action: "proformas.delete",
+      firmId,
+      userId: session.id,
+      entityType: "pro_forma",
+      entityId: deleted.id,
+      metadata: {
+        proformaNumber: deleted.proformaNumber,
+        clientId: deleted.clientId,
+        status: deleted.status,
+      },
+      ipOrUserAgent: clientInfo(request),
+    }).catch(() => undefined);
+
+    return jsonOk({ deleted: { id: deleted.id, proformaNumber: deleted.proformaNumber } });
   } catch (err) {
     return jsonError(err, request);
   }

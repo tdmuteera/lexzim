@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Can } from "@/components/auth/Can";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
@@ -46,6 +46,44 @@ export function ProFormaDetailView() {
   const [item, setItem] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+
+  async function handleDelete() {
+    if (!item) return;
+    if (
+      !window.confirm(
+        `Delete pro forma ${item.proformaNumber}? This permanently removes it and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/finance/proformas/${item.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        requestId?: string;
+        error?: { message: string; requestId?: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(
+          body.error?.message ??
+            `Could not delete pro forma.${body.error?.requestId || body.requestId ? ` Reference: ${body.error?.requestId ?? body.requestId}` : ""}`,
+        );
+        return;
+      }
+      router.push("/finance/proforma");
+    } catch {
+      setError("Could not delete pro forma.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -117,6 +155,17 @@ export function ProFormaDetailView() {
               >
                 Download Word
               </a>
+              <Can permission="finance.proforma.delete">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </Can>
             </>
           ) : null}
         </div>

@@ -49,6 +49,7 @@ export const ACCESS_TICK_GRANTS: Record<string, PermissionCode[]> = {
     "finance.commission.view",
   ],
   "finance.view_all_client_accounts": ["finance.view_all_client_accounts"],
+  "finance.proforma.delete": ["finance.proforma.delete"],
   "finance.payments.view": ["finance.payments.view", "finance.payments.create"],
   "finance.requisitions.view": [
     "finance.requisitions.view",
@@ -106,6 +107,12 @@ const EXTRA_ACCESS_TICKS: AccessTick[] = [
     section: "Finance",
     label: "All client finance accounts",
     hint: "Open trust and fee accounts for every client (bookkeeper / office manager).",
+  },
+  {
+    code: "finance.proforma.delete",
+    section: "Finance",
+    label: "Delete pro formas",
+    hint: "Permanently delete pro forma invoices. Deleted pro formas cannot be recovered.",
   },
   {
     code: "hr.manage",

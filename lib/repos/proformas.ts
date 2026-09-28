@@ -170,6 +170,21 @@ export async function updateProforma(
   });
 }
 
+export async function deleteProforma(firmId: string, id: string) {
+  const db = getDb();
+  const [deleted] = await db
+    .delete(proFormas)
+    .where(and(eq(proFormas.firmId, firmId), eq(proFormas.id, id)))
+    .returning({
+      id: proFormas.id,
+      proformaNumber: proFormas.proformaNumber,
+      clientId: proFormas.clientId,
+      status: proFormas.status,
+    });
+  if (!deleted) throw new AuthError("not_found", "Pro forma not found.");
+  return deleted;
+}
+
 export type ListProformasOpts = {
   status?: ProformaStatus;
   kind?: string;

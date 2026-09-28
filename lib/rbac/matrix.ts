@@ -123,6 +123,12 @@ export const PERMISSION_DEFS: {
     module: "finance",
   },
   {
+    code: "finance.proforma.delete",
+    name: "Delete pro formas",
+    description: "Permanently delete pro forma invoices",
+    module: "finance",
+  },
+  {
     code: "finance.view_all_client_accounts",
     name: "View all client finance accounts",
     description: "Open client trust/fee accounts firm-wide for bookkeeping",

@@ -66,6 +66,7 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
   set.add("finance.requisitions.pay");
   set.add("finance.commission.view");
   set.add("finance.commission.configure");
+  set.add("finance.proforma.delete");
   set.add("users.activity.view");
   return [...set];
 }

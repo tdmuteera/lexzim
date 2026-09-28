@@ -105,6 +105,7 @@ export type PermissionCode =
   | "finance.gl.view"
   | "finance.gl.post"
   | "finance.quote.manage"
+  | "finance.proforma.delete"
   | "finance.view_all_client_accounts"
   | "finance.payments.view"
   | "finance.payments.create"

@@ -365,6 +365,13 @@
       "when": 1789400000000,
       "tag": "0051_proforma_money_class",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1789500000000,
+      "tag": "0052_proforma_delete_permission",
+      "breakpoints": true
     }
   ]
 }

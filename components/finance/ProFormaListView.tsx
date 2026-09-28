@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
 import { Badge } from "@/components/ui/Badge";
@@ -42,6 +43,44 @@ export function ProFormaListView() {
   const [migrationHint, setMigrationHint] = useState<string | null>(null);
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { can, isLoading: authLoading } = useAuth();
+  const canDelete = !authLoading && can("finance.proforma.delete");
+
+  async function handleDelete(row: ProformaItem) {
+    if (
+      !window.confirm(
+        `Delete pro forma ${row.proformaNumber}? This permanently removes it and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/finance/proformas/${row.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok: boolean;
+        requestId?: string;
+        error?: { message: string; requestId?: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(
+          body.error?.message ??
+            `Could not delete pro forma.${body.error?.requestId || body.requestId ? ` Reference: ${body.error?.requestId ?? body.requestId}` : ""}`,
+        );
+        return;
+      }
+      setItems((prev) => prev.filter((i) => i.id !== row.id));
+    } catch {
+      setError("Could not delete pro forma.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -255,6 +294,7 @@ export function ProFormaListView() {
                     direction={sortDir}
                     onSort={toggleSort}
                   />
+                  {canDelete ? <th aria-label="Actions" /> : null}
                 </tr>
               </thead>
               <tbody>
@@ -288,6 +328,19 @@ export function ProFormaListView() {
                         year: "numeric",
                       })}
                     </td>
+                    {canDelete ? (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                          onClick={() => void handleDelete(row)}
+                          disabled={deletingId === row.id}
+                        >
+                          {deletingId === row.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
