@@ -17,7 +17,7 @@ import { postDisbursementGl } from "@/lib/gl/posting-disbursements";
 import { describeTimeLine } from "@/lib/billing/serialize";
 import { timeEntryAmountCents } from "@/lib/billing/money";
 import { AuthError } from "@/lib/auth/types";
-import { getDb } from "@/lib/db";
+import { getDb, lockFinanceKey, runInTransaction } from "@/lib/db";
 import {
   clients,
   disbursements,
@@ -34,6 +34,7 @@ import {
   postInvoiceSentGl,
   reverseInvoiceSentGl,
 } from "@/lib/gl/posting-invoices";
+import { reverseJournalBySource } from "@/lib/gl/journals";
 import { lineTotalCents } from "@/lib/quotes/validation";
 import {
   quotationDiscountCents,
@@ -223,75 +224,116 @@ export async function createDisbursement(
   matterId: string,
   userId: string,
   input: DisbursementInput,
+  opts?: { trustPaidViaRequisition?: boolean },
 ) {
-  const db = getDb();
-  const rows = await db
-    .insert(disbursements)
-    .values({
-      firmId,
-      matterId,
-      description: input.description,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      incurredAt: input.incurredAt,
-      billable: input.billable,
-      paidFrom: input.paidFrom,
-      createdBy: userId,
-    })
-    .returning();
-  const row = rows[0]!;
-  if (row.billable) {
-    await postDisbursementGl(firmId, userId, row.id);
+  if (input.paidFrom === "trust" && !opts?.trustPaidViaRequisition) {
+    throw new AuthError(
+      "validation",
+      "Disbursements paid from trust must go through a disbursement requisition so the client's trust ledger is debited.",
+    );
   }
-  return row;
+  return runInTransaction(async () => {
+    const db = getDb();
+    const rows = await db
+      .insert(disbursements)
+      .values({
+        firmId,
+        matterId,
+        description: input.description,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        incurredAt: input.incurredAt,
+        billable: input.billable,
+        paidFrom: input.paidFrom,
+        createdBy: userId,
+      })
+      .returning();
+    const row = rows[0]!;
+    if (row.billable && row.paidFrom !== "trust") {
+      await postDisbursementGl(firmId, userId, row.id);
+    }
+    return row;
+  });
 }
 
+function assertDisbursementEditable(existing: typeof disbursements.$inferSelect, verb: string) {
+  if (existing.invoiceId) {
+    throw new AuthError(
+      "validation",
+      `This disbursement is locked on an invoice and cannot be ${verb}.`,
+    );
+  }
+  if (existing.requisitionId || existing.trustEntryId) {
+    throw new AuthError(
+      "validation",
+      `This disbursement was paid through a requisition and cannot be ${verb} here. Reverse the requisition payment instead.`,
+    );
+  }
+}
+
+/** Edits re-post GL: the previous advance journal is reversed and the corrected one posted. */
 export async function updateDisbursement(
   firmId: string,
   id: string,
   input: DisbursementInput,
+  userId?: string,
 ) {
   const existing = await getDisbursement(firmId, id);
   if (!existing) return null;
-  if (existing.invoiceId) {
+  assertDisbursementEditable(existing, "edited");
+  if (input.paidFrom === "trust") {
     throw new AuthError(
       "validation",
-      "This disbursement is locked on an invoice and cannot be edited.",
+      "Disbursements paid from trust must go through a disbursement requisition.",
     );
   }
 
-  const db = getDb();
-  const rows = await db
-    .update(disbursements)
-    .set({
-      description: input.description,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      incurredAt: input.incurredAt,
-      billable: input.billable,
-      paidFrom: input.paidFrom,
-    })
-    .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, id)))
-    .returning();
-  return rows[0] ?? null;
+  return runInTransaction(async () => {
+    const db = getDb();
+    const rows = await db
+      .update(disbursements)
+      .set({
+        description: input.description,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        incurredAt: input.incurredAt,
+        billable: input.billable,
+        paidFrom: input.paidFrom,
+      })
+      .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, id)))
+      .returning();
+    const updated = rows[0] ?? null;
+    const moneyChanged =
+      existing.amountCents !== input.amountCents ||
+      existing.billable !== input.billable ||
+      existing.paidFrom !== input.paidFrom ||
+      existing.incurredAt.getTime() !== input.incurredAt.getTime();
+    const actor = userId ?? existing.createdBy;
+    if (updated && moneyChanged && actor) {
+      await reverseJournalBySource(firmId, actor, "expense", `disb-${id}`, `Disbursement corrected: ${updated.description}`);
+      if (updated.billable) await postDisbursementGl(firmId, actor, id);
+    }
+    return updated;
+  });
 }
 
-export async function deleteDisbursement(firmId: string, id: string) {
+/** Deleting reverses the advance journal so the books stay balanced. */
+export async function deleteDisbursement(firmId: string, id: string, userId?: string) {
   const existing = await getDisbursement(firmId, id);
   if (!existing) return null;
-  if (existing.invoiceId) {
-    throw new AuthError(
-      "validation",
-      "This disbursement is locked on an invoice and cannot be deleted.",
-    );
-  }
+  assertDisbursementEditable(existing, "deleted");
 
-  const db = getDb();
-  const rows = await db
-    .delete(disbursements)
-    .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, id)))
-    .returning({ id: disbursements.id });
-  return rows[0] ?? null;
+  return runInTransaction(async () => {
+    const actor = userId ?? existing.createdBy;
+    if (actor) {
+      await reverseJournalBySource(firmId, actor, "expense", `disb-${id}`, `Disbursement deleted: ${existing.description}`);
+    }
+    const rows = await getDb()
+      .delete(disbursements)
+      .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, id)))
+      .returning({ id: disbursements.id });
+    return rows[0] ?? null;
+  });
 }
 
 export async function getMatterDisbursementTotals(firmId: string, matterId: string) {
@@ -785,10 +827,39 @@ export async function updateInvoiceStatus(
   status: InvoiceStatusValue,
   userId?: string,
 ) {
+  return runInTransaction(async () => {
+    await lockFinanceKey(`invoice:${firmId}:${invoiceId}`);
+    return updateInvoiceStatusTx(firmId, invoiceId, status, userId);
+  });
+}
+
+async function updateInvoiceStatusTx(
+  firmId: string,
+  invoiceId: string,
+  status: InvoiceStatusValue,
+  userId?: string,
+) {
   const full = await getInvoice(firmId, invoiceId);
   if (!full) return null;
   const previousStatus = full.invoice.status;
   assertInvoiceStatusTransition(previousStatus, status);
+
+  if (status === "void" || status === "paid") {
+    const paid = await sumFeePayments(firmId, invoiceId);
+    const settled = paid + (full.invoice.retainerAppliedCents ?? 0);
+    if (status === "void" && settled > 0) {
+      throw new AuthError(
+        "validation",
+        "This invoice has receipts or trust applied. Reverse those first, then void it.",
+      );
+    }
+    if (status === "paid" && settled < full.invoice.totalCents) {
+      throw new AuthError(
+        "validation",
+        "An invoice becomes paid when receipts or trust cover its total. Record the payment instead.",
+      );
+    }
+  }
 
   if (status === "sent" && previousStatus === "draft") {
     const { getRequireInvoiceApproval } = await import("@/lib/billing/invoice-approval");
@@ -958,53 +1029,86 @@ export async function createFeePayment(
   firmId: string,
   userId: string,
   invoiceId: string,
-  input: FeePaymentInput,
+  input: FeePaymentInput & { intakeId?: string | null; idempotencyKey?: string | null },
 ) {
-  const full = await getInvoice(firmId, invoiceId);
-  if (!full) {
-    throw new AuthError("not_found", "Invoice not found.");
-  }
-  if (full.invoice.status === "void" || full.invoice.status === "draft") {
-    throw new AuthError(
-      "validation",
-      "Fee payments are only allowed on sent, overdue, or paid invoices.",
-    );
-  }
+  return runInTransaction(async () => {
+    await lockFinanceKey(`invoice:${firmId}:${invoiceId}`);
+    const db = getDb();
+    if (input.idempotencyKey) {
+      const prior = await db
+        .select()
+        .from(feePayments)
+        .where(
+          and(eq(feePayments.firmId, firmId), eq(feePayments.idempotencyKey, input.idempotencyKey)),
+        )
+        .limit(1);
+      if (prior[0]) return prior[0];
+    }
 
-  const receiptNumber =
-    input.receiptNumber?.trim() || (await allocateReceiptNumber(firmId));
-  const db = getDb();
-  const [payment] = await db
-    .insert(feePayments)
-    .values({
-      firmId,
-      invoiceId,
-      receiptNumber,
-      amountCents: input.amountCents,
-      currency: input.currency || full.invoice.currency,
-      paidAt: input.paidAt,
-      method: input.method,
-      reference: input.reference,
-      notes: input.notes,
-      createdBy: userId,
-    })
-    .returning();
+    const full = await getInvoice(firmId, invoiceId);
+    if (!full) {
+      throw new AuthError("not_found", "Invoice not found.");
+    }
+    if (full.invoice.status === "void" || full.invoice.status === "draft") {
+      throw new AuthError(
+        "validation",
+        "Fee payments are only allowed on sent, overdue, or paid invoices.",
+      );
+    }
+    if (input.currency && input.currency !== full.invoice.currency) {
+      throw new AuthError(
+        "validation",
+        `Payment currency ${input.currency} does not match the invoice currency ${full.invoice.currency}.`,
+      );
+    }
+    const paidBefore = await sumFeePayments(firmId, invoiceId);
+    const retainerApplied = full.invoice.retainerAppliedCents ?? 0;
+    const outstanding = full.invoice.totalCents - paidBefore - retainerApplied;
+    if (input.amountCents > outstanding) {
+      throw new AuthError(
+        "validation",
+        outstanding <= 0
+          ? "This invoice is already fully paid."
+          : `Payment exceeds the invoice balance (${outstanding} cents outstanding). Record any excess as a trust deposit instead.`,
+      );
+    }
 
-  await postFeePaymentGl(firmId, userId, payment!.id, {
-    cashGlCode: input.cashGlCode,
+    const receiptNumber =
+      input.receiptNumber?.trim() || (await allocateReceiptNumber(firmId));
+    const [payment] = await db
+      .insert(feePayments)
+      .values({
+        firmId,
+        invoiceId,
+        receiptNumber,
+        amountCents: input.amountCents,
+        currency: full.invoice.currency,
+        paidAt: input.paidAt,
+        method: input.method,
+        reference: input.reference,
+        notes: input.notes,
+        clientId: full.invoice.clientId,
+        matterId: full.invoice.matterId,
+        intakeId: input.intakeId ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
+        createdBy: userId,
+      })
+      .returning();
+
+    await postFeePaymentGl(firmId, userId, payment!.id, {
+      cashGlCode: input.cashGlCode,
+    });
+
+    if (
+      paidBefore + input.amountCents + retainerApplied >= full.invoice.totalCents &&
+      full.invoice.status !== "paid"
+    ) {
+      await db
+        .update(invoices)
+        .set({ status: "paid", updatedAt: new Date() })
+        .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)));
+    }
+
+    return payment!;
   });
-
-  const paid = await sumFeePayments(firmId, invoiceId);
-  const retainerApplied = full.invoice.retainerAppliedCents ?? 0;
-  if (
-    paid + retainerApplied >= full.invoice.totalCents &&
-    full.invoice.status !== "paid"
-  ) {
-    await db
-      .update(invoices)
-      .set({ status: "paid", updatedAt: new Date() })
-      .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)));
-  }
-
-  return payment!;
 }

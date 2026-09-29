@@ -52,7 +52,7 @@ export async function exportReceiptLetterheadPdf(
 
   const profile = await getFirmProfile(firmId);
   const paidTotal = await sumFeePayments(firmId, row.invoice.id);
-  const balanceCents = Math.max(0, row.invoice.totalCents - paidTotal);
+  const balanceCents = Math.max(0, row.invoice.totalCents - paidTotal - (row.invoice.retainerAppliedCents ?? 0));
 
   const clientLabel = row.clientType
     ? clientDisplayName({

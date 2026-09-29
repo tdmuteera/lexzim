@@ -12,6 +12,9 @@ export type VaultBankInInput = {
   reference: string | null;
   narrative: string | null;
   allowNegative: boolean;
+  overrideReason?: string | null;
+  /** Set server-side after the Managing Partner check. */
+  authorisedBy?: string | null;
 };
 
 export type VaultCountInput = {
@@ -92,6 +95,7 @@ export function parseVaultBankInInput(
     reference: trimOrNull(raw.reference),
     narrative: trimOrNull(raw.narrative),
     allowNegative: raw.allowNegative === true,
+    overrideReason: trimOrNull(raw.overrideReason),
   };
 }
 

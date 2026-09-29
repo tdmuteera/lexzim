@@ -1,5 +1,6 @@
 import { writeAuditLog } from "@/lib/auth/audit";
 import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
+import { AuthError } from "@/lib/auth/types";
 import { bankVaultCash } from "@/lib/repos/trust";
 import { parseVaultBankInInput } from "@/lib/trust/vault-validation";
 import { assertCanUse } from "@/lib/licensing/policy";
@@ -14,9 +15,22 @@ export async function POST(request: Request) {
     await assertCanUse(firmId, "trust");
 
     const body = await request.json();
-    const input = parseVaultBankInInput(body, {
+    const parsed = parseVaultBankInInput(body, {
       currency: session.firm.defaultCurrency || "USD",
     });
+    let input = parsed;
+    if (parsed.allowNegative) {
+      if (session.role.code !== "managing_partner") {
+        throw new AuthError(
+          "forbidden",
+          "Only the Managing Partner can authorise a trust balance to go negative.",
+        );
+      }
+      if (!parsed.overrideReason) {
+        throw new AuthError("validation", "A reason is required to authorise a negative trust balance.");
+      }
+      input = { ...parsed, authorisedBy: session.id };
+    }
 
     const result = await bankVaultCash(firmId, session.id, input);
 
@@ -33,6 +47,7 @@ export async function POST(request: Request) {
         amountCents: input.amountCents,
         currency: input.currency,
         allowNegative: input.allowNegative,
+        overrideReason: input.overrideReason ?? null,
         ledgerEntryIds: result.entries.map((e) => e.id),
         note: "Vault cash banked to trust bank. Client ledger total unchanged; location moved.",
       },

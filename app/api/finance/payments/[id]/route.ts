@@ -32,6 +32,8 @@ export async function GET(request: Request, context: RouteContext) {
         matterTitle: full.matterTitle,
         matterNumber: full.matterNumber,
         notes: full.intake.notes,
+        reversedAt: full.intake.reversedAt ? full.intake.reversedAt.toISOString() : null,
+        reversalReason: full.intake.reversalReason,
         createdAt: full.intake.createdAt.toISOString(),
         lines: full.lines.map((l) => ({
           id: l.id,

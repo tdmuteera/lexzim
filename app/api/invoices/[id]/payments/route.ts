@@ -28,7 +28,14 @@ export async function POST(request: Request, context: RouteContext) {
       currency: existing.invoice.currency,
     });
 
-    const payment = await createFeePayment(firmId, session.id, invoiceId, input);
+    const idempotencyKey =
+      body && typeof body === "object" && typeof (body as Record<string, unknown>).idempotencyKey === "string"
+        ? ((body as Record<string, unknown>).idempotencyKey as string).trim() || null
+        : null;
+    const payment = await createFeePayment(firmId, session.id, invoiceId, {
+      ...input,
+      idempotencyKey,
+    });
 
     await writeAuditLog({
       action: "fee_payments.create",

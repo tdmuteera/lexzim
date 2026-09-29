@@ -41,13 +41,26 @@ export type TrustLedgerInput = {
   transferToAccountId: string | null;
   /** For adjustment: true = credit (increase), false = debit. Default credit. */
   adjustmentCredit: boolean;
-  /** Allow posting that would make client balance negative (MP override). Default false. */
+  /**
+   * Allow posting that would make client balance negative. Honoured only when the
+   * caller has verified a Managing Partner and supplied overrideReason.
+   */
   allowNegative: boolean;
+  overrideReason?: string | null;
+  /** Managing Partner who authorised an override (set server-side, never from the body). */
+  authorisedBy?: string | null;
   /**
    * When true, skip standard trust bank GL for this ledger row.
    * Used when Payments allocates fee_revenue out of trust (liability → fee/AR GL is posted separately).
    */
   skipGl?: boolean;
+  /** Replays with the same key return the original entry instead of posting twice. */
+  idempotencyKey?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  invoiceId?: string | null;
+  requisitionId?: string | null;
+  intakeId?: string | null;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -141,8 +154,11 @@ export function parseTrustLedgerInput(
 
   const clientId = trimOrNull(raw.clientId);
   const matterId = trimOrNull(raw.matterId);
-  if (raw.entryType !== "transfer" && !clientId) {
-    throw new AuthError("validation", "Client is required for this entry type.");
+  if (!clientId) {
+    throw new AuthError(
+      "validation",
+      "Client is required. Trust money is always held for a named client.",
+    );
   }
 
   const amountCents = parsePositiveCents(raw);
@@ -172,7 +188,31 @@ export function parseTrustLedgerInput(
     transferToAccountId,
     adjustmentCredit: raw.adjustmentCredit === false ? false : true,
     allowNegative: raw.allowNegative === true,
+    overrideReason: trimOrNull(raw.overrideReason),
+    idempotencyKey: trimOrNull(raw.idempotencyKey),
+    sourceType: "manual",
   };
+}
+
+/** Negative-balance overrides: Managing Partner only, always with a written reason. */
+export function authoriseTrustOverride(
+  input: TrustLedgerInput,
+  actor: { id: string; isManagingPartner: boolean },
+): TrustLedgerInput {
+  if (!input.allowNegative) return { ...input, authorisedBy: null };
+  if (!actor.isManagingPartner) {
+    throw new AuthError(
+      "forbidden",
+      "Only the Managing Partner can authorise a trust balance to go negative.",
+    );
+  }
+  if (!input.overrideReason) {
+    throw new AuthError(
+      "validation",
+      "A reason is required to authorise a negative trust balance.",
+    );
+  }
+  return { ...input, authorisedBy: actor.id };
 }
 
 /** Signed cents: receipt +, disbursement -, adjustment ±, transfer out -. */

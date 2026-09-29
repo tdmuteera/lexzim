@@ -7,7 +7,6 @@ import {
   feePayments,
   firmServices,
   glJournalEntries,
-  glJournalLines,
   invoices,
 } from "@/lib/db/schema";
 import { ensureGlAccountByCode } from "@/lib/gl/accounts";
@@ -291,73 +290,4 @@ export async function reverseInvoiceSentGl(
     .where(and(eq(glJournalEntries.firmId, firmId), eq(glJournalEntries.id, original.id)));
 
   return reversal;
-}
-
-/** Apply client retainer (trust liability) against invoice AR. */
-export async function postApplyRetainerGl(
-  firmId: string,
-  userId: string,
-  invoiceId: string,
-  amountCents: number,
-) {
-  if (amountCents < 1) {
-    throw new AuthError("validation", "Retainer amount must be positive.");
-  }
-
-  const sourceId = `${invoiceId}-retainer-${amountCents}`;
-  const existing = await findPostedJournal(firmId, "trust", sourceId);
-  if (existing) return existing;
-
-  const db = getDb();
-  const invRows = await db
-    .select()
-    .from(invoices)
-    .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)))
-    .limit(1);
-  const invoice = invRows[0];
-  if (!invoice) throw new AuthError("not_found", "Invoice not found.");
-
-  const trustLiability = await ensureGlAccountByCode(firmId, "2100");
-  const ar = await ensureGlAccountByCode(firmId, "1310");
-
-  const entry = await postManualJournal(
-    firmId,
-    userId,
-    {
-      entryDate: new Date(),
-      reference: invoice.invoiceNumber,
-      memo: `Apply retainer to ${invoice.invoiceNumber}`,
-      lines: [
-        {
-          accountId: trustLiability.id,
-          debitCents: amountCents,
-          creditCents: 0,
-          matterId: invoice.matterId,
-          clientId: invoice.clientId,
-          currency: invoice.currency,
-          lineMemo: "Retainer applied",
-        },
-        {
-          accountId: ar.id,
-          debitCents: 0,
-          creditCents: amountCents,
-          matterId: invoice.matterId,
-          clientId: invoice.clientId,
-          currency: invoice.currency,
-        },
-      ],
-    },
-    "trust",
-    sourceId,
-  );
-
-  await db
-    .update(invoices)
-    .set({
-      retainerAppliedCents: invoice.retainerAppliedCents + amountCents,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(invoices.firmId, firmId), eq(invoices.id, invoiceId)));
-
-  return entry;
 }

@@ -38,6 +38,8 @@ function serializeIntakeListItem(row: Awaited<ReturnType<typeof listPaymentIntak
     matterNumber: row.matterNumber,
     lineCount: row.lineCount,
     notes: row.intake.notes,
+    reversedAt: row.intake.reversedAt ? row.intake.reversedAt.toISOString() : null,
+    reversalReason: row.intake.reversalReason,
     createdAt: row.intake.createdAt.toISOString(),
   };
 }

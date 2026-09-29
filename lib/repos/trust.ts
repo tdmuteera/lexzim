@@ -3,11 +3,12 @@
  * EVERY firm-scoped query MUST filter firmId.
  * amount_cents is signed: credit (+) increases client trust liability held.
  */
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { AuthError } from "@/lib/auth/types";
 import { clientDisplayName } from "@/lib/clients/display";
-import { getDb } from "@/lib/db";
+import { getDb, lockFinanceKey, runInTransaction } from "@/lib/db";
 import { clients, matters, trustAccounts, trustLedgerEntries, trustVaultBankIns, trustVaultCounts } from "@/lib/db/schema";
 import {
   signedTrustAmount,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/trust/validation";
 import type { VaultBankInInput, VaultCountInput } from "@/lib/trust/vault-validation";
 import { allocateTrustReferenceNumber } from "@/lib/repos/firm-settings";
-import { postTrustLedgerGl } from "@/lib/gl/posting-trust";
+import { postTrustLedgerGl, reverseTrustLedgerGl } from "@/lib/gl/posting-trust";
 
 export async function listTrustAccounts(firmId: string, activeOnly = true) {
   const db = getDb();
@@ -138,6 +139,15 @@ export async function getClientTrustBalance(
     .from(trustLedgerEntries)
     .where(and(...conditions));
   return rows[0]?.total ?? 0;
+}
+
+export async function getTrustLedgerEntry(firmId: string, id: string) {
+  const rows = await getDb()
+    .select()
+    .from(trustLedgerEntries)
+    .where(and(eq(trustLedgerEntries.firmId, firmId), eq(trustLedgerEntries.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function listTrustLedger(
@@ -361,75 +371,172 @@ export async function getTrustOverview(firmId: string): Promise<TrustOverview> {
   };
 }
 
+type TrustEntryRow = typeof trustLedgerEntries.$inferSelect;
+
+/** Client must belong to the firm; a matter, when given, must belong to that client. */
+export async function assertTrustClientMatter(
+  firmId: string,
+  clientId: string,
+  matterId: string | null | undefined,
+) {
+  const db = getDb();
+  const c = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(eq(clients.firmId, firmId), eq(clients.id, clientId)))
+    .limit(1);
+  if (!c[0]) throw new AuthError("validation", "Client not found in this firm.");
+  if (!matterId) return;
+  const m = await db
+    .select({ clientId: matters.clientId })
+    .from(matters)
+    .where(and(eq(matters.firmId, firmId), eq(matters.id, matterId)))
+    .limit(1);
+  if (!m[0]) throw new AuthError("validation", "Matter not found in this firm.");
+  if (m[0].clientId !== clientId) {
+    throw new AuthError(
+      "validation",
+      "That matter belongs to a different client. Trust money cannot be posted across clients.",
+    );
+  }
+}
+
+/** Serialise all movements on one client's trust funds for the current transaction. */
+export async function lockClientTrust(firmId: string, clientId: string) {
+  await lockFinanceKey(`trust:${firmId}:${clientId}`);
+}
+
+function overrideAuthorised(input: TrustLedgerInput) {
+  return Boolean(input.allowNegative && input.authorisedBy && input.overrideReason);
+}
+
+async function assertClientCanFund(
+  firmId: string,
+  input: TrustLedgerInput,
+  debitCents: number,
+  trustAccountId: string,
+) {
+  if (debitCents <= 0 || overrideAuthorised(input)) return;
+  const bal = await getClientTrustBalance(firmId, input.clientId!, { trustAccountId });
+  if (bal - debitCents < 0) {
+    throw new AuthError(
+      "validation",
+      `Insufficient client trust funds on this account (available ${bal}, required ${debitCents}). ` +
+        "Only the Managing Partner can authorise an overdraw, with a reason.",
+    );
+  }
+}
+
+async function findByIdempotencyKey(firmId: string, key: string) {
+  const db = getDb();
+  const first = await db
+    .select()
+    .from(trustLedgerEntries)
+    .where(and(eq(trustLedgerEntries.firmId, firmId), eq(trustLedgerEntries.idempotencyKey, key)))
+    .limit(1);
+  const row = first[0];
+  if (!row) return null;
+  if (!row.transferGroupId) return [row];
+  return db
+    .select()
+    .from(trustLedgerEntries)
+    .where(
+      and(
+        eq(trustLedgerEntries.firmId, firmId),
+        eq(trustLedgerEntries.transferGroupId, row.transferGroupId),
+      ),
+    )
+    .orderBy(asc(trustLedgerEntries.amountCents));
+}
+
+function linkFields(input: TrustLedgerInput) {
+  return {
+    sourceType: input.sourceType ?? null,
+    sourceId: input.sourceId ?? null,
+    invoiceId: input.invoiceId ?? null,
+    requisitionId: input.requisitionId ?? null,
+    intakeId: input.intakeId ?? null,
+    authorisedBy: overrideAuthorised(input) ? input.authorisedBy! : null,
+    authorisationNote: overrideAuthorised(input) ? input.overrideReason! : null,
+  };
+}
+
 export async function postTrustLedgerEntry(
   firmId: string,
   userId: string,
   input: TrustLedgerInput,
-) {
-  const account = await getTrustAccount(firmId, input.trustAccountId);
-  if (!account || !account.isActive) {
-    throw new AuthError("validation", "Active trust account not found.");
-  }
-
-  if (input.entryType === "transfer") {
-    return postTransfer(firmId, userId, input, account.currency);
-  }
-
-  const signed = signedTrustAmount(
-    input.entryType,
-    input.amountCents,
-    input.adjustmentCredit,
-  );
-
-  if (input.clientId && signed < 0 && !input.allowNegative) {
-    const bal = await getClientTrustBalance(firmId, input.clientId, {
-      trustAccountId: input.trustAccountId,
-    });
-    if (bal + signed < 0) {
+): Promise<{ entries: TrustEntryRow[]; replayed?: boolean }> {
+  return runInTransaction(async () => {
+    if (!input.clientId) {
       throw new AuthError(
         "validation",
-        `This would make the client trust balance negative (${bal} + ${signed}). Set allowNegative to override (audited).`,
+        "Client is required. Trust money is always held for a named client.",
       );
     }
-  }
+    if (input.idempotencyKey) {
+      const prior = await findByIdempotencyKey(firmId, input.idempotencyKey);
+      if (prior) return { entries: prior, replayed: true };
+    }
 
-  const db = getDb();
+    const account = await getTrustAccount(firmId, input.trustAccountId);
+    if (!account || !account.isActive) {
+      throw new AuthError("validation", "Active trust account not found.");
+    }
+    if (input.currency && input.currency !== account.currency) {
+      throw new AuthError(
+        "validation",
+        `Currency ${input.currency} does not match the trust account currency ${account.currency}.`,
+      );
+    }
+    await assertTrustClientMatter(firmId, input.clientId, input.matterId);
+    await lockClientTrust(firmId, input.clientId);
 
-  let referenceNumber = input.referenceNumber ?? input.reference;
-  if (
-    (input.entryType === "receipt" || input.entryType === "disbursement") &&
-    !referenceNumber
-  ) {
-    referenceNumber = await allocateTrustReferenceNumber(firmId);
-  }
-  const reference = input.reference ?? referenceNumber;
+    if (input.entryType === "transfer") {
+      return postTransfer(firmId, userId, input, account.currency);
+    }
 
-  const rows = await db
-    .insert(trustLedgerEntries)
-    .values({
-      firmId,
-      trustAccountId: input.trustAccountId,
-      matterId: input.matterId,
-      clientId: input.clientId,
-      entryType: input.entryType,
-      amountCents: signed,
-      currency: input.currency || account.currency,
-      occurredAt: input.occurredAt,
-      reference,
-      referenceNumber,
-      narrative: input.narrative,
-      createdBy: userId,
-    })
-    .returning();
+    const signed = signedTrustAmount(
+      input.entryType,
+      input.amountCents,
+      input.adjustmentCredit,
+    );
+    await assertClientCanFund(firmId, input, signed < 0 ? -signed : 0, input.trustAccountId);
 
-  if (
-    (input.entryType === "receipt" || input.entryType === "disbursement") &&
-    !input.skipGl
-  ) {
-    await postTrustLedgerGl(firmId, userId, rows[0]!.id);
-  }
+    let referenceNumber = input.referenceNumber ?? input.reference;
+    if (
+      (input.entryType === "receipt" || input.entryType === "disbursement") &&
+      !referenceNumber
+    ) {
+      referenceNumber = await allocateTrustReferenceNumber(firmId);
+    }
+    const reference = input.reference ?? referenceNumber;
 
-  return { entries: [rows[0]!] };
+    const rows = await getDb()
+      .insert(trustLedgerEntries)
+      .values({
+        firmId,
+        trustAccountId: input.trustAccountId,
+        matterId: input.matterId,
+        clientId: input.clientId,
+        entryType: input.entryType,
+        amountCents: signed,
+        currency: account.currency,
+        occurredAt: input.occurredAt,
+        reference,
+        referenceNumber,
+        narrative: input.narrative,
+        idempotencyKey: input.idempotencyKey ?? null,
+        ...linkFields(input),
+        createdBy: userId,
+      })
+      .returning();
+
+    if (!input.skipGl) {
+      await postTrustLedgerGl(firmId, userId, rows[0]!.id);
+    }
+
+    return { entries: [rows[0]!] };
+  });
 }
 
 async function postTransfer(
@@ -442,22 +549,19 @@ async function postTransfer(
   if (!toAccount || !toAccount.isActive) {
     throw new AuthError("validation", "Destination trust account not found.");
   }
-
-  if (input.clientId && !input.allowNegative) {
-    const bal = await getClientTrustBalance(firmId, input.clientId, {
-      trustAccountId: input.trustAccountId,
-    });
-    if (bal - input.amountCents < 0) {
-      throw new AuthError(
-        "validation",
-        `Transfer would make the client trust balance negative on the source account. Set allowNegative to override (audited).`,
-      );
-    }
+  if (toAccount.currency !== fromCurrency) {
+    throw new AuthError(
+      "validation",
+      "Trust transfers must be between accounts of the same currency.",
+    );
   }
+
+  await assertClientCanFund(firmId, input, input.amountCents, input.trustAccountId);
 
   const narrative =
     input.narrative ||
     `Transfer ${input.amountCents} between trust accounts`;
+  const transferGroupId = randomUUID();
 
   const db = getDb();
   const outRows = await db
@@ -469,10 +573,13 @@ async function postTransfer(
       clientId: input.clientId,
       entryType: "transfer",
       amountCents: -input.amountCents,
-      currency: input.currency || fromCurrency,
+      currency: fromCurrency,
       occurredAt: input.occurredAt,
       reference: input.reference,
       narrative: `${narrative} (out)`,
+      transferGroupId,
+      idempotencyKey: input.idempotencyKey ?? null,
+      ...linkFields(input),
       createdBy: userId,
     })
     .returning();
@@ -486,15 +593,231 @@ async function postTransfer(
       clientId: input.clientId,
       entryType: "transfer",
       amountCents: input.amountCents,
-      currency: input.currency || toAccount.currency,
+      currency: toAccount.currency,
       occurredAt: input.occurredAt,
       reference: input.reference,
       narrative: `${narrative} (in)`,
+      transferGroupId,
+      ...linkFields(input),
       createdBy: userId,
     })
     .returning();
 
   return { entries: [outRows[0]!, inRows[0]!] };
+}
+
+export type ClientTransferInput = {
+  trustAccountId: string;
+  fromClientId: string;
+  fromMatterId: string | null;
+  toClientId: string;
+  toMatterId: string | null;
+  amountCents: number;
+  occurredAt: Date;
+  reason: string;
+  reference: string | null;
+  idempotencyKey: string | null;
+};
+
+/**
+ * Explicit, authorised movement of trust money from one client to another
+ * (e.g. on the written instruction of the paying client). Never implicit.
+ */
+export async function postClientToClientTransfer(
+  firmId: string,
+  actor: { id: string; isManagingPartner: boolean },
+  input: ClientTransferInput,
+) {
+  if (!actor.isManagingPartner) {
+    throw new AuthError(
+      "forbidden",
+      "Only the Managing Partner can authorise moving trust money between clients.",
+    );
+  }
+  if (!input.reason.trim()) {
+    throw new AuthError("validation", "A reason (client instruction) is required.");
+  }
+  if (input.fromClientId === input.toClientId) {
+    throw new AuthError("validation", "Source and destination clients must differ.");
+  }
+  return runInTransaction(async () => {
+    if (input.idempotencyKey) {
+      const prior = await findByIdempotencyKey(firmId, input.idempotencyKey);
+      if (prior) return { entries: prior, replayed: true };
+    }
+    const account = await getTrustAccount(firmId, input.trustAccountId);
+    if (!account || !account.isActive) {
+      throw new AuthError("validation", "Active trust account not found.");
+    }
+    await assertTrustClientMatter(firmId, input.fromClientId, input.fromMatterId);
+    await assertTrustClientMatter(firmId, input.toClientId, input.toMatterId);
+    const [first, second] = [input.fromClientId, input.toClientId].sort();
+    await lockClientTrust(firmId, first!);
+    await lockClientTrust(firmId, second!);
+
+    const bal = await getClientTrustBalance(firmId, input.fromClientId, {
+      trustAccountId: input.trustAccountId,
+    });
+    if (bal < input.amountCents) {
+      throw new AuthError(
+        "validation",
+        `Insufficient trust funds for the paying client (available ${bal}, required ${input.amountCents}).`,
+      );
+    }
+
+    const transferGroupId = randomUUID();
+    const base = {
+      firmId,
+      trustAccountId: input.trustAccountId,
+      entryType: "transfer",
+      currency: account.currency,
+      occurredAt: input.occurredAt,
+      reference: input.reference,
+      sourceType: "client_transfer",
+      sourceId: transferGroupId,
+      transferGroupId,
+      authorisedBy: actor.id,
+      authorisationNote: input.reason.trim(),
+      createdBy: actor.id,
+    };
+    const db = getDb();
+    const out = await db
+      .insert(trustLedgerEntries)
+      .values({
+        ...base,
+        clientId: input.fromClientId,
+        matterId: input.fromMatterId,
+        counterpartyClientId: input.toClientId,
+        amountCents: -input.amountCents,
+        narrative: `Client to client transfer (out): ${input.reason.trim()}`,
+        idempotencyKey: input.idempotencyKey,
+      })
+      .returning();
+    const inn = await db
+      .insert(trustLedgerEntries)
+      .values({
+        ...base,
+        clientId: input.toClientId,
+        matterId: input.toMatterId,
+        counterpartyClientId: input.fromClientId,
+        amountCents: input.amountCents,
+        narrative: `Client to client transfer (in): ${input.reason.trim()}`,
+      })
+      .returning();
+    return { entries: [out[0]!, inn[0]!] };
+  });
+}
+
+/**
+ * Reverse a manual trust posting with a contra row. The original stays on the
+ * ledger, linked both ways; transfers reverse every leg together.
+ */
+export async function reverseTrustEntry(
+  firmId: string,
+  actor: { id: string; isManagingPartner: boolean },
+  entryId: string,
+  reason: string,
+  opts?: { fromSource?: boolean },
+) {
+  if (!reason.trim()) {
+    throw new AuthError("validation", "A reason is required to reverse a trust entry.");
+  }
+  return runInTransaction(async () => {
+    const db = getDb();
+    const found = await db
+      .select()
+      .from(trustLedgerEntries)
+      .where(and(eq(trustLedgerEntries.firmId, firmId), eq(trustLedgerEntries.id, entryId)))
+      .limit(1);
+    const original = found[0];
+    if (!original) throw new AuthError("not_found", "Trust entry not found.");
+    if (original.reversalOfId) {
+      throw new AuthError("validation", "This entry is itself a reversal and cannot be reversed.");
+    }
+    if (
+      !opts?.fromSource &&
+      original.sourceType &&
+      !["manual", "client_transfer", "vault_bank_in"].includes(original.sourceType)
+    ) {
+      throw new AuthError(
+        "validation",
+        `This entry was created by a ${original.sourceType.replace("_", " ")}. Reverse it from that record so all linked postings reverse together.`,
+      );
+    }
+    if (original.sourceType === "client_transfer" && !actor.isManagingPartner) {
+      throw new AuthError("forbidden", "Only the Managing Partner can reverse a client to client transfer.");
+    }
+
+    const legs = original.transferGroupId
+      ? await db
+          .select()
+          .from(trustLedgerEntries)
+          .where(
+            and(
+              eq(trustLedgerEntries.firmId, firmId),
+              eq(trustLedgerEntries.transferGroupId, original.transferGroupId),
+            ),
+          )
+      : [original];
+    if (legs.some((l) => l.reversedById)) {
+      throw new AuthError("validation", "This entry has already been reversed.");
+    }
+
+    const clientIds = [...new Set(legs.map((l) => l.clientId).filter(Boolean) as string[])].sort();
+    for (const c of clientIds) await lockClientTrust(firmId, c);
+
+    for (const leg of legs) {
+      if (leg.amountCents > 0 && leg.clientId) {
+        const bal = await getClientTrustBalance(firmId, leg.clientId, {
+          trustAccountId: leg.trustAccountId,
+        });
+        if (bal - leg.amountCents < 0) {
+          throw new AuthError(
+            "validation",
+            `Reversal would make the client trust balance negative (available ${bal}, reversing ${leg.amountCents}). The funds have already been used.`,
+          );
+        }
+      }
+    }
+
+    const reversalGroupId = original.transferGroupId ? randomUUID() : null;
+    const contras: TrustEntryRow[] = [];
+    for (const leg of legs) {
+      const [contra] = await db
+        .insert(trustLedgerEntries)
+        .values({
+          firmId,
+          trustAccountId: leg.trustAccountId,
+          matterId: leg.matterId,
+          clientId: leg.clientId,
+          entryType: leg.entryType,
+          amountCents: -leg.amountCents,
+          currency: leg.currency,
+          occurredAt: new Date(),
+          reference: leg.reference,
+          referenceNumber: leg.referenceNumber ? `${leg.referenceNumber}-REV` : null,
+          narrative: `Reversal of ${leg.referenceNumber ?? leg.id.slice(0, 8)}: ${reason.trim()}`,
+          sourceType: "reversal",
+          sourceId: leg.id,
+          invoiceId: leg.invoiceId,
+          requisitionId: leg.requisitionId,
+          intakeId: leg.intakeId,
+          transferGroupId: reversalGroupId,
+          counterpartyClientId: leg.counterpartyClientId,
+          reversalOfId: leg.id,
+          reversalReason: reason.trim(),
+          createdBy: actor.id,
+        })
+        .returning();
+      await db
+        .update(trustLedgerEntries)
+        .set({ reversedById: contra!.id, reversalReason: reason.trim() })
+        .where(and(eq(trustLedgerEntries.firmId, firmId), eq(trustLedgerEntries.id, leg.id)));
+      await reverseTrustLedgerGl(firmId, actor.id, leg.id, contra!.id);
+      contras.push(contra!);
+    }
+    return { original: legs, reversals: contras };
+  });
 }
 
 /** Client portions held in vault (non-zero balances on vault accounts). */
@@ -582,40 +905,45 @@ export async function bankVaultCash(
     input.narrative?.trim() ||
     "Vault cash banked into master trust bank";
 
-  const transferResult = await postTrustLedgerEntry(firmId, userId, {
-    trustAccountId: input.vaultAccountId,
-    transferToAccountId: input.bankAccountId,
-    clientId: input.clientId,
-    matterId: input.matterId,
-    entryType: "transfer",
-    amountCents: input.amountCents,
-    currency: input.currency || vault.currency,
-    occurredAt: input.occurredAt,
-    reference: input.reference,
-    referenceNumber: null,
-    narrative,
-    adjustmentCredit: true,
-    allowNegative: input.allowNegative,
-  });
-
-  const db = getDb();
-  const bankInRows = await db
-    .insert(trustVaultBankIns)
-    .values({
-      firmId,
-      vaultAccountId: input.vaultAccountId,
-      bankAccountId: input.bankAccountId,
+  return runInTransaction(async () => {
+    const transferResult = await postTrustLedgerEntry(firmId, userId, {
+      trustAccountId: input.vaultAccountId,
+      transferToAccountId: input.bankAccountId,
       clientId: input.clientId,
+      matterId: input.matterId,
+      entryType: "transfer",
       amountCents: input.amountCents,
       currency: input.currency || vault.currency,
       occurredAt: input.occurredAt,
       reference: input.reference,
+      referenceNumber: null,
       narrative,
-      createdBy: userId,
-    })
-    .returning();
+      adjustmentCredit: true,
+      allowNegative: input.allowNegative,
+      overrideReason: input.overrideReason ?? null,
+      authorisedBy: input.authorisedBy ?? null,
+      sourceType: "vault_bank_in",
+    });
 
-  return { bankIn: bankInRows[0]!, entries: transferResult.entries };
+    const db = getDb();
+    const bankInRows = await db
+      .insert(trustVaultBankIns)
+      .values({
+        firmId,
+        vaultAccountId: input.vaultAccountId,
+        bankAccountId: input.bankAccountId,
+        clientId: input.clientId,
+        amountCents: input.amountCents,
+        currency: input.currency || vault.currency,
+        occurredAt: input.occurredAt,
+        reference: input.reference,
+        narrative,
+        createdBy: userId,
+      })
+      .returning();
+
+    return { bankIn: bankInRows[0]!, entries: transferResult.entries };
+  });
 }
 
 export async function recordVaultCount(

@@ -3,15 +3,17 @@
  */
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
-import { getDb } from "@/lib/db";
+import { getDb, runInTransaction } from "@/lib/db";
 import {
   businessCashbookEntries,
   feePayments,
+  financeRequisitions,
   firmExpenses,
   matters,
 } from "@/lib/db/schema";
 import type { CashbookEntryInput, ExpenseInput } from "@/lib/finance/firm-finance-validation";
 import { resolveExpenseGlAccountId } from "@/lib/finance/expense-gl-tree";
+import { reverseJournalBySource } from "@/lib/gl/journals";
 import { postFirmExpenseGl } from "@/lib/gl/posting-expenses";
 
 export async function listFirmExpenses(
@@ -86,43 +88,115 @@ export async function createFirmExpense(firmId: string, userId: string, input: E
   return expense;
 }
 
+async function assertExpenseNotFromRequisition(firmId: string, id: string) {
+  const linked = await getDb()
+    .select({ id: financeRequisitions.id })
+    .from(financeRequisitions)
+    .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.expenseId, id)))
+    .limit(1);
+  if (linked[0]) {
+    throw new AuthError(
+      "validation",
+      "This expense was paid through a requisition. Reverse the requisition payment instead.",
+    );
+  }
+}
+
+/** Edits re-post GL: the old journal is reversed and the corrected one posted. */
 export async function updateFirmExpense(
   firmId: string,
   id: string,
   input: ExpenseInput,
+  userId?: string,
 ) {
   const { assertPeriodNotLocked } = await import("@/lib/repos/period-locks");
   await assertPeriodNotLocked(firmId, input.expenseDate);
 
-  const db = getDb();
-  const rows = await db
-    .update(firmExpenses)
-    .set({
-      expenseDate: input.expenseDate,
-      category: input.category,
-      payee: input.payee,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      matterId: input.matterId,
-      paymentMethod: input.paymentMethod,
-      notes: input.notes,
-      glAccountId: input.glAccountId ?? undefined,
-      paymentSource: input.paymentSource,
-      budgetMonth: input.budgetMonth,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(firmExpenses.firmId, firmId), eq(firmExpenses.id, id)))
-    .returning();
-  return rows[0] ?? null;
+  return runInTransaction(async () => {
+    const before = await getFirmExpense(firmId, id);
+    if (!before) return null;
+    const moneyChanged =
+      before.expense.amountCents !== input.amountCents ||
+      before.expense.paymentSource !== input.paymentSource ||
+      before.expense.category !== input.category ||
+      (input.glAccountId != null && before.expense.glAccountId !== input.glAccountId) ||
+      before.expense.expenseDate.getTime() !== input.expenseDate.getTime();
+    if (moneyChanged) await assertExpenseNotFromRequisition(firmId, id);
+
+    const db = getDb();
+    const rows = await db
+      .update(firmExpenses)
+      .set({
+        expenseDate: input.expenseDate,
+        category: input.category,
+        payee: input.payee,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        matterId: input.matterId,
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+        glAccountId: input.glAccountId ?? undefined,
+        paymentSource: input.paymentSource,
+        budgetMonth: input.budgetMonth,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(firmExpenses.firmId, firmId), eq(firmExpenses.id, id)))
+      .returning();
+    const updated = rows[0] ?? null;
+    const actor = userId ?? before.expense.createdBy;
+    if (updated && moneyChanged && actor) {
+      await reverseJournalBySource(firmId, actor, "expense", id, `Expense corrected: ${updated.payee}`);
+      if (updated.paymentSource !== "ap") await postFirmExpenseGl(firmId, actor, id);
+    }
+    return updated;
+  });
 }
 
-export async function deleteFirmExpense(firmId: string, id: string) {
-  const db = getDb();
-  const rows = await db
-    .delete(firmExpenses)
-    .where(and(eq(firmExpenses.firmId, firmId), eq(firmExpenses.id, id)))
-    .returning();
-  return rows[0] ?? null;
+/** Deleting an expense also reverses its GL posting so the books stay balanced. */
+export async function deleteFirmExpense(firmId: string, id: string, userId?: string) {
+  return runInTransaction(async () => {
+    await assertExpenseNotFromRequisition(firmId, id);
+    const before = await getFirmExpense(firmId, id);
+    if (!before) return null;
+    const actor = userId ?? before.expense.createdBy;
+    if (actor) {
+      await reverseJournalBySource(firmId, actor, "expense", id, `Expense deleted: ${before.expense.payee}`);
+    }
+    const rows = await getDb()
+      .delete(firmExpenses)
+      .where(and(eq(firmExpenses.firmId, firmId), eq(firmExpenses.id, id)))
+      .returning();
+    return rows[0] ?? null;
+  });
+}
+
+/** Contra expense row plus GL reversal; the original expense stays on record. */
+export async function reverseFirmExpense(
+  firmId: string,
+  userId: string,
+  id: string,
+  reason: string,
+) {
+  const before = await getFirmExpense(firmId, id);
+  if (!before) throw new AuthError("not_found", "Expense not found.");
+  const e = before.expense;
+  await getDb().insert(firmExpenses).values({
+    firmId,
+    expenseDate: new Date(),
+    category: e.category,
+    payee: e.payee,
+    amountCents: -e.amountCents,
+    currency: e.currency,
+    matterId: e.matterId,
+    paymentMethod: e.paymentMethod,
+    notes: `Reversal of expense ${id.slice(0, 8)}: ${reason.trim()}`,
+    glAccountId: e.glAccountId,
+    paymentSource: e.paymentSource,
+    budgetMonth: e.budgetMonth,
+    createdBy: userId,
+    updatedAt: new Date(),
+  });
+  await reverseJournalBySource(firmId, userId, "expense", id, `Expense reversal: ${reason.trim()}`);
 }
 
 export async function listCashbookEntries(

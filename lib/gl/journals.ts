@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { glJournalEntries, glJournalLines, glAccounts, users } from "@/lib/db/schema";
@@ -174,6 +174,62 @@ export async function postManualJournal(
 
     return entry;
   });
+}
+
+/**
+ * Reverse the live journal for a source document with an equal and opposite entry.
+ * The original stays posted and points to its reversal; returns null when nothing is posted.
+ */
+export async function reverseJournalBySource(
+  firmId: string,
+  userId: string,
+  sourceType: GlSourceType,
+  sourceId: string,
+  memo: string,
+) {
+  const db = getDb();
+  const found = await db
+    .select()
+    .from(glJournalEntries)
+    .where(
+      and(
+        eq(glJournalEntries.firmId, firmId),
+        eq(glJournalEntries.sourceType, sourceType),
+        eq(glJournalEntries.sourceId, sourceId),
+        isNull(glJournalEntries.reversedByEntryId),
+      ),
+    )
+    .limit(1);
+  const original = found[0];
+  if (!original) return null;
+  const full = await getJournalEntry(firmId, original.id);
+  if (!full) return null;
+
+  const reversal = await postManualJournal(
+    firmId,
+    userId,
+    {
+      entryDate: new Date(),
+      reference: original.reference ? `REV ${original.reference}`.slice(0, 60) : "REV",
+      memo,
+      lines: full.lines.map(({ line }) => ({
+        accountId: line.accountId,
+        debitCents: line.creditCents,
+        creditCents: line.debitCents,
+        matterId: line.matterId,
+        clientId: line.clientId,
+        currency: line.currency,
+        lineMemo: line.lineMemo ? `Reversal: ${line.lineMemo}` : "Reversal",
+      })),
+    },
+    sourceType,
+    `${sourceId}:rev:${original.id.slice(0, 8)}`,
+  );
+  await db
+    .update(glJournalEntries)
+    .set({ reversedByEntryId: reversal.id })
+    .where(and(eq(glJournalEntries.firmId, firmId), eq(glJournalEntries.id, original.id)));
+  return reversal;
 }
 
 export function parseManualJournalInput(body: unknown, defaultCurrency: string): ManualJournalInput {

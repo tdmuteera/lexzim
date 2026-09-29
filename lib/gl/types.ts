@@ -15,6 +15,7 @@ export type GlSourceType =
   | "payment"
   | "payment_intake"
   | "trust"
+  | "trust_fee"
   | "expense"
   | "quote"
   | "opening";

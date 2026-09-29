@@ -8,6 +8,7 @@ import {
   getRequisition,
   payRequisition,
   rejectRequisition,
+  reverseRequisitionPayment,
   settleRecoverableRequisition,
   submitRequisition,
 } from "@/lib/repos/requisitions";
@@ -34,6 +35,9 @@ function serialize(row: NonNullable<Awaited<ReturnType<typeof getRequisition>>>)
     recoverable: row.recoverable,
     expenseId: row.expenseId,
     disbursementId: row.disbursementId,
+    trustEntryId: row.trustEntryId,
+    reversedAt: row.reversedAt ? row.reversedAt.toISOString() : null,
+    reversalReason: row.reversalReason,
     rejectionNote: row.rejectionNote,
     statusUpdatedAt: row.updatedAt.toISOString(),
   };
@@ -43,7 +47,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { action, rejectionNote, pay } = parseRequisitionAction(body);
+    const { action, rejectionNote, pay, reason } = parseRequisitionAction(body);
 
     let session;
     if (action === "submit" || action === "cancel") {
@@ -74,6 +78,10 @@ export async function POST(request: Request, context: RouteContext) {
       result = await cancelRequisition(firmId, session.id, id);
     } else if (action === "settle_recoverable") {
       result = await settleRecoverableRequisition(firmId, session.id, id);
+    } else if (action === "reverse_payment") {
+      result = await reverseRequisitionPayment(firmId, session.id, id, reason ?? "", {
+        isManagingPartner: isMp,
+      });
     } else {
       if (!pay) throw new AuthError("validation", "Pay payload required.");
       const paid = await payRequisition(firmId, session.id, id, pay, {
@@ -98,7 +106,11 @@ export async function POST(request: Request, context: RouteContext) {
         amountCents: result.amountCents,
         paidFrom: result.paidFrom,
         recoverable: result.recoverable,
+        trustEntryId: result.trustEntryId,
         rejectionNote,
+        reason,
+        allowNegativeTrust: pay?.allowNegativeTrust ?? false,
+        overrideReason: pay?.overrideReason ?? null,
       },
       ipOrUserAgent: clientInfo(request),
     });

@@ -1,5 +1,8 @@
 import "server-only";
 
+import { and, eq } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { feePayments, invoices } from "@/lib/db/schema";
 import {
   AR_AGING_BUCKETS,
   type ArAgingBucket,
@@ -409,11 +412,36 @@ export function isExportKind(value: string): value is ExportKind {
   return (EXPORT_KINDS as readonly string[]).includes(value);
 }
 
+/** Invoice and receipt documents carry matter data, so the matter-access rule applies. */
+async function assertExportMatterAccess(kind: ExportKind, ctx: ExportContext) {
+  if (kind !== "invoice" && kind !== "receipt") return;
+  const id = ctx.searchParams.get("id")?.trim();
+  if (!id) return;
+  let invoiceId = id;
+  if (kind === "receipt") {
+    const rows = await getDb()
+      .select({ invoiceId: feePayments.invoiceId })
+      .from(feePayments)
+      .where(and(eq(feePayments.firmId, ctx.firmId), eq(feePayments.id, id)))
+      .limit(1);
+    if (!rows[0]) throw new AuthError("not_found", "Receipt not found.");
+    invoiceId = rows[0].invoiceId;
+  }
+  const inv = await getDb()
+    .select({ matterId: invoices.matterId })
+    .from(invoices)
+    .where(and(eq(invoices.firmId, ctx.firmId), eq(invoices.id, invoiceId)))
+    .limit(1);
+  if (!inv[0]) throw new AuthError("not_found", "Invoice not found.");
+  await assertInvoiceMatterAccess(ctx.session, ctx.firmId, inv[0].matterId);
+}
+
 export async function renderExport(
   kind: ExportKind,
   format: ExportFormat,
   ctx: ExportContext,
 ): Promise<{ bytes: Buffer; filenameBase: string }> {
+  await assertExportMatterAccess(kind, ctx);
   const def = EXPORT_REGISTRY[kind];
   const branding = await getFirmExportBranding(ctx.firmId);
 

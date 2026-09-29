@@ -6,13 +6,15 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { clientDisplayName } from "@/lib/clients/display";
-import { getDb } from "@/lib/db";
+import { getDb, lockFinanceKey, runInTransaction } from "@/lib/db";
 import {
   clients,
+  disbursements,
   financeRequisitions,
   matters,
   users,
 } from "@/lib/db/schema";
+import { reverseJournalBySource } from "@/lib/gl/journals";
 import { requisitionApprovalTier } from "@/lib/finance/requisition-constants";
 import { evaluateTrustShortfallForFirm } from "@/lib/finance/trust-shortfall-policy";
 import type {
@@ -25,12 +27,15 @@ import { isExpenseCategoryOrGlCode } from "@/lib/finance/expense-gl-tree";
 import { listUsersWithPermissionCode } from "@/lib/hr/approver-users";
 import { createStaffNotification } from "@/lib/notifications/staff";
 import { createDisbursement } from "@/lib/repos/billing";
-import { createFirmExpense } from "@/lib/repos/firm-finance";
+import { createFirmExpense, reverseFirmExpense } from "@/lib/repos/firm-finance";
 import {
+  assertTrustClientMatter,
   getClientTrustBalance,
   getTrustAccount,
   listTrustAccounts,
+  lockClientTrust,
   postTrustLedgerEntry,
+  reverseTrustEntry,
 } from "@/lib/repos/trust";
 
 export type RequisitionListFilters = {
@@ -457,6 +462,48 @@ export async function payRequisition(
   input: RequisitionPayInput,
   opts: { isManagingPartner: boolean },
 ): Promise<PayRequisitionResult> {
+  const result = await runInTransaction(async () => {
+    await lockFinanceKey(`requisition:${firmId}:${id}`);
+    return payRequisitionTx(firmId, userId, id, input, opts);
+  });
+  await notifyRequester({
+    firmId,
+    requesterUserId: result.requisition.requestedBy,
+    actorUserId: userId,
+    requisitionId: id,
+    outcome: "paid",
+  });
+  return result;
+}
+
+async function markRequisitionPaid(
+  firmId: string,
+  id: string,
+  patch: Partial<typeof financeRequisitions.$inferInsert>,
+) {
+  const rows = await getDb()
+    .update(financeRequisitions)
+    .set({ ...patch, status: "paid", updatedAt: new Date() })
+    .where(
+      and(
+        eq(financeRequisitions.firmId, firmId),
+        eq(financeRequisitions.id, id),
+        eq(financeRequisitions.status, "approved"),
+      ),
+    )
+    .returning({ id: financeRequisitions.id });
+  if (!rows[0]) {
+    throw new AuthError("validation", "This requisition was already paid or changed by someone else.");
+  }
+}
+
+async function payRequisitionTx(
+  firmId: string,
+  userId: string,
+  id: string,
+  input: RequisitionPayInput,
+  opts: { isManagingPartner: boolean },
+): Promise<PayRequisitionResult> {
   const existing = await getRequisition(firmId, id);
   if (!existing) throw new AuthError("not_found", "Requisition not found.");
   if (existing.status !== "approved") {
@@ -464,7 +511,6 @@ export async function payRequisition(
   }
 
   let trustShortfallWarning: string | null = null;
-  let trustBalanceCents: number | null = null;
 
   if (existing.type === "business") {
     if (input.paidFrom !== "operating") {
@@ -497,59 +543,83 @@ export async function payRequisition(
       budgetMonth: null,
     });
 
-    const db = getDb();
-    await db
-      .update(financeRequisitions)
-      .set({
-        status: "paid",
-        paidAt: new Date(),
-        paidBy: userId,
-        paidFrom: "operating",
-        paymentRef: input.paymentRef,
-        recoverable: false,
-        expenseId: expense.id,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.id, id)));
+    await markRequisitionPaid(firmId, id, {
+      paidAt: new Date(),
+      paidBy: userId,
+      paidFrom: "operating",
+      paymentRef: input.paymentRef,
+      recoverable: false,
+      expenseId: expense.id,
+    });
   } else {
     if (!existing.clientId || !existing.matterId) {
       throw new AuthError("validation", "Disbursement requisition is missing client/matter.");
     }
-    trustBalanceCents = await getClientTrustBalance(firmId, existing.clientId, {
-      matterId: existing.matterId,
-    });
+    const clientId = existing.clientId;
+    const matterId = existing.matterId;
+    await assertTrustClientMatter(firmId, clientId, matterId);
 
-    let paidFrom = input.paidFrom;
+    const paidFrom = input.paidFrom;
     if (paidFrom === "operating") {
       throw new AuthError(
         "validation",
-        "Disbursement requisitions use trust or firm_float (not operating expense).",
+        "Disbursement requisitions use trust, firm_float or trust_then_float (not operating expense).",
       );
     }
+    await lockClientTrust(firmId, clientId);
 
+    let account: Awaited<ReturnType<typeof getTrustAccount>> | null = null;
+    if (paidFrom !== "firm_float") {
+      let trustAccountId = input.trustAccountId;
+      if (!trustAccountId) {
+        const accounts = await listTrustAccounts(firmId, true);
+        trustAccountId = (accounts.find((a) => a.accountKind === "bank") ?? accounts[0])?.id ?? null;
+      }
+      account = trustAccountId ? await getTrustAccount(firmId, trustAccountId) : null;
+      if (!account || !account.isActive) {
+        throw new AuthError("validation", "No active trust account available for payment.");
+      }
+    }
+    const trustBalanceCents = account
+      ? await getClientTrustBalance(firmId, clientId, { trustAccountId: account.id })
+      : await getClientTrustBalance(firmId, clientId);
     const shortfall = await evaluateTrustShortfallForFirm(
       firmId,
       existing.amountCents,
       trustBalanceCents,
     );
 
-    if (paidFrom === "trust" && shortfall.isShort) {
-      throw new AuthError(
-        "validation",
-        `${shortfall.message} Switch paidFrom to firm_float (if allowed) or top up trust.`,
-      );
+    const overdrawAuthorised =
+      input.allowNegativeTrust && opts.isManagingPartner && Boolean(input.overrideReason);
+    if (input.allowNegativeTrust && !opts.isManagingPartner) {
+      throw new AuthError("forbidden", "Only the Managing Partner can authorise a trust overdraw.");
+    }
+    if (input.allowNegativeTrust && !input.overrideReason) {
+      throw new AuthError("validation", "A reason is required to authorise a trust overdraw.");
     }
 
-    if (paidFrom === "firm_float") {
-      if (shortfall.isShort && !shortfall.allowFirmFloat) {
+    let trustPart = 0;
+    let floatPart = 0;
+    if (paidFrom === "trust") {
+      if (shortfall.isShort && !overdrawAuthorised) {
         throw new AuthError(
           "validation",
-          shortfall.message,
+          `${shortfall.message} Use trust_then_float or firm_float (if allowed), or top up trust.`,
         );
       }
-      if (shortfall.isShort) {
-        trustShortfallWarning = shortfall.message;
+      trustPart = existing.amountCents;
+    } else if (paidFrom === "firm_float") {
+      floatPart = existing.amountCents;
+    } else {
+      trustPart = Math.min(Math.max(trustBalanceCents, 0), existing.amountCents);
+      floatPart = existing.amountCents - trustPart;
+    }
+
+    if (floatPart > 0) {
+      if (shortfall.isShort && !shortfall.allowFirmFloat) {
+        throw new AuthError("validation", shortfall.message);
       }
+      if (shortfall.isShort) trustShortfallWarning = shortfall.message;
       const tier = requisitionApprovalTier({
         type: "disbursement",
         amountCents: existing.amountCents,
@@ -564,77 +634,157 @@ export async function payRequisition(
       }
     }
 
-    const disbursement = await createDisbursement(
-      firmId,
-      existing.matterId,
-      userId,
-      {
-        description: existing.description,
-        amountCents: existing.amountCents,
-        currency: existing.currency,
-        incurredAt: new Date(),
-        billable: true,
-        paidFrom: paidFrom === "trust" ? "trust" : "operating",
-      },
-    );
+    const db = getDb();
+    let trustEntryId: string | null = null;
+    let trustDisbursementId: string | null = null;
+    let floatDisbursementId: string | null = null;
 
-    if (paidFrom === "trust") {
-      let trustAccountId = input.trustAccountId;
-      if (!trustAccountId) {
-        const accounts = await listTrustAccounts(firmId, true);
-        const bank = accounts.find((a) => a.accountKind === "bank") ?? accounts[0];
-        trustAccountId = bank?.id ?? null;
-      }
-      if (!trustAccountId) {
-        throw new AuthError("validation", "No active trust account available for payment.");
-      }
-      const account = await getTrustAccount(firmId, trustAccountId);
-      if (!account || !account.isActive) {
-        throw new AuthError("validation", "Active trust account not found.");
-      }
-      await postTrustLedgerEntry(firmId, userId, {
-        trustAccountId,
-        matterId: existing.matterId,
-        clientId: existing.clientId,
+    if (trustPart > 0) {
+      const posted = await postTrustLedgerEntry(firmId, userId, {
+        trustAccountId: account!.id,
+        matterId,
+        clientId,
         entryType: "disbursement",
-        amountCents: existing.amountCents,
-        currency: existing.currency,
+        amountCents: trustPart,
+        currency: account!.currency,
         occurredAt: new Date(),
         reference: input.paymentRef,
         referenceNumber: null,
         narrative: `Requisition pay: ${existing.description}`,
         transferToAccountId: null,
         adjustmentCredit: false,
-        allowNegative: input.allowNegativeTrust,
+        allowNegative: overdrawAuthorised,
+        overrideReason: input.overrideReason,
+        authorisedBy: overdrawAuthorised ? userId : null,
+        sourceType: "requisition",
+        sourceId: id,
+        requisitionId: id,
       });
+      trustEntryId = posted.entries[0]!.id;
+      // Paid with the client's own money: recorded for the matter but not billed again.
+      const disb = await createDisbursement(
+        firmId,
+        matterId,
+        userId,
+        {
+          description: existing.description,
+          amountCents: trustPart,
+          currency: existing.currency,
+          incurredAt: new Date(),
+          billable: false,
+          paidFrom: "trust",
+        },
+        { trustPaidViaRequisition: true },
+      );
+      await db
+        .update(disbursements)
+        .set({ trustEntryId, requisitionId: id })
+        .where(eq(disbursements.id, disb.id));
+      trustDisbursementId = disb.id;
     }
 
-    const db = getDb();
-    await db
-      .update(financeRequisitions)
-      .set({
-        status: "paid",
-        paidAt: new Date(),
-        paidBy: userId,
-        paidFrom,
-        paymentRef: input.paymentRef,
-        recoverable: paidFrom === "firm_float",
-        disbursementId: disbursement.id,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.id, id)));
-  }
+    if (floatPart > 0) {
+      const disb = await createDisbursement(firmId, matterId, userId, {
+        description:
+          trustPart > 0 ? `${existing.description} (balance from firm float)` : existing.description,
+        amountCents: floatPart,
+        currency: existing.currency,
+        incurredAt: new Date(),
+        billable: true,
+        paidFrom: "operating",
+      });
+      await db
+        .update(disbursements)
+        .set({ requisitionId: id })
+        .where(eq(disbursements.id, disb.id));
+      floatDisbursementId = disb.id;
+    }
 
-  await notifyRequester({
-    firmId,
-    requesterUserId: existing.requestedBy,
-    actorUserId: userId,
-    requisitionId: id,
-    outcome: "paid",
-  });
+    await markRequisitionPaid(firmId, id, {
+      paidAt: new Date(),
+      paidBy: userId,
+      paidFrom,
+      paymentRef: input.paymentRef,
+      recoverable: floatPart > 0,
+      disbursementId: floatDisbursementId ?? trustDisbursementId,
+      trustEntryId,
+    });
+  }
 
   const requisition = await getRequisition(firmId, id);
   return { requisition: requisition!, trustShortfallWarning };
+}
+
+/**
+ * Reverse a paid requisition (payment returned, paid in error). Managing Partner only.
+ * Trust money goes back to the client, float advances and expenses are reversed in GL,
+ * and the requisition is marked reversed with the reason. Blocks once billed.
+ */
+export async function reverseRequisitionPayment(
+  firmId: string,
+  userId: string,
+  id: string,
+  reason: string,
+  opts: { isManagingPartner: boolean },
+) {
+  if (!opts.isManagingPartner) {
+    throw new AuthError("forbidden", "Only the Managing Partner can reverse a paid requisition.");
+  }
+  if (!reason.trim()) throw new AuthError("validation", "A reason is required.");
+  return runInTransaction(async () => {
+    await lockFinanceKey(`requisition:${firmId}:${id}`);
+    const existing = await getRequisition(firmId, id);
+    if (!existing) throw new AuthError("not_found", "Requisition not found.");
+    if (existing.status !== "paid") {
+      throw new AuthError("validation", "Only paid requisitions can be reversed.");
+    }
+    const db = getDb();
+    const linked = await db
+      .select()
+      .from(disbursements)
+      .where(and(eq(disbursements.firmId, firmId), eq(disbursements.requisitionId, id)));
+    if (linked.some((d) => d.invoiceId)) {
+      throw new AuthError(
+        "validation",
+        "This disbursement has already been billed. Reverse or credit the invoice first.",
+      );
+    }
+
+    if (existing.trustEntryId) {
+      await reverseTrustEntry(
+        firmId,
+        { id: userId, isManagingPartner: true },
+        existing.trustEntryId,
+        reason,
+        { fromSource: true },
+      );
+    }
+    for (const d of linked) {
+      if (d.billable) {
+        await reverseJournalBySource(firmId, userId, "expense", `disb-${d.id}`, `Requisition reversal: ${reason.trim()}`);
+      }
+      await db
+        .update(disbursements)
+        .set({ billable: false, description: `${d.description} [reversed: ${reason.trim()}]`.slice(0, 500) })
+        .where(eq(disbursements.id, d.id));
+    }
+    if (existing.expenseId) {
+      await reverseFirmExpense(firmId, userId, existing.expenseId, reason);
+    }
+
+    await db
+      .update(financeRequisitions)
+      .set({
+        status: "reversed",
+        recoverable: false,
+        reversedAt: new Date(),
+        reversedBy: userId,
+        reversalReason: reason.trim(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.id, id)));
+    return getRequisition(firmId, id);
+  });
 }
 
 export async function getRequisitionPayPreview(firmId: string, id: string) {

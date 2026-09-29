@@ -21,7 +21,7 @@ export type RequisitionApprovalTier = {
 export function requisitionApprovalTier(input: {
   type: "business" | "disbursement";
   amountCents: number;
-  paidFrom?: "trust" | "firm_float" | "operating" | null;
+  paidFrom?: "trust" | "firm_float" | "trust_then_float" | "operating" | null;
   trustBalanceCents?: number | null;
 }): RequisitionApprovalTier {
   if (input.type === "business") {
@@ -41,6 +41,16 @@ export function requisitionApprovalTier(input: {
     return {
       requiresManagingPartner: true,
       reason: "Firm float disbursements require Managing Partner approval.",
+    };
+  }
+  if (
+    input.paidFrom === "trust_then_float" &&
+    input.trustBalanceCents != null &&
+    input.amountCents > input.trustBalanceCents
+  ) {
+    return {
+      requiresManagingPartner: true,
+      reason: "Part of this disbursement is covered by firm float, which requires Managing Partner approval.",
     };
   }
   if (input.amountCents >= REQUISITION_DISBURSEMENT_MP_THRESHOLD_CENTS) {

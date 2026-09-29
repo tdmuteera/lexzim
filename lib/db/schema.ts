@@ -915,6 +915,8 @@ export const disbursements = pgTable(
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
     /** operating | trust */
     paidFrom: text("paid_from").notNull().default("operating"),
+    trustEntryId: uuid("trust_entry_id"),
+    requisitionId: uuid("requisition_id"),
     glPostedAt: timestamp("gl_posted_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1028,12 +1030,25 @@ export const feePayments = pgTable(
     reference: text("reference"),
     notes: text("notes"),
     receiptNumber: text("receipt_number"),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    matterId: uuid("matter_id").references(() => matters.id, { onDelete: "set null" }),
+    intakeId: uuid("intake_id"),
+    /** Set on a contra (negative) row that reverses another payment. */
+    reversalOfId: uuid("reversal_of_id").references((): AnyPgColumn => feePayments.id, {
+      onDelete: "restrict",
+    }),
+    reversedById: uuid("reversed_by_id").references((): AnyPgColumn => feePayments.id, {
+      onDelete: "set null",
+    }),
+    reversalReason: text("reversal_reason"),
+    idempotencyKey: text("idempotency_key"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     index("fee_payments_firm_id_idx").on(t.firmId),
     index("fee_payments_invoice_id_idx").on(t.invoiceId),
+    index("fee_payments_client_idx").on(t.firmId, t.clientId),
   ],
 );
 
@@ -1085,10 +1100,34 @@ export const trustLedgerEntries = pgTable(
     reference: text("reference"),
     referenceNumber: text("reference_number"),
     narrative: text("narrative"),
+    /** What produced this row: manual | intake | invoice_fee | requisition | disbursement | client_transfer | reversal */
+    sourceType: text("source_type"),
+    sourceId: text("source_id"),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+    requisitionId: uuid("requisition_id"),
+    intakeId: uuid("intake_id"),
+    /** Shared by the legs of one transfer (account to account or client to client). */
+    transferGroupId: uuid("transfer_group_id"),
+    counterpartyClientId: uuid("counterparty_client_id").references(() => clients.id, {
+      onDelete: "set null",
+    }),
+    reversalOfId: uuid("reversal_of_id").references((): AnyPgColumn => trustLedgerEntries.id, {
+      onDelete: "restrict",
+    }),
+    reversedById: uuid("reversed_by_id").references((): AnyPgColumn => trustLedgerEntries.id, {
+      onDelete: "set null",
+    }),
+    reversalReason: text("reversal_reason"),
+    authorisedBy: uuid("authorised_by").references(() => users.id, { onDelete: "set null" }),
+    authorisationNote: text("authorisation_note"),
+    idempotencyKey: text("idempotency_key"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    index("trust_ledger_client_idx").on(t.firmId, t.clientId),
+    index("trust_ledger_source_idx").on(t.firmId, t.sourceType, t.sourceId),
+    index("trust_ledger_transfer_group_idx").on(t.transferGroupId),
     index("trust_ledger_firm_id_idx").on(t.firmId),
     index("trust_ledger_account_idx").on(t.trustAccountId),
     index("trust_ledger_matter_id_idx").on(t.matterId),
@@ -2318,7 +2357,7 @@ export const glJournalEntries = pgTable(
     memo: text("memo"),
     /** manual | invoice | payment | trust | expense | quote | opening */
     sourceType: text("source_type").notNull().default("manual"),
-    sourceId: uuid("source_id"),
+    sourceId: text("source_id"),
     postedBy: uuid("posted_by")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -2647,6 +2686,9 @@ export const financePaymentIntakes = pgTable(
     reference: text("reference"),
     receiptNumber: text("receipt_number"),
     notes: text("notes"),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: uuid("reversed_by").references(() => users.id, { onDelete: "set null" }),
+    reversalReason: text("reversal_reason"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2730,6 +2772,10 @@ export const financeRequisitions = pgTable(
     disbursementId: uuid("disbursement_id").references(() => disbursements.id, {
       onDelete: "set null",
     }),
+    trustEntryId: uuid("trust_entry_id"),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: uuid("reversed_by").references(() => users.id, { onDelete: "set null" }),
+    reversalReason: text("reversal_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

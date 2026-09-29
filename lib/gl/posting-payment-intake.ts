@@ -9,68 +9,6 @@ import { ensureGlAccountByCode } from "@/lib/gl/accounts";
 import { postManualJournal } from "@/lib/gl/journals";
 
 /**
- * Recognise fee revenue from client trust after money is already in trust (Payments split).
- * Dr 2100 trust liability / Cr fee revenue. Does not move trust bank (1210).
- */
-export async function postFeeEarnedFromTrustGl(
-  firmId: string,
-  userId: string,
-  input: {
-    sourceId: string;
-    amountCents: number;
-    currency: string;
-    entryDate: Date;
-    reference: string;
-    feeCategory: FeeCategory;
-    clientId: string;
-    matterId: string | null;
-    memo?: string;
-  },
-) {
-  if (input.amountCents < 1) {
-    throw new AuthError("validation", "Fee amount must be positive.");
-  }
-
-  const trustLiability = await ensureGlAccountByCode(firmId, "2100");
-  const revenue = await ensureGlAccountByCode(
-    firmId,
-    feeCategoryGlCode(input.feeCategory),
-  );
-
-  return postManualJournal(
-    firmId,
-    userId,
-    {
-      entryDate: input.entryDate,
-      reference: input.reference,
-      memo: input.memo ?? `Fee from trust (${input.feeCategory})`,
-      lines: [
-        {
-          accountId: trustLiability.id,
-          debitCents: input.amountCents,
-          creditCents: 0,
-          clientId: input.clientId,
-          matterId: input.matterId,
-          currency: input.currency,
-          lineMemo: "Trust liability released to fees",
-        },
-        {
-          accountId: revenue.id,
-          debitCents: 0,
-          creditCents: input.amountCents,
-          clientId: input.clientId,
-          matterId: input.matterId,
-          currency: input.currency,
-          lineMemo: input.feeCategory,
-        },
-      ],
-    },
-    "payment_intake",
-    input.sourceId,
-  );
-}
-
-/**
  * Fees-only receipt with no invoice.
  * fee_bank → Dr 1010 Operating Bank / Cr fee revenue.
  * fee_vault → Dr 1020 Business Vault (fee cash on hand) / Cr fee revenue.

@@ -43,7 +43,10 @@ export async function GET(request: Request, context: RouteContext) {
     const { getRequireInvoiceApproval } = await import("@/lib/billing/invoice-approval");
     const requireInvoiceApproval = await getRequireInvoiceApproval(firmId);
 
-    const balanceCents = Math.max(0, full.invoice.totalCents - paidCents);
+    const balanceCents = Math.max(
+      0,
+      full.invoice.totalCents - paidCents - (full.invoice.retainerAppliedCents ?? 0),
+    );
 
     return jsonOk({
       invoice: serializeInvoice(full.invoice, {

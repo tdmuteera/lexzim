@@ -1,5 +1,7 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/lib/db/schema";
@@ -85,8 +87,46 @@ export function prepareDbRetry() {
   resetDbClient();
 }
 
-export function getDb() {
+function createDb() {
   return drizzle(getSql(), { schema });
 }
 
-export type Db = ReturnType<typeof getDb>;
+export type Db = ReturnType<typeof createDb>;
+
+type TxHolder = { tx: Db; open: boolean };
+const txStore = new AsyncLocalStorage<TxHolder>();
+
+function activeTx(): Db | null {
+  const holder = txStore.getStore();
+  return holder?.open ? holder.tx : null;
+}
+
+/** Inside runInTransaction every getDb() call joins the open transaction. */
+export function getDb(): Db {
+  return activeTx() ?? createDb();
+}
+
+/**
+ * Run fn in one database transaction. Nested calls reuse the outer transaction,
+ * so a money movement and its ledger and GL rows commit or roll back together.
+ * Work that outlives the transaction (fire-and-forget calls) falls back to the pool.
+ */
+export async function runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  if (activeTx()) return fn();
+  return createDb().transaction(async (tx) => {
+    const holder: TxHolder = { tx: tx as unknown as Db, open: true };
+    try {
+      return await txStore.run(holder, fn);
+    } finally {
+      holder.open = false;
+    }
+  });
+}
+
+/** Serialise concurrent money movements on one key (e.g. a client's trust funds). */
+export async function lockFinanceKey(key: string) {
+  if (!activeTx()) {
+    throw new Error("lockFinanceKey must run inside runInTransaction.");
+  }
+  await getDb().execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
+}

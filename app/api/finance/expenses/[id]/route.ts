@@ -61,7 +61,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       currency: session.firm.defaultCurrency || "USD",
     });
 
-    const expense = await updateFirmExpense(firmId, id, input);
+    const expense = await updateFirmExpense(firmId, id, input, session.id);
     if (!expense) throw new AuthError("not_found", "Expense not found.");
 
     await writeAuditLog({
@@ -87,7 +87,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const firmId = tenantFirmId(session);
     const { id } = await context.params;
 
-    const expense = await deleteFirmExpense(firmId, id);
+    const expense = await deleteFirmExpense(firmId, id, session.id);
     if (!expense) throw new AuthError("not_found", "Expense not found.");
 
     await writeAuditLog({

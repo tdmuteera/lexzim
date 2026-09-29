@@ -67,7 +67,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       currency: existing.currency || session.firm.defaultCurrency || "USD",
     });
 
-    const row = await updateDisbursement(firmId, id, input);
+    const row = await updateDisbursement(firmId, id, input, session.id);
     if (!row) {
       throw new AuthError("not_found", "Disbursement not found.");
     }
@@ -113,7 +113,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       throw new AuthError("forbidden", "You do not have access to this matter.");
     }
 
-    const deleted = await deleteDisbursement(firmId, id);
+    const deleted = await deleteDisbursement(firmId, id, session.id);
     if (!deleted) {
       throw new AuthError("not_found", "Disbursement not found.");
     }

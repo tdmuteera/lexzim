@@ -3,7 +3,7 @@ import { clientInfo, jsonError, jsonOk } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/types";
 import { clientDisplayName } from "@/lib/clients/display";
 import { serializeTrustLedgerEntry } from "@/lib/trust/serialize";
-import { parseTrustLedgerInput } from "@/lib/trust/validation";
+import { authoriseTrustOverride, parseTrustLedgerInput } from "@/lib/trust/validation";
 import { listTrustLedger, postTrustLedgerEntry } from "@/lib/repos/trust";
 import { userCanAccessMatter } from "@/lib/repos/matters";
 import { assertCanUse } from "@/lib/licensing/policy";
@@ -66,9 +66,12 @@ export async function POST(request: Request) {
     const firmId = tenantFirmId(session);
     await assertCanUse(firmId, "trust");
     const body = await request.json();
-    const input = parseTrustLedgerInput(body, {
-      currency: session.firm.defaultCurrency || "USD",
-    });
+    const input = authoriseTrustOverride(
+      parseTrustLedgerInput(body, {
+        currency: session.firm.defaultCurrency || "USD",
+      }),
+      { id: session.id, isManagingPartner: session.role.code === "managing_partner" },
+    );
 
     if (input.matterId) {
       const allowed = await userCanAccessMatter(
@@ -99,6 +102,9 @@ export async function POST(request: Request) {
         clientId: input.clientId,
         matterId: input.matterId,
         allowNegative: input.allowNegative,
+        overrideReason: input.overrideReason ?? null,
+        authorisedBy: input.authorisedBy ?? null,
+        replayed: result.replayed === true,
         note: "Trust ledger only. Not a fee payment.",
       },
       ipOrUserAgent: clientInfo(request),
@@ -107,8 +113,9 @@ export async function POST(request: Request) {
     return jsonOk(
       {
         entries: result.entries.map((e) => serializeTrustLedgerEntry(e)),
+        replayed: result.replayed === true,
       },
-      { status: 201 },
+      { status: result.replayed ? 200 : 201 },
     );
   } catch (err) {
     return jsonError(err, request);

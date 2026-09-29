@@ -11,10 +11,12 @@ export const REQUISITION_STATUSES = [
   "rejected",
   "paid",
   "cancelled",
+  "reversed",
 ] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
 
-export const REQUISITION_PAID_FROM = ["trust", "firm_float", "operating"] as const;
+/** trust_then_float: use the client's trust funds first and cover any shortfall from firm float. */
+export const REQUISITION_PAID_FROM = ["trust", "firm_float", "trust_then_float", "operating"] as const;
 export type RequisitionPaidFrom = (typeof REQUISITION_PAID_FROM)[number];
 
 export type RequisitionCreateInput = {
@@ -33,8 +35,10 @@ export type RequisitionPayInput = {
   paidFrom: RequisitionPaidFrom;
   paymentRef: string | null;
   trustAccountId: string | null;
-  /** Allow trust pay that would go negative (audited). Default false. */
+  /** Allow trust pay that would go negative. Managing Partner only, with overrideReason. */
   allowNegativeTrust: boolean;
+  overrideReason: string | null;
+  reason: string | null;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -133,7 +137,7 @@ export function parseRequisitionPayInput(body: unknown): RequisitionPayInput {
   ) {
     throw new AuthError(
       "validation",
-      "paidFrom must be trust, firm_float, or operating.",
+      "paidFrom must be trust, firm_float, trust_then_float, or operating.",
     );
   }
   return {
@@ -141,6 +145,8 @@ export function parseRequisitionPayInput(body: unknown): RequisitionPayInput {
     paymentRef: trimOrNull(raw.paymentRef),
     trustAccountId: trimOrNull(raw.trustAccountId),
     allowNegativeTrust: raw.allowNegativeTrust === true,
+    overrideReason: trimOrNull(raw.overrideReason),
+    reason: trimOrNull(raw.reason),
   };
 }
 
@@ -150,12 +156,14 @@ export type RequisitionAction =
   | "reject"
   | "pay"
   | "cancel"
-  | "settle_recoverable";
+  | "settle_recoverable"
+  | "reverse_payment";
 
 export function parseRequisitionAction(body: unknown): {
   action: RequisitionAction;
   rejectionNote: string | null;
   pay: RequisitionPayInput | null;
+  reason: string | null;
 } {
   if (!body || typeof body !== "object") {
     throw new AuthError("validation", "Invalid action payload.");
@@ -168,11 +176,12 @@ export function parseRequisitionAction(body: unknown): {
     action !== "reject" &&
     action !== "pay" &&
     action !== "cancel" &&
-    action !== "settle_recoverable"
+    action !== "settle_recoverable" &&
+    action !== "reverse_payment"
   ) {
     throw new AuthError(
       "validation",
-      "action must be submit, approve, reject, pay, cancel, or settle_recoverable.",
+      "action must be submit, approve, reject, pay, cancel, settle_recoverable, or reverse_payment.",
     );
   }
   let rejectionNote: string | null = null;
@@ -185,5 +194,5 @@ export function parseRequisitionAction(body: unknown): {
           : null;
   }
   const pay = action === "pay" ? parseRequisitionPayInput(raw) : null;
-  return { action, rejectionNote, pay };
+  return { action, rejectionNote, pay, reason: trimOrNull(raw.reason) };
 }
