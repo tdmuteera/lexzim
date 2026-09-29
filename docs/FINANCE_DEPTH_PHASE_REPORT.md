@@ -140,7 +140,7 @@ Integrity checks (13): ledger balanced; trust ledger vs 1210; client trust vs 21
 
 ## F. Data Migration
 
-Source: `Accounts at 28-09-2026` (four workbooks). Mode: **dry run only**. Nothing was written to the database. Import record: `Migration dry run import record 28-09-2026.json` in the same folder.
+Source: `Accounts at 28-09-2026` (four workbooks). The dry run below was reviewed, and the opening balances were then **imported on 29 September 2026** (see section M). Import record: `Migration dry run import record 28-09-2026.json` in the same folder.
 
 | Opening balance | Amount | Check |
 |---|---|---|
@@ -214,15 +214,15 @@ Other findings: the trust sheet heading still says 13.8.2026; several "date upda
 
 **Still open:**
 
-1. **Client matching.** Six Excel names could belong to more than one LexZim client (Chikwama R and M, Kasipo, Pfukwa, Scholtz / Harishri Africa, the Mandizha estate, Rev Musindo Danet).
-2. **Cutover date.** The date the opening balances are "as at", after which all entries are made in LexZim only.
+1. **Client matching.** Imported using the defaults listed in section M. Please confirm them.
+2. **Cutover date.** Imported as at 28 September 2026. Please confirm.
 3. **Remaining small advances** (Jeffery 323, Bristow 190, Taguta 30, Kahembe 10, Granola 10, Danet 5): held as recoverable until confirmed.
 4. **Matter-level trust.** Enforce separate trust balances per matter, or keep per client (current)?
 
 ## J. Attention Required
 
 1. Migration `0054_finance_depth.sql` is applied to the shared database (local and Railway use the same one). It only adds columns, indexes and keys; existing data was not changed.
-2. The new actions (reversals, client to client transfer, `trust_then_float`, overdraw reason) work through the API but **do not yet have buttons** on the Trust, Payments and Requisitions screens. That is the next UI task.
+2. Done (section M): the reversal, client to client transfer, `trust_then_float`, overdraw reason and float actions now have buttons.
 3. The document numbering policy (PREFIX-YEAR-SEQUENCE) is not yet implemented.
 4. No bank reconciliation has been done and the bank statement has not been received.
 5. The business operating bank Excel is still outstanding.
@@ -242,3 +242,36 @@ Other findings: the trust sheet heading still says 13.8.2026; several "date upda
 - Known issue seen during outages (not changed in this phase): when the database is unreachable, login sometimes reports "Invalid email or password" instead of "database unavailable". Worth fixing so staff are not misled.
 - Migration: `0054_finance_depth.sql` (journal index 54).
 - Commit: "Finance depth phase: atomic money movements, trust controls, reversals, integrity checks, ten-cycle harness".
+
+## M. Buttons and T Pfigu Opening Balances (29 September 2026)
+
+**New buttons.** Every correction asks for a written reason and posts a linked reversal; nothing is deleted.
+
+| Screen | Button | Who |
+|---|---|---|
+| Trust, header | Transfer between clients (paying client, receiving client, optional matters, amount, reason) | Managing Partner |
+| Trust, ledger rows | Reverse (manual entries, client transfers, vault deposits, fee transfers). Other rows say where to reverse them (Payments, Requisitions) or show "Opening balance" | Trust managers; transfers need the Managing Partner |
+| Trust, post entry | Overdraw reason box, shown when "Allow negative" is ticked | Managing Partner |
+| Invoice, receipts tab | Reverse receipt. Receipts that came through Payments link there instead | Billing managers |
+| Payments register | Reverse (unwinds the whole payment) | Payment capturers |
+| Requisitions | Pay option "Trust first, shortfall from float"; "Client paid into" selector on Mark recovered; Reverse payment | Payers; reverse is Managing Partner only |
+| Requisitions, top | Disbursement float panel: balance, movements, Fund float, Return excess | Finance posters; Return excess is Managing Partner only |
+
+The shared pop-up window now opens over the whole page. Before this fix it was cut off when opened from inside a panel or table.
+
+**Import.** Script `scripts/finance-import-tpfigu.ts`, batch `tpfigu-ob-20260928`, as at 28 September 2026. It posts through the application's own trust, invoice and ledger functions in one transaction, checks integrity before saving, and refuses to run if T Pfigu already has finance rows. The dry run (which saves nothing) and the live run gave the same result: all 15 integrity checks passed. Manifest of created records: `Opening balance import manifest 28-09-2026.json` in the accounts folder. The script's `--rollback` option removes exactly those records, and refuses once anything else has been posted against them.
+
+| Imported | Amount | How |
+|---|---|---|
+| Trust Bank (new trust account) | 189,504 | 10 client receipts |
+| Trust Cash (new vault account) | 534 | 6 client receipts |
+| Debtors | 36,865 | 21 sent invoices OB-0001 to OB-0021; due dates backdated to keep the ageing buckets |
+| Recoverable cost advances | 619 | 7 disbursements (Dr 1320) |
+| Business cash book | 10 | Dr 1020 |
+| Opening equity (3010) | 37,494 | Balancing credit for debtors, advances and cash |
+
+Not imported: operating bank (figure still outstanding), petty cash 0, float 0, Banda 4,062 and Harishri 284 (both written off before cutover).
+
+Client matches used (firm defaults, to confirm): Chikwama R to CL0031 Rickson; Kasipo to CL0040 Nisbert; Pfukwa to CL0029 Eng P M Pfukwa; Monagan P/L Dr Matemezano to CL0019; Rev Musindo Danet (TP) to Danet, matter "Rev Musindo (TP)". New clients CL0063 to CL0078: M Chikwama, Bristow, Chikandiwa, Chigariro, Paradza, Gweme, Harishri Africa, Danet, Z Chipanga-Mlambo, B M Mutanga, Estate Late Mandizha, Mwasoya, Chidziva, W P Kauraro, Kahembe, Granola. Their KYC is marked draft. Each client with debtors or advances has an "Opening balance brought forward (28 Sep 2026)" matter; Danet has one matter per debtor line. Trust balances are held per client, not per matter.
+
+Checks: TypeScript clean, lint clean on changed and new files, production build succeeded, screens checked in the browser against the imported data without posting anything.

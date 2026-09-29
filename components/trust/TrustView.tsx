@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import Link from "next/link";
 import { Can } from "@/components/auth/Can";
 import { ExportMenu } from "@/components/export/ExportMenu";
+import { ReasonActionButton } from "@/components/finance/ReasonActionButton";
+import { ClientTransferModal } from "@/components/trust/ClientTransferModal";
 import { TrustMoneyCallout } from "@/components/trust/TrustMoneyCallout";
 import { TrustVaultPanel } from "@/components/trust/TrustVaultPanel";
 import { Badge } from "@/components/ui/Badge";
@@ -38,6 +40,11 @@ type LedgerItem = {
   matterTitle: string | null;
   clientId: string | null;
   runningBalanceCents?: number;
+  sourceType?: string | null;
+  reversalOfId?: string | null;
+  reversedById?: string | null;
+  reversalReason?: string | null;
+  transferGroupId?: string | null;
 };
 
 type ClientOption = { id: string; displayLabel: string; clientNumber: string | null };
@@ -53,6 +60,46 @@ function todayInput() {
 
 function accountKindLabel(kind: string) {
   return kind === "vault" ? "Vault (cash)" : "Bank";
+}
+
+const LEDGER_REVERSIBLE_SOURCES = ["manual", "client_transfer", "vault_bank_in", "invoice_fee"];
+const SOURCE_REVERSAL_HINT: Record<string, string> = {
+  intake: "Reverse from Payments",
+  intake_fee: "Reverse from Payments",
+  requisition: "Reverse from Requisitions",
+  opening_balance: "Opening balance",
+};
+
+function LedgerRowAction({ row, onDone }: { row: LedgerItem; onDone: () => void | Promise<void> }) {
+  if (row.reversedById) return <Badge tone="closed">Reversed</Badge>;
+  if (row.reversalOfId) return null;
+  const source = row.sourceType ?? "manual";
+  if (!LEDGER_REVERSIBLE_SOURCES.includes(source)) {
+    const hint = SOURCE_REVERSAL_HINT[source];
+    return hint ? (
+      <span className="muted" style={{ fontSize: "0.72rem" }}>
+        {hint}
+      </span>
+    ) : null;
+  }
+  const isTransfer = source === "client_transfer" || Boolean(row.transferGroupId);
+  return (
+    <Can permission="trust.manage">
+      <ReasonActionButton
+        label="Reverse"
+        title="Reverse trust entry"
+        explanation={
+          isTransfer
+            ? "Posts contra entries for every leg of this transfer. The originals stay on the ledger and are marked reversed. Client to client transfers need the Managing Partner."
+            : "Posts a contra entry for this amount. The original stays on the ledger and is marked reversed. It will not go through if a client ledger would drop below zero."
+        }
+        url={`/api/trust/ledger/${row.id}/reverse`}
+        successMessage="Trust entry reversed."
+        onDone={onDone}
+        variant="ghost"
+      />
+    </Can>
+  );
 }
 
 export function TrustView() {
@@ -80,6 +127,8 @@ export function TrustView() {
   const [reference, setReference] = useState("");
   const [narrative, setNarrative] = useState("");
   const [allowNegative, setAllowNegative] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [clientTransferOpen, setClientTransferOpen] = useState(false);
   const [adjustmentCredit, setAdjustmentCredit] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -318,6 +367,7 @@ export function TrustView() {
           reference: reference || null,
           narrative: narrative || null,
           allowNegative,
+          overrideReason: allowNegative ? overrideReason.trim() || null : null,
           adjustmentCredit,
         }),
       });
@@ -331,6 +381,7 @@ export function TrustView() {
       setNarrative("");
       setReference("");
       setAllowNegative(false);
+      setOverrideReason("");
       await load();
     } catch {
       setFormError("Could not post entry.");
@@ -507,10 +558,20 @@ export function TrustView() {
               <Button size="sm" variant="outline" onClick={() => setNewAccountOpen(true)}>
                 New account
               </Button>
+              <Button size="sm" variant="outline" onClick={() => setClientTransferOpen(true)}>
+                Transfer between clients
+              </Button>
               <Button size="sm" onClick={() => setPostOpen(true)}>
                 Post entry
               </Button>
             </Can>
+            <ClientTransferModal
+              open={clientTransferOpen}
+              onClose={() => setClientTransferOpen(false)}
+              onDone={() => load()}
+              accounts={accounts}
+              clients={clients}
+            />
           </div>
         </div>
         <div className="panel-body">
@@ -817,8 +878,17 @@ export function TrustView() {
                     checked={allowNegative}
                     onChange={(e) => setAllowNegative(e.target.checked)}
                   />
-                  Allow negative client balance (audited override)
+                  Allow negative client balance (Managing Partner, audited override)
                 </label>
+                {allowNegative ? (
+                  <input
+                    aria-label="Reason for overdrawing the client ledger"
+                    placeholder="Reason for overdrawing (required)"
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    style={{ marginTop: "0.35rem" }}
+                  />
+                ) : null}
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <Button type="submit" size="sm" disabled={saving || !activeAccounts.length}>
@@ -1153,6 +1223,7 @@ export function TrustView() {
                           direction={ledDir}
                           onSort={toggleLed}
                         />
+                        <th aria-label="Actions" />
                       </tr>
                     </thead>
                     <tbody>
@@ -1192,6 +1263,14 @@ export function TrustView() {
                                 {row.matterTitle}
                               </div>
                             ) : null}
+                            {row.reversalOfId ? (
+                              <div className="muted" style={{ fontSize: "0.72rem" }}>
+                                Reversal{row.reversalReason ? `: ${row.reversalReason}` : ""}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <LedgerRowAction row={row} onDone={() => load()} />
                           </td>
                         </tr>
                       ))}

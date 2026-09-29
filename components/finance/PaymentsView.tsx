@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
+import { ReasonActionButton } from "@/components/finance/ReasonActionButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -37,6 +38,8 @@ type IntakeItem = {
   matterNumber: string | null;
   lineCount: number;
   notes: string | null;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
 };
 
 type ClientOption = { id: string; label: string };
@@ -911,6 +914,23 @@ export function PaymentsView() {
                         >
                           Receipt
                         </a>
+                        {item.reversedAt ? (
+                          <Badge tone="closed" title={item.reversalReason ?? undefined}>
+                            Reversed
+                          </Badge>
+                        ) : (
+                          <Can permission="finance.payments.create">
+                            <ReasonActionButton
+                              label="Reverse"
+                              title="Reverse payment"
+                              explanation="Unwinds every posting from this payment: trust receipts, fee receipts, invoice allocations and ledger entries. The original record stays, marked reversed. It will not go through if the client's trust money has already been spent."
+                              url={`/api/finance/payments/${item.id}/reverse`}
+                              successMessage="Payment reversed."
+                              onDone={() => loadRegister().catch(() => undefined)}
+                              variant="ghost"
+                            />
+                          </Can>
+                        )}
                       </td>
                     </tr>
                   ))}

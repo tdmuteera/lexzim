@@ -7,6 +7,7 @@ import { Can } from "@/components/auth/Can";
 import { ExportMenu } from "@/components/export/ExportMenu";
 import { SendDocumentButton } from "@/components/email/SendDocumentButton";
 import { FeeMoneyCallout } from "@/components/billing/FeeMoneyCallout";
+import { ReasonActionButton } from "@/components/finance/ReasonActionButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { SortableTh } from "@/components/ui/SortableTh";
@@ -66,6 +67,10 @@ type Payment = {
   method: string | null;
   reference: string | null;
   balanceCents?: number | null;
+  intakeId?: string | null;
+  reversalOfId?: string | null;
+  reversedById?: string | null;
+  reversalReason?: string | null;
 };
 
 type InvoiceDetailViewProps = {
@@ -795,6 +800,29 @@ export function InvoiceDetailView({
                               p.receiptNumber ? `Receipt ${p.receiptNumber}` : "Receipt"
                             }
                           />
+                          {p.reversedById ? (
+                            <Badge tone="closed">Reversed</Badge>
+                          ) : p.reversalOfId ? (
+                            <span className="muted" style={{ fontSize: "0.75rem" }}>
+                              Reversal{p.reversalReason ? `: ${p.reversalReason}` : ""}
+                            </span>
+                          ) : p.intakeId ? (
+                            <Link href="/finance/payments" className="muted" style={{ fontSize: "0.75rem" }}>
+                              Reverse from Payments
+                            </Link>
+                          ) : (
+                            <Can permission="billing.manage">
+                              <ReasonActionButton
+                                label="Reverse receipt"
+                                title="Reverse fee receipt"
+                                explanation="Posts a reversal of this receipt and its ledger entries, then reopens the invoice balance. The original receipt stays on record, marked reversed."
+                                url={`/api/invoices/${invoiceId}/payments/${p.id}/reverse`}
+                                successMessage="Receipt reversed."
+                                onDone={() => load()}
+                                variant="ghost"
+                              />
+                            </Can>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Can } from "@/components/auth/Can";
+import { DisbursementFloatPanel } from "@/components/finance/DisbursementFloatPanel";
+import { ReasonActionButton } from "@/components/finance/ReasonActionButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -45,6 +47,7 @@ function statusTone(status: string) {
   if (status === "approved" || status === "paid") return "open" as const;
   if (status === "pending_approval") return "pending" as const;
   if (status === "rejected" || status === "cancelled") return "danger" as const;
+  if (status === "reversed") return "closed" as const;
   return "default" as const;
 }
 
@@ -93,7 +96,12 @@ export function RequisitionsView() {
   const [clientId, setClientId] = useState("");
   const [matterId, setMatterId] = useState("");
 
-  const [payFrom, setPayFrom] = useState<"operating" | "trust" | "firm_float">("operating");
+  const [payFrom, setPayFrom] = useState<
+    "operating" | "trust" | "firm_float" | "trust_then_float"
+  >("operating");
+  const [receivedInto, setReceivedInto] = useState<"1010" | "1020">("1010");
+  const isManagingPartner = user?.role?.code === "managing_partner";
+  const [floatRefresh, setFloatRefresh] = useState(0);
   const [trustAccountId, setTrustAccountId] = useState("");
   const [paymentRef, setPaymentRef] = useState("");
   const [rejectNote, setRejectNote] = useState("");
@@ -296,6 +304,7 @@ export function RequisitionsView() {
       if (payload.trustShortfallWarning) {
         setError(payload.trustShortfallWarning);
       }
+      setFloatRefresh((n) => n + 1);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed.");
@@ -322,6 +331,7 @@ export function RequisitionsView() {
 
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Requisitions">
+      <DisbursementFloatPanel refreshKey={floatRefresh} />
       <div className="panel">
         <div className="panel-head">
           <div>
@@ -660,10 +670,18 @@ export function RequisitionsView() {
                             className="filter-select"
                             value={payFrom}
                             onChange={(e) =>
-                              setPayFrom(e.target.value as "trust" | "firm_float")
+                              setPayFrom(
+                                e.target.value as "trust" | "firm_float" | "trust_then_float",
+                              )
                             }
                           >
                             <option value="trust">Client trust</option>
+                            <option
+                              value="trust_then_float"
+                              disabled={!trustPreview?.allowFirmFloat}
+                            >
+                              Trust first, shortfall from float (recoverable)
+                            </option>
                             <option
                               value="firm_float"
                               disabled={Boolean(
@@ -676,7 +694,7 @@ export function RequisitionsView() {
                             </option>
                           </select>
                         </label>
-                        {payFrom === "trust" ? (
+                        {payFrom === "trust" || payFrom === "trust_then_float" ? (
                           <label>
                             <span>Trust account</span>
                             <select
@@ -778,15 +796,46 @@ export function RequisitionsView() {
 
                 {selected.status === "paid" && selected.recoverable ? (
                   <Can permission="finance.requisitions.pay">
+                    <label style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                      <span className="muted" style={{ fontSize: "0.8rem" }}>
+                        Client paid into
+                      </span>
+                      <select
+                        className="filter-select"
+                        value={receivedInto}
+                        onChange={(e) => setReceivedInto(e.target.value as "1010" | "1020")}
+                      >
+                        <option value="1010">Operating bank</option>
+                        <option value="1020">Business cashbook (vault)</option>
+                      </select>
+                    </label>
                     <Button
                       type="button"
                       variant="outline"
                       disabled={saving}
-                      onClick={() => void runAction("settle_recoverable")}
+                      title="Needs the billing invoice for this advance to be paid. The money goes back into the disbursement float."
+                      onClick={() => void runAction("settle_recoverable", { receivedInto })}
                     >
-                      Mark recoverable settled
+                      Mark recovered (return to float)
                     </Button>
                   </Can>
+                ) : null}
+
+                {selected.status === "paid" && isManagingPartner ? (
+                  <ReasonActionButton
+                    label="Reverse payment"
+                    title="Reverse requisition payment"
+                    explanation="Unwinds the payment: the trust debit and any float advance are reversed and the requisition is marked reversed. Managing Partner only. It will not go through if the advance was already recovered or billed."
+                    url={`/api/finance/requisitions/${selected.id}/action`}
+                    body={{ action: "reverse_payment" }}
+                    successMessage="Requisition payment reversed."
+                    onDone={() => {
+                      setFloatRefresh((n) => n + 1);
+                      return load().catch(() => undefined);
+                    }}
+                    size="md"
+                    variant="outline"
+                  />
                 ) : null}
 
                 {selected.status !== "paid" && selected.status !== "cancelled" ? (
