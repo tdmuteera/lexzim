@@ -413,7 +413,18 @@ async function cycle4() {
     "Trust then float by accounts user (float part needs MP)",
     "forbidden",
   );
+  rejected(
+    await reqAction(mp, r2, { action: "pay", paidFrom: "trust_then_float" }),
+    "Float part while the disbursement float is empty",
+    "rejected (float holds 0)",
+  );
+  const funded = ok(
+    await acc.call("POST", "/api/finance/float", { action: "fund", amountCents: 40000, fromAccount: "1010", note: `${TAG} monthly top-up` }),
+    "Accounts funds the disbursement float 400 from operating bank",
+  );
+  eq("Float balance after funding", funded.body?.balanceCents, 40000);
   const split = ok(await reqAction(mp, r2, { action: "pay", paidFrom: "trust_then_float", paymentRef: "FINQA-R2" }), "Trust then float by Managing Partner");
+  eq("Float reduced by the 150 shortfall", await glBalance("1060"), 25000);
   eq("Split requisition marked recoverable", split.body?.requisition?.recoverable, true);
   eq("Client B trust used first (balance 0)", await trustBalance(b), 0);
   ids.c4ReqSplit = r2;
@@ -727,7 +738,10 @@ async function cycle10() {
   eq(s("Trust balance 750"), await trustBalance(d), 75000);
   const r2 = await requisition(acc, { type: "disbursement", clientId: d, matterId: m, description: `${TAG} D courier`, amountCents: 900000 });
   ok(await reqAction(mp, r2, { action: "approve" }), s("Approve large disbursement 9,000"));
+  const floatStart = await glBalance("1060");
+  ok(await acc.call("POST", "/api/finance/float", { action: "fund", amountCents: 900000, fromAccount: "1010", note: `${TAG} large matter` }), s("Fund the float 9,000 for the large disbursement"));
   ok(await reqAction(mp, r2, { action: "pay", paidFrom: "trust_then_float", paymentRef: "FINQA-D2" }), s("Pay: trust bank first, float for the balance"));
+  eq(s("Float paid the 8,650 balance"), await glBalance("1060"), floatStart + 900000 - 865000);
   const [bankLeft] = await sql`select coalesce(sum(amount_cents),0)::int s from trust_ledger_entries where client_id = ${d} and trust_account_id = ${ids.bank!}`;
   eq(s("Trust bank for D used to 0"), bankLeft!.s, 0);
   await integrity("E2E after disbursements");
@@ -737,6 +751,8 @@ async function cycle10() {
   const lines = await mp.call("GET", `/api/invoices/${billId}`);
   // 350 of the 9,000 came from trust bank; only the 8,650 float advance is recoverable.
   eq(s("Only the float part is billed (trust-paid part is not billed twice)"), lines.body?.invoice?.totalCents, 865000);
+  const advancesBefore = await glBalance("1320");
+  const reimbursedBefore = await glBalance("4100");
   let sent = await mp.call("PATCH", `/api/invoices/${billId}`, { status: "sent" });
   if (sent.status !== 200) {
     await mp.call("POST", `/api/invoices/${billId}/approval`, { action: "submit" });
@@ -744,6 +760,9 @@ async function cycle10() {
     sent = await mp.call("PATCH", `/api/invoices/${billId}`, { status: "sent" });
   }
   ok(sent, s("Send recovery invoice"));
+  eq(s("Billing the advance clears client cost advances (1320)"), (await glBalance("1320")) - advancesBefore, -865000);
+  eq(s("Recovered advance is not booked as revenue (4100)"), (await glBalance("4100")) - reimbursedBefore, 0);
+  rejected(await reqAction(mp, r2, { action: "settle_recoverable" }), s("Mark recovered before the client pays"), "rejected (invoice unpaid)");
   ok(await mp.call("POST", `/api/invoices/${billId}/apply-retainer`, { amountCents: 40000, trustAccountId: ids.vault }), s("Apply the 400 cash trust to the invoice"));
   eq(s("Client D trust now 0"), await trustBalance(d), 0);
   const fee = await makeInvoice("D", "D1", 80000, "C10 fees");
@@ -755,6 +774,29 @@ async function cycle10() {
   eq(s("Recovery invoice settled"), (await invoiceState(billId)).status, "paid");
   eq(s("Fee invoice settled"), (await invoiceState(fee)).status, "paid");
   ok(await reqAction(mp, r2, { action: "settle_recoverable" }), s("Mark the float advance as recovered"));
+  eq(s("Recovered 8,650 goes back to the float"), await glBalance("1060"), floatStart + 900000);
+  rejected(
+    await acc.call("POST", "/api/finance/float", { action: "return", amountCents: 525000, toAccount: "1020", reason: "Float too high" }),
+    s("Accounts user moves float excess to cashbook"),
+    "forbidden",
+  );
+  rejected(
+    await mp.call("POST", "/api/finance/float", { action: "return", amountCents: 525000, toAccount: "1020" }),
+    s("MP moves float excess without a reason"),
+    "rejected (reason required)",
+  );
+  rejected(
+    await mp.call("POST", "/api/finance/float", { action: "return", amountCents: 99900000, toAccount: "1020", reason: "Too much" }),
+    s("MP moves more than the float holds"),
+    "rejected (above balance)",
+  );
+  const back = ok(
+    await mp.call("POST", "/api/finance/float", { action: "return", amountCents: 525000, toAccount: "1020", reason: "Float above the 400 monthly level" }),
+    s("MP returns float excess to the cashbook"),
+  );
+  eq(s("Float reduced by the 5,250 returned"), back.body?.balanceCents, floatStart + 900000 - 525000);
+  const floatView = await mp.call("GET", "/api/finance/float");
+  eq(s("Float screen balance"), floatView.body?.balanceCents, floatStart + 900000 - 525000);
   await integrity("E2E after billing and recovery");
   const refund = await makeInvoice("D", "D1", 5000, "C10 correction");
   const p = ok(await mp.call("POST", `/api/invoices/${refund}/payments`, { amountCents: 5000, paidAt: today() }), s("Small fee paid"));

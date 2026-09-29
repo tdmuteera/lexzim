@@ -224,12 +224,18 @@ export async function createDisbursement(
   matterId: string,
   userId: string,
   input: DisbursementInput,
-  opts?: { trustPaidViaRequisition?: boolean },
+  opts?: { trustPaidViaRequisition?: boolean; floatPaidViaRequisition?: boolean },
 ) {
   if (input.paidFrom === "trust" && !opts?.trustPaidViaRequisition) {
     throw new AuthError(
       "validation",
       "Disbursements paid from trust must go through a disbursement requisition so the client's trust ledger is debited.",
+    );
+  }
+  if (input.paidFrom === "firm_float" && !opts?.floatPaidViaRequisition) {
+    throw new AuthError(
+      "validation",
+      "Disbursements paid from the disbursement float must go through a disbursement requisition.",
     );
   }
   return runInTransaction(async () => {

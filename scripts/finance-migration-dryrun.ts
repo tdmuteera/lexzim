@@ -174,30 +174,30 @@ async function trustCash() {
   }
   const potBalance = Math.round((inflow - outflow) * 100) / 100;
 
-  // Firm answer 4: treat the gap as Zokwa 740 and Pfukwa 111 moved from cash trust to bank trust.
-  const gapMoves: Record<string, number> = { zokwa: 740, pfukwa: 111 };
+  // Firm decision 29 Sep 2026: Zokwa 740 and Pfukwa 110 were deposited to bank trust, leaving 534 cash on hand.
+  const gapMoves: Record<string, number> = { zokwa: 740, pfukwa: 110 };
   const moved = Object.values(gapMoves).reduce((a, b) => a + b, 0);
   for (const r of local) {
     const mv = gapMoves[r.clientKey];
     if (mv) {
       r.amountCents -= cents(mv);
-      r.note = `reduced by ${mv}: moved to bank trust (firm answer 4)`;
-      rows.push({ file: FILES.disb, sheet: ws.name, row: r.row, sourceName: r.sourceName, clientKey: r.clientKey, target: "trust_bank_opening", amountCents: cents(mv), note: "moved from cash trust (firm answer 4)" });
+      r.note = `reduced by ${mv}: deposited to bank trust (firm decision 29 Sep 2026)`;
+      rows.push({ file: FILES.disb, sheet: ws.name, row: r.row, sourceName: r.sourceName, clientKey: r.clientKey, target: "trust_bank_opening", amountCents: cents(mv), note: "deposited from cash trust (firm decision 29 Sep 2026)" });
     }
     rows.push(r);
   }
   const vaultAfter = sum - moved;
-  if (Math.abs(vaultAfter - potBalance) > 0.005) {
-    issues.push({ severity: "error", file: FILES.disb, detail: `Cash trust after the 851 move is ${vaultAfter} but the pot computes to ${potBalance}.` });
+  const onHand = typedBalance ?? potBalance;
+  if (Math.abs(vaultAfter - onHand) > 0.005) {
+    issues.push({ severity: "error", file: FILES.disb, detail: `Cash trust after the ${moved} deposit is ${vaultAfter} but cash on hand is ${onHand}.` });
   }
   if (typedBalance != null && Math.abs(typedBalance - potBalance) > 0.005) {
-    issues.push({ severity: "warning", file: FILES.disb, detail: `Pot balance typed as ${typedBalance} but deposits ${inflow} less spending ${outflow} is ${potBalance}.` });
+    issues.push({
+      severity: "warning",
+      file: FILES.disb,
+      detail: `Cash on hand ${typedBalance} agrees with client balances; the ledger lines (in ${inflow}, out ${outflow}) add to ${potBalance}, so one line in the pot ledger is ${Math.abs(typedBalance - potBalance)} short. Fix the sheet line; the opening balance uses cash on hand.`,
+    });
   }
-  issues.push({
-    severity: "decision",
-    file: FILES.disb,
-    detail: `The 851 (Zokwa 740, Pfukwa 111) is booked as a cash to bank trust transfer as instructed, but no bank deposit exists yet. Either deposit the cash or confirm the pot spent it on other clients' costs (recoverable advances).`,
-  });
   return { inflow, outflow, potBalance, typedBalance, vaultAfter };
 }
 
@@ -248,10 +248,20 @@ async function debtors() {
       if (cr != null && /bad debt/.test(d)) writeOff = cr;
       else if (cr != null) credit += cr;
     }
+    // Firm decision 29 Sep 2026: the true balance stands as the write-off; the sheet figure was a working error.
     const trueBalance = debit - credit;
-    rows.push({ file: FILES.debtors, sheet: "Banda", row: 0, sourceName: "Ms L Banda", clientKey: "banda", target: "bad_debt_written_off", amountCents: cents(writeOff), note: `true balance ${trueBalance}` });
+    rows.push({
+      file: FILES.debtors,
+      sheet: "Banda",
+      row: 0,
+      sourceName: "Ms L Banda",
+      clientKey: "banda",
+      target: "bad_debt_written_off",
+      amountCents: cents(trueBalance),
+      note: `sheet wrote off ${writeOff}; corrected to true balance ${trueBalance} (firm decision 29 Sep 2026)`,
+    });
     if (Math.abs(trueBalance - writeOff) > 0.005) {
-      issues.push({ severity: "decision", file: FILES.debtors, detail: `Banda: invoiced ${debit}, paid ${credit}, true balance ${trueBalance}, but only ${writeOff} was written off (first balance line subtracts the 1,000 payment twice).` });
+      issues.push({ severity: "warning", file: FILES.debtors, detail: `Banda sheet: correct the bad debt line from ${writeOff} to ${trueBalance} (the first balance line subtracts the 1,000 payment twice).` });
     }
   }
   return { grand, statedGrand };
@@ -302,19 +312,52 @@ async function main() {
   void trustBankSummary;
 
   // The pot's physical cash is the client cash trust already mapped above; booking it again as firm float would double count.
-  issues.push({
-    severity: "decision",
-    file: FILES.disb,
-    detail: `The pot (${pot.potBalance}) is client cash trust. The 400 per month firm disbursement float has no balance in these books, so its opening balance must be supplied before go-live.`,
-  });
+  // Firm decision 29 Sep 2026: the disbursement float (GL 1060) has not been funded yet.
+  rows.push({ file: FILES.disb, sheet: "Disbursement Account", row: 0, sourceName: "Disbursement float", clientKey: "_firm", target: "disbursement_float_opening", amountCents: 0, note: "not yet funded (firm decision 29 Sep 2026)" });
 
-  // Duplicate detection within the import itself.
+  // Pot costs paid for clients with no or short deposits (findings 28 Sep 2026, section 5).
+  const advances: { key: string; name: string; amount: number; action: "write_off" | "recover"; decided: boolean }[] = [
+    { key: "harishri", name: "Harishri", amount: 284, action: "write_off", decided: true },
+    { key: "mupetesi", name: "Mupetesi", amount: 51, action: "recover", decided: true },
+    { key: "jeffery", name: "Mr Malcom Jeffery", amount: 323, action: "recover", decided: false },
+    { key: "bristow", name: "Bristow", amount: 190, action: "recover", decided: false },
+    { key: "taguta", name: "Taguta", amount: 30, action: "recover", decided: false },
+    { key: "kahembe", name: "Kahembe", amount: 10, action: "recover", decided: false },
+    { key: "granola", name: "Granola", amount: 10, action: "recover", decided: false },
+    { key: "danet", name: "Danet", amount: 5, action: "recover", decided: false },
+  ];
+  for (const a of advances) {
+    rows.push({
+      file: FILES.disb,
+      sheet: "Disbursement Account",
+      row: 0,
+      sourceName: a.name,
+      clientKey: a.key,
+      target: a.action === "write_off" ? "advance_written_off" : "recoverable_advance_opening",
+      amountCents: cents(a.amount),
+      note: a.decided
+        ? a.action === "write_off"
+          ? "written off (firm decision 29 Sep 2026)"
+          : "recover from pending invoice payments (firm decision 29 Sep 2026)"
+        : "recover by default; firm to confirm",
+    });
+  }
+  const undecided = advances.filter((a) => !a.decided);
+  if (undecided.length) {
+    issues.push({
+      severity: "decision",
+      file: FILES.disb,
+      detail: `Held as recoverable until confirmed: ${undecided.map((a) => `${a.name} ${a.amount}`).join(", ")}.`,
+    });
+  }
+
+  // Duplicate detection within the import itself. Danet is one client with several matters (firm decision 29 Sep 2026).
   const seen = new Map<string, Row>();
   for (const r of rows) {
     if (r.clientKey === "_firm") continue;
     const k = `${r.target}:${r.clientKey}`;
     const prev = seen.get(k);
-    if (prev && r.target !== "trust_bank_opening") {
+    if (prev && r.target !== "trust_bank_opening" && r.clientKey !== "danet") {
       issues.push({ severity: "warning", file: r.file, detail: `Possible duplicate ${r.target} for "${r.sourceName}" (also "${prev.sourceName}"). Review before import.` });
     }
     seen.set(k, r);
@@ -323,9 +366,13 @@ async function main() {
   if (chikwama.length > 1) {
     issues.push({ severity: "decision", file: FILES.trust, detail: `"Chikwama R" and "Chikwama M" share a surname. They are kept as two separate trust clients unless management confirms they are one.` });
   }
-  const danet = rows.filter((r) => r.clientKey === "danet" && r.target === "ar_opening_invoice");
-  if (danet.length > 1) {
-    issues.push({ severity: "decision", file: FILES.debtors, detail: `${danet.length} Danet debtor lines (${danet.map((d) => d.sourceName).join("; ")}). Confirm whether these are one client with several matters.` });
+  for (const r of rows) {
+    if (r.clientKey === "danet" && r.target === "ar_opening_invoice") {
+      r.note = `${r.note ? `${r.note}; ` : ""}Danet matter: ${r.sourceName}`;
+    }
+    if (r.clientKey === "jeffery" && /jefferey|jeffrey/i.test(r.sourceName)) {
+      r.note = `${r.note ? `${r.note}; ` : ""}spelling corrected to Mr Malcom Jeffery`;
+    }
   }
 
   // Read-only check against existing T Pfigu records.
@@ -387,6 +434,9 @@ async function main() {
       cashPotOutflow: pot.outflow,
       businessCash: cash["Cash Book"]?.closing,
       pettyCash: cash["Petty Cash B"]?.closing,
+      disbursementFloat: sum("disbursement_float_opening"),
+      recoverableAdvances: sum("recoverable_advance_opening"),
+      advancesWrittenOff: sum("advance_written_off"),
     },
     clientRegister: [...register.entries()].map(([key, v]) => {
       const multiName = [...v.names].some((n) => countKnown(n) > 1);

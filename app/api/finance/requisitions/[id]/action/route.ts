@@ -77,7 +77,10 @@ export async function POST(request: Request, context: RouteContext) {
     } else if (action === "cancel") {
       result = await cancelRequisition(firmId, session.id, id);
     } else if (action === "settle_recoverable") {
-      result = await settleRecoverableRequisition(firmId, session.id, id);
+      const receivedInto = (body as { receivedInto?: unknown }).receivedInto;
+      result = await settleRecoverableRequisition(firmId, session.id, id, {
+        receivedInto: receivedInto === "1020" ? "1020" : "1010",
+      });
     } else if (action === "reverse_payment") {
       result = await reverseRequisitionPayment(firmId, session.id, id, reason ?? "", {
         isManagingPartner: isMp,

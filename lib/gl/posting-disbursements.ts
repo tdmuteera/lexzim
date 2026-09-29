@@ -27,7 +27,7 @@ async function findPostedJournal(
   return rows[0] ?? null;
 }
 
-/** Client cost advance: Dr 1320, Cr cash or trust bank when disbursement recorded. */
+/** Client cost advance: Dr 1320, Cr the paying account (trust bank, disbursement float or operating bank). */
 export async function postDisbursementGl(
   firmId: string,
   userId: string,
@@ -50,10 +50,13 @@ export async function postDisbursementGl(
   if (!row || !row.disbursement.billable) return null;
 
   const advances = await ensureGlAccountByCode(firmId, "1320");
-  const creditAccount =
+  const creditCode =
     row.disbursement.paidFrom === "trust"
-      ? await ensureGlAccountByCode(firmId, "1210")
-      : await ensureGlAccountByCode(firmId, "1010");
+      ? "1210"
+      : row.disbursement.paidFrom === "firm_float"
+        ? "1060"
+        : "1010";
+  const creditAccount = await ensureGlAccountByCode(firmId, creditCode);
 
   const entry = await postManualJournal(
     firmId,

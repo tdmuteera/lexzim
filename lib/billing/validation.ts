@@ -18,8 +18,8 @@ export type DisbursementInput = {
   incurredAt: Date;
   /** Billable to client (schema column: billable). */
   billable: boolean;
-  /** operating | trust — source of funds for GL posting. */
-  paidFrom: "operating" | "trust";
+  /** operating | trust | firm_float (float only via requisitions) — source of funds for GL posting. */
+  paidFrom: "operating" | "trust" | "firm_float";
 };
 
 function trimOrNull(value: unknown): string | null {

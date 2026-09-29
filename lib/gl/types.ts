@@ -17,6 +17,7 @@ export type GlSourceType =
   | "trust"
   | "trust_fee"
   | "expense"
+  | "float"
   | "quote"
   | "opening";
 

@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import {
+  disbursements,
   feePayments,
   firmServices,
   glJournalEntries,
@@ -134,6 +135,28 @@ export async function postInvoiceSentGl(
     );
     if (!accountId) continue;
     creditByAccount.set(accountId, (creditByAccount.get(accountId) ?? 0) + line.amountCents);
+  }
+
+  // Disbursements already booked as client cost advances (Dr 1320) are recovered, not earned:
+  // billing them clears 1320 instead of crediting reimbursed revenue.
+  const advancedRows = await db
+    .select({ total: sql<string>`coalesce(sum(${disbursements.amountCents}), 0)` })
+    .from(disbursements)
+    .where(
+      and(
+        eq(disbursements.firmId, firmId),
+        eq(disbursements.invoiceId, invoiceId),
+        eq(disbursements.billable, true),
+        isNotNull(disbursements.glPostedAt),
+      ),
+    );
+  const reimbursedCredit = creditByAccount.get(reimbursed.id) ?? 0;
+  const toAdvances = Math.min(Number(advancedRows[0]?.total ?? 0), reimbursedCredit);
+  if (toAdvances > 0) {
+    const advances = await ensureGlAccountByCode(firmId, "1320");
+    creditByAccount.set(reimbursed.id, reimbursedCredit - toAdvances);
+    creditByAccount.set(advances.id, (creditByAccount.get(advances.id) ?? 0) + toAdvances);
+    if (creditByAccount.get(reimbursed.id) === 0) creditByAccount.delete(reimbursed.id);
   }
 
   const journalLines: ManualJournalLineInput[] = [];

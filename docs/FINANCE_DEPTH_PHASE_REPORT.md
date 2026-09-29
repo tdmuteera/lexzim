@@ -123,6 +123,7 @@ The defects in section G were found by reading every movement path before the ha
 | 1010 | Operating bank | Fee receipts, earned fees moved from trust, float disbursements |
 | 1020 | Business vault | Cash fee receipts |
 | 1050 | Petty cash | Petty cash float and spending |
+| 1060 | Disbursement float | Firm money for client disbursements; funded monthly, recoveries return here |
 | 1210 | Trust bank (includes trust cash) | Client money held |
 | 1310 | Accounts receivable | Invoices outstanding |
 | 1320 | Client cost advances | Recoverable disbursements paid by the firm |
@@ -143,14 +144,17 @@ Source: `Accounts at 28-09-2026` (four workbooks). Mode: **dry run only**. Nothi
 
 | Opening balance | Amount | Check |
 |---|---|---|
-| Trust bank | 189,505 | Sheet 188,654 plus the 851 moved from cash (Zokwa 740, Pfukwa 111, firm answer 4) |
-| Trust cash | 533 | Sheet 1,384 less 851; equals the pot (in 5,313, out 4,780). Pot typed as 534, off by 1 |
+| Trust bank | 189,504 | Sheet 188,654 plus the 850 deposited from cash (Zokwa 740, Pfukwa 110) |
+| Trust cash | 534 | Sheet 1,384 less 850; equals cash on hand. The pot ledger lines add to 533 (one line 1 short) |
 | Accounts receivable | 36,865 | Equals the Master Schedule grand total; every bucket subtotal agrees |
-| Bad debt written off (Banda) | 3,062 | True balance 4,062 (see section I) |
+| Bad debt written off (Banda) | 4,062 | True balance, per firm decision (sheet shows 3,062) |
+| Recoverable advances | 619 | Mupetesi 51 (decided) plus Jeffery 323, Bristow 190, Taguta 30, Kahembe 10, Granola 10, Danet 5 (to confirm) |
+| Advances written off | 284 | Harishri, per firm decision |
+| Disbursement float | 0 | Not yet funded |
 | Business cash | 10 | Cash book: 2,051 + 1,520 − 3,561 |
 | Petty cash | 0 | 9 + 60 − 69 |
 
-Client register: 34 clients. 16 link to existing LexZim clients, 12 would be created, and 6 need a person to choose (Chikwama R and M, Kasipo, Pfukwa, Scholtz / Harishri Africa, Mandizha estate, Musindo / Danet).
+Client register: 38 names (the advances list adds Harishri, Kahembe and Granola). 6 need a person to choose (Chikwama R and M, Kasipo, Pfukwa, Scholtz / Harishri Africa, Mandizha estate, Musindo / Danet). Danet is one client with several matters.
 Duplicate protection: T Pfigu currently has zero finance rows, so opening balances would not overlap existing entries. The script refuses to mark the import safe if any finance rows exist. Receipt numbers 157 and 160 repeat across books, so they are not used as import keys.
 Other findings: the trust sheet heading still says 13.8.2026; several "date updated" cells have day and month swapped; no physical cash count is recorded in either cash book.
 
@@ -180,6 +184,8 @@ Other findings: the trust sheet heading still says 13.8.2026; several "date upda
 22. (Environment) Petty cash returned 401 during a dev server reload; a clean retest returned 200. No code defect.
 23. (Harness) Run 2 took 59 minutes and the Accounts user sat idle for more than 30 minutes, so the staff idle timeout signed it out (401s in cycles 8 to 10). The harness now signs in again once on a 401 and retries.
 24. (Environment) In run 2 the database pooler dropped one connection (`CONNECTION_CLOSED`) during the cycle 6 split payment. The payment failed with a 500 and **rolled back completely**: invoices 2 and 3 kept their exact prior balances and all 15 integrity runs in that run passed. This confirms the atomicity fix (item 1) under a real failure. Later failures in that cycle were knock-on effects.
+26. Client cost advances (1320) never cleared: billing an advanced disbursement credited revenue (4100) instead. Billing now clears 1320, and a new integrity check keeps 1320 equal to unbilled advances.
+27. The firm float was paid out of the operating bank, mixing float and operating money. It now has its own account (1060), cannot pay more than it holds, and recoveries return to it.
 25. (Hardening) Work that outlives a transaction, such as a fire-and-forget notification, could still have picked up the finished transaction. The transaction store now marks itself closed when the transaction ends, and such work falls back to the normal connection pool.
 
 ## H. Assumptions
@@ -191,22 +197,27 @@ Other findings: the trust sheet heading still says 13.8.2026; several "date upda
 5. Cashbook deletes have no ledger impact (unchanged from before).
 6. `trust_then_float` implements the firm's rule: use trust if it has funds; if short, use trust then the disbursement account for the rest.
 7. Requisitions have a new status, "reversed".
-8. The 400 monthly disbursement float is a firm fund, kept separate from client trust.
+8. The 400 monthly disbursement float is a firm fund (account 1060), kept separate from client trust. It cannot pay more than it holds; fund it first. Marking an advance recovered requires the invoice that billed it to be paid.
 9. Trust bank and trust cash share ledger account 1210 and are separated by trust account in the subledger.
 
 ## I. Management Decisions Required
 
-1. **The 851 transfer.** It is booked as cash to bank trust as instructed, but no bank deposit exists. Either deposit the cash or confirm the pot spent it on other clients' costs (then it is a recoverable advance).
-2. **Float opening balance.** The 400 per month float has no balance in the books supplied. Please give its balance at go-live.
-3. **Recovered advances.** Should recovered float money go back to the float or to the operating account?
-4. **Banda write-off.** The sheet subtracts the 1,000 payment twice. Write off 4,062 (true balance) or 3,062 (as recorded)?
-5. **Mandizha.** Was the 900 trust deposit fully applied to later invoices, and was the 700 separate money?
-6. **Jeffery identity.** Is "Malcom Jeffrey" (trust sheet) the same person as "Mr Jeffery" (cash ledger) and client CL0050?
-7. **Small recoverable amounts** (Harishri 284, Mupetesi 51, Taguta 30, Kahembe 10, Granola 10, Danet 5): recover, bill, or write off?
-8. **Client matching** for the six ambiguous names in section F.
-9. **Danet.** Are the three Danet debtor lines one client with several matters?
-10. **Matter-level trust.** Enforce separate trust balances per matter, or keep per client (current)?
-11. **Cutover date** for opening balances (the trust sheet heading says 13.8.2026).
+**Answered by the firm on 29 September 2026 (now applied):**
+- Zokwa 740 and Pfukwa 110 were deposited to bank trust. Cash trust is 534, matching cash on hand. The pot ledger lines add to 533, so one sheet line is 1 short.
+- The disbursement float opens at 0 (not yet funded).
+- Recovered advances go back to the float. If the float is too high, the Managing Partner can move the excess to the cashbook or bank, with a reason.
+- Banda write-off stands at 4,062 (the 3,062 was a working error).
+- Mandizha: the 900 trust deposit was applied to later invoices on the client's instruction.
+- Jeffery: correct name is Mr Malcom Jeffery. LexZim already has CL0050 spelled correctly; the Excel spellings map to it on import.
+- Harishri 284 written off; Mupetesi 51 recovered from pending invoice payments.
+- Danet is one client with several matters.
+
+**Still open:**
+
+1. **Client matching.** Six Excel names could belong to more than one LexZim client (Chikwama R and M, Kasipo, Pfukwa, Scholtz / Harishri Africa, the Mandizha estate, Rev Musindo Danet).
+2. **Cutover date.** The date the opening balances are "as at", after which all entries are made in LexZim only.
+3. **Remaining small advances** (Jeffery 323, Bristow 190, Taguta 30, Kahembe 10, Granola 10, Danet 5): held as recoverable until confirmed.
+4. **Matter-level trust.** Enforce separate trust balances per matter, or keep per client (current)?
 
 ## J. Attention Required
 
@@ -227,6 +238,7 @@ Other findings: the trust sheet heading still says 13.8.2026; several "date upda
 ## L. Deployment
 
 - Checks: TypeScript (`tsc --noEmit`) clean; lint clean on every changed file; production build (`npm run build`) succeeded; final ten-cycle regression 184 of 184 against the local server.
+- Float and recovery update (29 September 2026): regression 200 of 200, 16 integrity runs of 15 checks all clean (new checks: 1320 equals unbilled advances; float never negative), production build succeeded.
 - Known issue seen during outages (not changed in this phase): when the database is unreachable, login sometimes reports "Invalid email or password" instead of "database unavailable". Worth fixing so staff are not misled.
 - Migration: `0054_finance_depth.sql` (journal index 54).
 - Commit: "Finance depth phase: atomic money movements, trust controls, reversals, integrity checks, ten-cycle harness".

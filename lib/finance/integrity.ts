@@ -184,6 +184,30 @@ export async function runFinanceIntegrity(firmId: string): Promise<IntegrityRepo
     detail: `invoices outstanding ${arOutstanding}, GL 1310 ${gl1310}`,
   });
 
+  const advances = await q<{ total: string }>(sql`
+    select coalesce(sum(d.amount_cents), 0)::bigint as total from disbursements d
+    where d.firm_id = ${firmId} and d.billable and d.gl_posted_at is not null
+      and (d.invoice_id is null or not exists (
+        select 1 from gl_journal_entries j
+        where j.firm_id = ${firmId} and j.source_type = 'invoice'
+          and j.source_id = d.invoice_id::text and j.reversed_by_entry_id is null))`);
+  const unbilledAdvances = n(advances[0]?.total);
+  const gl1320 = glBal("1320", "debit");
+  checks.push({
+    id: "advances_vs_gl_1320",
+    label: "Unbilled client cost advances equal GL client cost advances (1320)",
+    ok: unbilledAdvances === gl1320,
+    detail: `unbilled advances ${unbilledAdvances}, GL 1320 ${gl1320}`,
+  });
+
+  const gl1060 = glBal("1060", "debit");
+  checks.push({
+    id: "float_not_negative",
+    label: "Disbursement float (1060) never pays out more than it holds",
+    ok: gl1060 >= 0,
+    detail: `float balance ${gl1060}`,
+  });
+
   const reqLinks = await q(sql`
     select r.id, r.paid_from, r.trust_entry_id, r.disbursement_id
     from finance_requisitions r

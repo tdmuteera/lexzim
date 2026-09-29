@@ -11,6 +11,7 @@ import {
   clients,
   disbursements,
   financeRequisitions,
+  invoices,
   matters,
   users,
 } from "@/lib/db/schema";
@@ -27,6 +28,7 @@ import { isExpenseCategoryOrGlCode } from "@/lib/finance/expense-gl-tree";
 import { listUsersWithPermissionCode } from "@/lib/hr/approver-users";
 import { createStaffNotification } from "@/lib/notifications/staff";
 import { createDisbursement } from "@/lib/repos/billing";
+import { assertFloatCanPay, lockFloat, returnRecoveryToFloat } from "@/lib/repos/disbursement-float";
 import { createFirmExpense, reverseFirmExpense } from "@/lib/repos/firm-finance";
 import {
   assertTrustClientMatter,
@@ -632,6 +634,8 @@ async function payRequisitionTx(
           `Managing Partner required to pay from firm float. ${tier.reason}`,
         );
       }
+      await lockFloat(firmId);
+      await assertFloatCanPay(firmId, floatPart);
     }
 
     const db = getDb();
@@ -684,15 +688,21 @@ async function payRequisitionTx(
     }
 
     if (floatPart > 0) {
-      const disb = await createDisbursement(firmId, matterId, userId, {
-        description:
-          trustPart > 0 ? `${existing.description} (balance from firm float)` : existing.description,
-        amountCents: floatPart,
-        currency: existing.currency,
-        incurredAt: new Date(),
-        billable: true,
-        paidFrom: "operating",
-      });
+      const disb = await createDisbursement(
+        firmId,
+        matterId,
+        userId,
+        {
+          description:
+            trustPart > 0 ? `${existing.description} (balance from firm float)` : existing.description,
+          amountCents: floatPart,
+          currency: existing.currency,
+          incurredAt: new Date(),
+          billable: true,
+          paidFrom: "firm_float",
+        },
+        { floatPaidViaRequisition: true },
+      );
       await db
         .update(disbursements)
         .set({ requisitionId: id })
@@ -829,31 +839,70 @@ export async function listRecoverableRequisitions(
   return rows.filter((r) => r.recoverable && r.type === "disbursement");
 }
 
-/** Mark a paid recoverable requisition as settled (client repaid / topped up). */
+/**
+ * Mark a paid recoverable requisition as settled once the client has paid the invoice that
+ * billed the advance. The recovered amount moves from the receiving account back into the float.
+ */
 export async function settleRecoverableRequisition(
   firmId: string,
   userId: string,
   id: string,
+  opts?: { receivedInto?: "1010" | "1020" },
 ) {
-  const existing = await getRequisition(firmId, id);
-  if (!existing) throw new AuthError("not_found", "Requisition not found.");
-  if (existing.status !== "paid" || !existing.recoverable) {
-    throw new AuthError(
-      "validation",
-      "Only paid recoverable disbursement requisitions can be settled.",
+  const existing = await runInTransaction(async () => {
+    await lockFinanceKey(`requisition:${firmId}:${id}`);
+    const row = await getRequisition(firmId, id);
+    if (!row) throw new AuthError("not_found", "Requisition not found.");
+    if (row.status !== "paid" || !row.recoverable) {
+      throw new AuthError(
+        "validation",
+        "Only paid recoverable disbursement requisitions can be settled.",
+      );
+    }
+    const db = getDb();
+    const floatDisbs = await db
+      .select({
+        id: disbursements.id,
+        amountCents: disbursements.amountCents,
+        invoiceId: disbursements.invoiceId,
+        invoiceStatus: invoices.status,
+      })
+      .from(disbursements)
+      .leftJoin(invoices, eq(invoices.id, disbursements.invoiceId))
+      .where(
+        and(
+          eq(disbursements.firmId, firmId),
+          eq(disbursements.requisitionId, id),
+          eq(disbursements.paidFrom, "firm_float"),
+          eq(disbursements.billable, true),
+        ),
+      );
+    if (floatDisbs.some((d) => !d.invoiceId || d.invoiceStatus !== "paid")) {
+      throw new AuthError(
+        "validation",
+        "Bill the advance to the client and record the payment first. Recovery is taken from the paid invoice.",
+      );
+    }
+    const recovered = floatDisbs.reduce((s, d) => s + d.amountCents, 0);
+    await lockFloat(firmId);
+    await returnRecoveryToFloat(
+      firmId,
+      userId,
+      id,
+      recovered,
+      opts?.receivedInto ?? "1010",
+      `Advance recovered to float: ${row.description}`.slice(0, 200),
     );
-  }
-  const db = getDb();
-  await db
-    .update(financeRequisitions)
-    .set({
-      recoverable: false,
-      paymentRef: existing.paymentRef
-        ? `${existing.paymentRef} · settled`
-        : "settled",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.id, id)));
+    await db
+      .update(financeRequisitions)
+      .set({
+        recoverable: false,
+        paymentRef: row.paymentRef ? `${row.paymentRef} · settled` : "settled",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(financeRequisitions.firmId, firmId), eq(financeRequisitions.id, id)));
+    return row;
+  });
 
   await createStaffNotification({
     firmId,
