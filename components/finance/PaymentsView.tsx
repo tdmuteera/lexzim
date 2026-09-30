@@ -160,17 +160,32 @@ export function PaymentsView() {
   const [method, setMethod] = useState("Bank");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<DraftLine[]>([
-    newLine("trust_hold"),
-    { ...newLine("fee_revenue"), feeCategory: "consultation" },
-  ]);
+  const [lines, setLines] = useState<DraftLine[]>([newLine("trust_hold")]);
 
   const amountCents = dollarsToCentsLocal(amountDollars);
+  const isSplit = lines.length > 1;
   const lineSumCents = useMemo(
-    () => lines.reduce((sum, line) => sum + dollarsToCentsLocal(line.amountDollars), 0),
-    [lines],
+    () =>
+      isSplit
+        ? lines.reduce((sum, line) => sum + dollarsToCentsLocal(line.amountDollars), 0)
+        : amountCents,
+    [lines, isSplit, amountCents],
   );
-  const splitOk = amountCents > 0 && lineSumCents === amountCents;
+  const usedLineCount = isSplit
+    ? lines.filter((line) => dollarsToCentsLocal(line.amountDollars) > 0).length
+    : 1;
+  const splitOk = amountCents > 0 && usedLineCount > 0 && lineSumCents === amountCents;
+
+  function startSplit() {
+    setLines((prev) => {
+      const first = prev.length === 1 && !prev[0].amountDollars ? { ...prev[0], amountDollars } : prev[0];
+      return [
+        first,
+        ...prev.slice(1),
+        newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold"),
+      ];
+    });
+  }
 
   const clientMatters = useMemo(
     () => matters.filter((m) => !clientId || m.clientId === clientId),
@@ -374,13 +389,15 @@ export function PaymentsView() {
           method: method || null,
           reference: reference || null,
           notes: notes || null,
-          lines: lines.map((line) => ({
-            lineType: line.lineType,
-            feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
-            amountDollars: line.amountDollars,
-            invoiceId: line.invoiceId || null,
-            notes: line.notes || null,
-          })),
+          lines: lines
+            .filter((line) => !isSplit || dollarsToCentsLocal(line.amountDollars) > 0)
+            .map((line) => ({
+              lineType: line.lineType,
+              feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
+              amountDollars: isSplit ? line.amountDollars : amountDollars,
+              invoiceId: line.invoiceId || null,
+              notes: line.notes || null,
+            })),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -393,7 +410,7 @@ export function PaymentsView() {
       setAmountDollars("");
       setReference("");
       setNotes("");
-      setLines([newLine("trust_hold"), { ...newLine("fee_revenue"), feeCategory: "consultation" }]);
+      setLines([newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold")]);
       await loadRegister();
       if (intakeId) {
         window.open(
@@ -449,7 +466,7 @@ export function PaymentsView() {
                 variant={formOpen ? "outline" : "primary"}
                 onClick={() => setFormOpen((v) => !v)}
               >
-                {formOpen ? "Close form" : "New payment"}
+                {formOpen ? "Close form" : "New receipt"}
               </Button>
             </Can>
           </div>
@@ -467,10 +484,10 @@ export function PaymentsView() {
           {formOpen ? (
             <form onSubmit={onSubmit} className="finance-intake-form">
               <div className="finance-intake-form-head">
-                <h4>New payment intake</h4>
+                <h4>New receipt</h4>
                 <p className="muted">
-                  Allocation lines must equal the cash received. Leave blank lines out by
-                  removing them.
+                  One purpose? Just choose the type below; it takes the full amount. Splitting is
+                  optional: a split line left blank or at 0 is not used and is not recorded.
                 </p>
               </div>
 
@@ -594,33 +611,45 @@ export function PaymentsView() {
               <div className="finance-allocation-block">
                 <div className="finance-allocation-head">
                   <div>
-                    <h4>Allocation split</h4>
-                    <p className="muted">Each line is trust hold, disbursement float, or fee revenue.</p>
+                    <h4>{isSplit ? "Allocation split" : "What is this money for?"}</h4>
+                    <p className="muted">
+                      {isSplit
+                        ? "Each line is trust hold, disbursement float, or fee revenue. Lines must add up to the cash received."
+                        : "Trust hold, disbursement float, or fee revenue. Split only if the money covers more than one purpose."}
+                    </p>
                   </div>
                   <div className="finance-allocation-actions">
-                    <Badge tone={splitOk ? "open" : "pending"}>
-                      Lines {centsToDisplay(lineSumCents, currency)} / cash{" "}
-                      {centsToDisplay(amountCents, currency)}
-                    </Badge>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        setLines((prev) => [
-                          ...prev,
-                          newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold"),
-                        ])
-                      }
-                    >
-                      Add line
+                    {isSplit ? (
+                      <Badge tone={splitOk ? "open" : "pending"}>
+                        Lines {centsToDisplay(lineSumCents, currency)} / cash{" "}
+                        {centsToDisplay(amountCents, currency)}
+                      </Badge>
+                    ) : null}
+                    <Button type="button" size="sm" variant="outline" onClick={startSplit}>
+                      {isSplit ? "Add line" : "Split into lines"}
                     </Button>
+                    {isSplit ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setLines((prev) => [prev[0]])}
+                      >
+                        Don&apos;t split
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="finance-allocation-rows">
-                  {lines.map((line, index) => (
-                    <div key={line.key} className="finance-allocation-row">
+                  {lines.map((line, index) => {
+                    const unused = isSplit && dollarsToCentsLocal(line.amountDollars) === 0;
+                    return (
+                    <div
+                      key={line.key}
+                      className="finance-allocation-row"
+                      style={unused ? { opacity: 0.55 } : undefined}
+                    >
                       <label>
                         <span>Type</span>
                         <select
@@ -682,13 +711,17 @@ export function PaymentsView() {
                         </label>
                       )}
                       <label>
-                        <span>Amount</span>
+                        <span>
+                          Amount
+                          {unused ? <em className="muted"> · not used</em> : null}
+                        </span>
                         <input
                           className="filter-select"
-                          required
                           inputMode="decimal"
                           placeholder="0.00"
-                          value={line.amountDollars}
+                          disabled={!isSplit}
+                          title={isSplit ? undefined : "Takes the full cash received"}
+                          value={isSplit ? line.amountDollars : amountDollars}
                           onChange={(e) => {
                             const amountDollarsValue = e.target.value;
                             setLines((prev) =>
@@ -742,17 +775,20 @@ export function PaymentsView() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="finance-intake-form-foot">
                 <Button type="submit" disabled={saving || !splitOk || !clientId}>
-                  {saving ? "Saving…" : "Record payment"}
+                  {saving ? "Saving…" : "Record receipt"}
                 </Button>
-                {!splitOk && amountCents > 0 ? (
+                {!splitOk && amountCents > 0 && isSplit ? (
                   <span className="muted">
-                    Split must equal cash received before you can save.
+                    {usedLineCount === 0
+                      ? "Give at least one line an amount."
+                      : `Split lines add up to ${centsToDisplay(lineSumCents, currency)}; they must equal the cash received.`}
                   </span>
                 ) : null}
               </div>

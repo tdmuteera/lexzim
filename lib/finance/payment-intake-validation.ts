@@ -123,6 +123,24 @@ function parsePositiveCents(
   return dollars;
 }
 
+/** Split lines may be left blank or 0: that part of the receipt is not used and is not recorded. */
+function parseLineCents(raw: Record<string, unknown>, fieldLabel: string): number {
+  if (raw.amountCents != null && raw.amountCents !== "") {
+    const n = Number(raw.amountCents);
+    if (!Number.isInteger(n) || n < 0) {
+      throw new AuthError("validation", `${fieldLabel} must be zero or a positive integer (cents).`);
+    }
+    return n;
+  }
+  const value = raw.amount ?? raw.amountDollars;
+  if (value == null || (typeof value === "string" && !value.trim())) return 0;
+  const cents = dollarsToCents(value);
+  if (cents == null || cents < 0) {
+    throw new AuthError("validation", `${fieldLabel} must be zero or more.`);
+  }
+  return cents;
+}
+
 function isDestination(value: unknown): value is PaymentDestination {
   return (
     typeof value === "string" &&
@@ -141,7 +159,7 @@ function isFeeCategory(value: unknown): value is FeeCategory {
   return typeof value === "string" && (FEE_CATEGORIES as readonly string[]).includes(value);
 }
 
-function parseLine(raw: unknown, index: number): PaymentAllocationLineInput {
+function parseLine(raw: unknown, index: number, fullAmountCents?: number): PaymentAllocationLineInput {
   if (!raw || typeof raw !== "object") {
     throw new AuthError("validation", `Allocation line ${index + 1} is invalid.`);
   }
@@ -152,7 +170,8 @@ function parseLine(raw: unknown, index: number): PaymentAllocationLineInput {
       `Allocation line ${index + 1}: lineType must be trust_hold, fee_revenue, or disbursement_float.`,
     );
   }
-  const amountCents = parsePositiveCents(row, `Allocation line ${index + 1} amount`);
+  const parsed = parseLineCents(row, `Allocation line ${index + 1} amount`);
+  const amountCents = parsed === 0 && fullAmountCents != null ? fullAmountCents : parsed;
   let feeCategory: FeeCategory | null = null;
   if (row.lineType === "fee_revenue") {
     if (!isFeeCategory(row.feeCategory)) {
@@ -180,7 +199,9 @@ function parseLine(raw: unknown, index: number): PaymentAllocationLineInput {
 
 /**
  * Parse Payments intake payload.
- * Lines must sum to cash received. fee_bank / fee_vault intakes may only use fee_revenue lines.
+ * Splitting is optional: a single line with no amount takes the full cash received.
+ * Blank or zero lines are dropped. The remaining lines must sum to cash received.
+ * fee_bank / fee_vault intakes may only use fee_revenue lines.
  */
 export function parsePaymentIntakeInput(
   body: unknown,
@@ -205,7 +226,13 @@ export function parsePaymentIntakeInput(
   if (!linesRaw || linesRaw.length < 1) {
     throw new AuthError("validation", "At least one allocation line is required.");
   }
-  const lines = linesRaw.map((line, i) => parseLine(line, i));
+  const single = linesRaw.length === 1 ? amountCents : undefined;
+  const lines = linesRaw
+    .map((line, i) => parseLine(line, i, single))
+    .filter((line) => line.amountCents > 0);
+  if (!lines.length) {
+    throw new AuthError("validation", "At least one allocation line needs an amount.");
+  }
   const lineSum = lines.reduce((s, l) => s + l.amountCents, 0);
   if (lineSum !== amountCents) {
     throw new AuthError(
