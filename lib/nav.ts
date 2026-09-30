@@ -117,7 +117,7 @@ export const navSections: NavSection[] = [
       },
       {
         href: "/finance/payments",
-        label: "Payments",
+        label: "Receipts / Receivables",
         icon: "invoice",
         permission: "finance.payments.view",
         anyOf: ["finance.payments.view", "billing.my_clients.view"],
@@ -135,6 +135,30 @@ export const navSections: NavSection[] = [
         permission: "finance.requisitions.view",
       },
       {
+        href: "/finance/disbursements",
+        label: "Disbursement float",
+        icon: "shield",
+        permission: "finance.view",
+      },
+      {
+        href: "/finance/cash-book",
+        label: "Business Cash Book",
+        icon: "list",
+        permission: "finance.view",
+      },
+      {
+        href: "/finance/petty-cash",
+        label: "Petty cash",
+        icon: "invoice",
+        permission: "finance.view",
+      },
+      {
+        href: "/finance/transfers",
+        label: "Funds transfer",
+        icon: "check",
+        permission: "finance.view",
+      },
+      {
         href: "/finance/reconciliations",
         label: "Reconciliations",
         icon: "check",
@@ -142,7 +166,7 @@ export const navSections: NavSection[] = [
       },
       {
         href: "/finance/expenses",
-        label: "Expenses & cashbook",
+        label: "Expenses & bank register",
         icon: "clipboard",
         permission: "finance.view",
       },
@@ -337,7 +361,7 @@ export const routeMeta: Record<string, RouteMeta> = {
     phaseBadge: "Phase 3+",
   },
   "/finance/payments": {
-    title: "Payments",
+    title: "Receipts / Receivables",
     subtitle: "Money in · trust / fee / disbursement split",
     purpose: "Record client payments and apportion trust hold, fee revenue, and disbursement float. Trust first; fees-only exception for direct fee bank receipts.",
     phaseBadge: "Phase 11",
@@ -361,10 +385,34 @@ export const routeMeta: Record<string, RouteMeta> = {
     phaseBadge: "Phase 6+",
   },
   "/finance/expenses": {
-    title: "Expenses & cashbook",
+    title: "Expenses & bank register",
     subtitle: "Firm operating costs · business bank in/out",
-    purpose: "Record firm expenses and business cashbook entries, separate from client trust.",
+    purpose: "Record firm expenses and business bank register entries, separate from client trust.",
     phaseBadge: "Phase 6+",
+  },
+  "/finance/disbursements": {
+    title: "Disbursement float",
+    subtitle: "Trust first · float covers shortfalls · monthly top-up",
+    purpose: "Firm money that advances client disbursements when trust is short. Recoveries return to the float.",
+    phaseBadge: "Phase 11",
+  },
+  "/finance/cash-book": {
+    title: "Business Cash Book",
+    subtitle: "Firm cash on premises · GL 1020",
+    purpose: "Cash fee receipts and cash movements of the firm, straight from the general ledger.",
+    phaseBadge: "Phase 11",
+  },
+  "/finance/petty-cash": {
+    title: "Business Petty Cash",
+    subtitle: "Small office cash · GL 1050",
+    purpose: "Minor office expenses paid in cash. Topped up from the Business Cash Book or bank.",
+    phaseBadge: "Phase 11",
+  },
+  "/finance/transfers": {
+    title: "Funds transfer",
+    subtitle: "Bank · cash book · petty cash · float",
+    purpose: "Move firm money between the operating bank, Business Cash Book, petty cash and disbursement float.",
+    phaseBadge: "Phase 11",
   },
   "/finance/reports": {
     title: "Finance reports",

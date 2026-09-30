@@ -9,8 +9,8 @@ export const DEFAULT_COA: CoaSeedRow[] = [
   // Assets
   { code: "1000", name: "Assets", type: "asset", isSystem: true, isGroup: true, normalBalance: "debit" },
   { code: "1010", name: "Operating Bank", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "Business operating account" },
-  { code: "1020", name: "Business Vault", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "On-premises business cash vault" },
-  { code: "1050", name: "Petty Cash", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit" },
+  { code: "1020", name: "Business Cash Book", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "Firm cash held on premises (cash fee receipts)" },
+  { code: "1050", name: "Petty Cash", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "Small office cash for minor expenses; topped up from the Business Cash Book" },
   { code: "1060", name: "Disbursement Float", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "Firm-funded account for client disbursements; recoveries return here" },
   { code: "1210", name: "Trust Bank", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit", description: "IOLTA / client trust bank" },
   { code: "1310", name: "Accounts Receivable", type: "asset", parentCode: "1000", isSystem: true, normalBalance: "debit" },

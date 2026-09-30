@@ -11,6 +11,11 @@ import {
   getBusinessCashbookBalance,
   listFirmExpenses,
 } from "@/lib/repos/firm-finance";
+import {
+  FLOAT_MONTHLY_TARGET_CENTS,
+  getFirmCashPositions,
+  type FirmCashPosition,
+} from "@/lib/repos/firm-cash";
 import { listReconciliationRuns } from "@/lib/repos/reconciliation";
 import { getTrustOverview } from "@/lib/repos/trust";
 
@@ -35,6 +40,9 @@ export type FinanceKpis = {
   businessBankStatementCents: number | null;
   businessBankLabel: string;
   trustVaultCents: number;
+  /** Firm cash accounts from the general ledger: operating bank, cash book, petty cash, float. */
+  firmCash: FirmCashPosition[];
+  floatTargetCents: number;
   monthlyExpensesCents: number;
   monthlyExpenseCount: number;
   monthlyProfitCents: number;
@@ -181,6 +189,7 @@ export async function getFinanceKpis(
     bookBalance,
     reconRows,
     matterCounts,
+    firmCash,
   ] = await Promise.all([
     listDebtors(firmId, {
       userId: opts.userId,
@@ -196,6 +205,7 @@ export async function getFinanceKpis(
       status: "completed",
     }),
     countMattersOpenedClosed(firmId, from, to),
+    getFirmCashPositions(firmId),
   ]);
 
   const debtors = debtorsBucketTotals(debtorsReport.rows);
@@ -242,6 +252,8 @@ export async function getFinanceKpis(
     businessBankStatementCents: lastBusinessRecon?.run.statementBalanceCents ?? null,
     businessBankLabel: DEFAULT_BUSINESS_BANK_LABEL,
     trustVaultCents: vaultCents,
+    firmCash,
+    floatTargetCents: FLOAT_MONTHLY_TARGET_CENTS,
     monthlyExpensesCents: expenseTotal,
     monthlyExpenseCount: expenseRows.filter((r) => r.expense.currency === defaultCurrency).length,
     monthlyProfitCents: collected.totalCents - expenseTotal,

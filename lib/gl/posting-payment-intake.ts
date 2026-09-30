@@ -49,7 +49,7 @@ export async function postDirectFeeCashGl(
       reference: input.reference,
       memo:
         input.memo ??
-        `Direct fee receipt (${input.feeCategory}) via ${cashCode === "1020" ? "fee vault" : "fee bank"}`,
+        `Direct fee receipt (${input.feeCategory}) via ${cashCode === "1020" ? "Business Cash Book" : "fee bank"}`,
       lines: [
         {
           accountId: cash.id,

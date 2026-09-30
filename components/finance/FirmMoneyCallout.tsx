@@ -8,17 +8,19 @@ export function FirmMoneyCallout() {
     <div className="finance-desk-callout firm-desk-callout" role="note">
       <div className="finance-desk-callout-title">Firm operating account</div>
       <p>
-        Expenses and business cashbook entries are firm money only. Never record client trust
-        deposits, trust disbursements, or fee invoices here.
+        Expenses, the Business Cash Book, petty cash and the disbursement float are firm money
+        only. Never record client trust deposits, trust disbursements, or fee invoices here.
       </p>
       <p className="finance-desk-callout-link">
+        <Link href="/finance/transfers">Funds Transfer</Link>
+        <span className="muted"> · </span>
         <Link href="/finance/requisitions">Requisitions</Link>
         <span className="muted"> · </span>
         <Link href="/finance/trust">Trust</Link>
         <span className="muted"> · </span>
         <Link href="/finance/invoicing">Invoicing</Link>
         <span className="muted"> · </span>
-        <Link href="/finance/payments">Payments</Link>
+        <Link href="/finance/payments">Receipts / Receivables</Link>
       </p>
     </div>
   );

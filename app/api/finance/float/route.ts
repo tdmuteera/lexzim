@@ -8,6 +8,7 @@ import {
   listFloatJournals,
   returnFloatExcess,
 } from "@/lib/repos/disbursement-float";
+import { FLOAT_MONTHLY_TARGET_CENTS } from "@/lib/repos/firm-cash";
 import { tenantFirmId } from "@/lib/tenant/scope";
 
 /** GET /api/finance/float : disbursement float balance and recent movements. */
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
     ]);
     return jsonOk({
       balanceCents,
+      targetCents: FLOAT_MONTHLY_TARGET_CENTS,
       movements: movements.map((m) => ({
         entryId: m.id,
         entryDate: m.entryDate.toISOString(),

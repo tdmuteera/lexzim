@@ -65,7 +65,7 @@ function RequisitionCallout() {
         <span className="muted"> · </span>
         <Link href="/finance/client-accounts">Client accounts</Link>
         <span className="muted"> · </span>
-        <Link href="/finance/payments">Payments</Link>
+        <Link href="/finance/payments">Receipts / Receivables</Link>
       </p>
     </div>
   );
@@ -806,7 +806,7 @@ export function RequisitionsView() {
                         onChange={(e) => setReceivedInto(e.target.value as "1010" | "1020")}
                       >
                         <option value="1010">Operating bank</option>
-                        <option value="1020">Business cashbook (vault)</option>
+                        <option value="1020">Business Cash Book</option>
                       </select>
                     </label>
                     <Button

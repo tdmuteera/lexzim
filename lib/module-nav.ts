@@ -49,7 +49,7 @@ export const FINANCE_TABS: ModuleTab[] = [
   },
   {
     href: "/finance/payments",
-    label: "Payments",
+    label: "Receipts / Receivables",
     permission: "finance.payments.view",
     anyOf: ["finance.payments.view", "billing.my_clients.view"],
   },
@@ -64,13 +64,33 @@ export const FINANCE_TABS: ModuleTab[] = [
     permission: "finance.requisitions.view",
   },
   {
+    href: "/finance/disbursements",
+    label: "Disbursement float",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/cash-book",
+    label: "Business Cash Book",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/petty-cash",
+    label: "Petty cash",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/transfers",
+    label: "Funds transfer",
+    permission: "finance.view",
+  },
+  {
     href: "/finance/reconciliations",
     label: "Reconciliations",
     permission: "finance.reconcile",
   },
   {
     href: "/finance/expenses",
-    label: "Expenses & cashbook",
+    label: "Expenses & bank register",
     permission: "finance.view",
   },
   {
@@ -138,6 +158,9 @@ export const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   { prefix: "/finance/reports", permission: "finance.view" },
   { prefix: "/finance/quotations", permission: "billing.view" },
   { prefix: "/finance/petty-cash", permission: "finance.view" },
+  { prefix: "/finance/cash-book", permission: "finance.view" },
+  { prefix: "/finance/disbursements", permission: "finance.view" },
+  { prefix: "/finance/transfers", permission: "finance.view" },
   { prefix: "/finance/creditors", permission: "finance.view" },
   { prefix: "/finance/accounting", permission: "finance.gl.view" },
   {

@@ -44,9 +44,31 @@ function KpiTile({
   return inner;
 }
 
+const CASH_HREF: Record<string, string> = {
+  "1010": "/finance/transfers",
+  "1020": "/finance/cash-book",
+  "1050": "/finance/petty-cash",
+  "1060": "/finance/disbursements",
+};
+
 export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProps) {
   const c = kpis.currency;
   const money = (n: number) => centsToDisplay(n, c);
+  const cash = (code: string) => kpis.firmCash.find((p) => p.code === code)?.balanceCents ?? 0;
+  const floatShort = Math.max(0, kpis.floatTargetCents - cash("1060"));
+
+  function cashHint(code: string): string {
+    if (code === "1010") {
+      return kpis.businessBankStatementCents != null
+        ? `Last stmt ${centsToDisplay(kpis.businessBankStatementCents, c)}`
+        : "Postings in the system";
+    }
+    if (code === "1020") return "Firm cash on premises";
+    if (code === "1050") return "Office petty cash";
+    return floatShort > 0
+      ? `Target ${money(kpis.floatTargetCents)}, short ${money(floatShort)}`
+      : `Target ${money(kpis.floatTargetCents)}, funded`;
+  }
 
   if (compact) {
     return (
@@ -78,11 +100,11 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
             href="/finance/debtors"
           />
           <KpiTile
-            label="Business bank"
-            value={kpis.businessBankBookCents}
+            label="Business Cash Book"
+            value={cash("1020")}
             format={money}
-            hint="Book balance"
-            href="/finance/expenses"
+            hint={`Petty ${money(cash("1050"))} · Float ${money(cash("1060"))}`}
+            href="/finance/cash-book"
           />
           <KpiTile
             label="Monthly profit"
@@ -160,17 +182,16 @@ export function FinanceKpisPanel({ kpis, compact = false }: FinanceKpisPanelProp
 
       <h4 style={{ marginBottom: "0.5rem" }}>Cash positions</h4>
       <div className="trust-overview-cards" style={{ marginBottom: "1.25rem" }}>
-        <KpiTile
-          label="Business bank (book)"
-          value={kpis.businessBankBookCents}
-          format={money}
-          hint={
-            kpis.businessBankStatementCents != null
-              ? `Last stmt ${centsToDisplay(kpis.businessBankStatementCents, c)}`
-              : kpis.businessBankLabel
-          }
-          href="/finance/expenses"
-        />
+        {kpis.firmCash.map((p) => (
+          <KpiTile
+            key={p.code}
+            label={p.label}
+            value={p.balanceCents}
+            format={money}
+            hint={cashHint(p.code)}
+            href={CASH_HREF[p.code]}
+          />
+        ))}
         <KpiTile
           label="Trust vault"
           value={kpis.trustVaultCents}

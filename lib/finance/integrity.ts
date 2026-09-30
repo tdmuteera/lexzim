@@ -208,6 +208,32 @@ export async function runFinanceIntegrity(firmId: string): Promise<IntegrityRepo
     detail: `float balance ${gl1060}`,
   });
 
+  const gl1020 = glBal("1020", "debit");
+  const gl1050 = glBal("1050", "debit");
+  checks.push({
+    id: "firm_cash_not_negative",
+    label: "Business Cash Book (1020) and Petty Cash (1050) never pay out more than they hold",
+    ok: gl1020 >= 0 && gl1050 >= 0,
+    detail: `cash book ${gl1020}, petty cash ${gl1050}`,
+  });
+
+  const badTransfers = await q(sql`
+    select j.id, j.source_id, count(l.id)::int as legs,
+           count(l.id) filter (where a.code not in ('1010','1020','1050','1060'))::int as non_cash_legs
+    from gl_journal_entries j
+    join gl_journal_lines l on l.entry_id = j.id
+    join gl_accounts a on a.id = l.account_id
+    where j.firm_id = ${firmId} and j.source_id like 'transfer:%'
+    group by j.id, j.source_id
+    having count(l.id) <> 2 or count(l.id) filter (where a.code not in ('1010','1020','1050','1060')) > 0`);
+  checks.push({
+    id: "funds_transfers_cash_only",
+    label: "Every funds transfer moves money between two firm cash accounts only",
+    ok: badTransfers.length === 0,
+    detail: `${badTransfers.length} malformed transfers`,
+    rows: badTransfers,
+  });
+
   const reqLinks = await q(sql`
     select r.id, r.paid_from, r.trust_entry_id, r.disbursement_id
     from finance_requisitions r

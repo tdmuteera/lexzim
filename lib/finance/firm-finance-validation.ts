@@ -47,7 +47,7 @@ export type ExpenseInput = {
   paymentMethod: string | null;
   notes: string | null;
   glAccountId: string | null;
-  paymentSource: "cash" | "ap" | "petty";
+  paymentSource: "cash" | "ap" | "petty" | "cashbook";
   budgetMonth: string | null;
 };
 
@@ -78,8 +78,8 @@ export function parseExpenseInput(
   }
 
   const paymentSourceRaw = trimOrNull(raw.paymentSource) ?? "cash";
-  if (paymentSourceRaw !== "cash" && paymentSourceRaw !== "ap" && paymentSourceRaw !== "petty") {
-    throw new AuthError("validation", "paymentSource must be cash, ap, or petty.");
+  if (paymentSourceRaw !== "cash" && paymentSourceRaw !== "ap" && paymentSourceRaw !== "petty" && paymentSourceRaw !== "cashbook") {
+    throw new AuthError("validation", "paymentSource must be cash (operating bank), cashbook, petty, or ap.");
   }
 
   return {

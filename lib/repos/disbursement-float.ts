@@ -7,6 +7,7 @@ import { getDb, lockFinanceKey, runInTransaction } from "@/lib/db";
 import { glAccounts, glJournalEntries, glJournalLines } from "@/lib/db/schema";
 import { ensureGlAccountByCode } from "@/lib/gl/accounts";
 import { postManualJournal, reverseJournalBySource } from "@/lib/gl/journals";
+import { firmCashLabel, lockAndAssertCashCanPay } from "@/lib/repos/firm-cash";
 
 /** Disbursement float (GL 1060): firm money set aside for client disbursements. */
 export const FLOAT_GL_CODE = "1060";
@@ -14,7 +15,7 @@ export type FloatCashCode = "1010" | "1020";
 
 function assertCashCode(code: unknown): FloatCashCode {
   if (code === "1010" || code === "1020") return code;
-  throw new AuthError("validation", "Account must be the operating bank (1010) or the business cashbook/vault (1020).");
+  throw new AuthError("validation", "Account must be the Operating Bank (1010) or the Business Cash Book (1020).");
 }
 
 function assertAmount(amountCents: unknown): number {
@@ -101,6 +102,7 @@ export async function fundFloat(
   const amountCents = assertAmount(input.amountCents);
   const from = assertCashCode(input.fromAccount);
   return runInTransaction(async () => {
+    await lockAndAssertCashCanPay(firmId, from, amountCents);
     await lockFloat(firmId);
     const entry = await postFloatMove(
       firmId,
@@ -108,7 +110,7 @@ export async function fundFloat(
       "in",
       from,
       amountCents,
-      `Float funded from ${from}${input.note ? `: ${input.note}` : ""}`,
+      `Float funded from ${firmCashLabel(from)}${input.note ? `: ${input.note}` : ""}`,
       `fund:${randomUUID()}`,
     );
     return { entry, balanceCents: await getFloatBalanceCents(firmId) };
@@ -135,7 +137,7 @@ export async function returnFloatExcess(
     if (amountCents > balance) {
       throw new AuthError("validation", `The float only holds ${balance} cents.`);
     }
-    const entry = await postFloatMove(firmId, userId, "out", to, amountCents, `Float excess returned to ${to}: ${reason}`, `return:${randomUUID()}`);
+    const entry = await postFloatMove(firmId, userId, "out", to, amountCents, `Float excess returned to ${firmCashLabel(to)}: ${reason}`, `return:${randomUUID()}`);
     return { entry, balanceCents: await getFloatBalanceCents(firmId) };
   });
 }

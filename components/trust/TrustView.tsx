@@ -549,7 +549,7 @@ export function TrustView() {
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
             <Link href="/finance/payments" className="btn btn-ghost btn-sm">
-              Payments
+              Receipts
             </Link>
             <Link href="/finance/client-accounts" className="btn btn-ghost btn-sm">
               Client accounts

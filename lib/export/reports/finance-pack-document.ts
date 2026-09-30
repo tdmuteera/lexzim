@@ -28,7 +28,7 @@ export function weeklyPackToExportDocument(pack: WeeklyFinancePack): ExportDocum
 
   return {
     title: "Weekly finance pack",
-    subtitle: `Collections, trust, and cashbook as of ${shortDate(pack.asOf)}`,
+    subtitle: `Collections, trust, and firm cash as of ${shortDate(pack.asOf)}`,
     asOf: shortDate(pack.asOf),
     summaryLines: [
       ...pack.debtors.summaryByCurrency.map(
@@ -36,7 +36,8 @@ export function weeklyPackToExportDocument(pack: WeeklyFinancePack): ExportDocum
           `Debtors ${s.currency}: ${s.invoiceCount} invoice(s), ${centsToDisplay(s.totalBalanceCents, s.currency)}`,
       ),
       `Trust accounts: ${pack.trustSnapshot.accounts.length}`,
-      `Business book balance: ${centsToDisplay(cash.bookBalanceCents, currency)}`,
+      ...pack.firmCash.map((p) => `${p.label}: ${centsToDisplay(p.balanceCents, currency)}`),
+      `Bank register (memo) balance: ${centsToDisplay(cash.bookBalanceCents, currency)}`,
       cash.lastRecon
         ? `Last recon variance: ${centsToDisplay(cash.lastRecon.varianceCents, currency)}`
         : "No completed business bank recon yet.",

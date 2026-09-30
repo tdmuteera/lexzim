@@ -18,14 +18,16 @@ type Movement = {
 
 type Mode = "fund" | "return" | null;
 
-type FloatResult = { balanceCents: number; movements: Movement[] } | { error: string };
+type FloatResult =
+  | { balanceCents: number; targetCents: number; movements: Movement[] }
+  | { error: string };
 
 async function fetchFloat(): Promise<FloatResult> {
   try {
     const res = await fetch("/api/finance/float", { credentials: "include" });
     const body = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
-      data?: { balanceCents: number; movements: Movement[] };
+      data?: { balanceCents: number; targetCents: number; movements: Movement[] };
       error?: { message?: string };
     };
     if (!res.ok || !body.ok || !body.data) {
@@ -38,21 +40,28 @@ async function fetchFloat(): Promise<FloatResult> {
 }
 
 const ACCOUNT_LABEL: Record<"1010" | "1020", string> = {
-  "1010": "Operating bank",
-  "1020": "Business cashbook (vault)",
+  "1010": "Operating Bank (1010)",
+  "1020": "Business Cash Book (1020)",
 };
 
 /**
  * Firm money set aside to advance client disbursements when trust is short (GL 1060).
  * Recoveries flow back here; the Managing Partner moves any excess out.
  */
-export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+export function DisbursementFloatPanel({
+  refreshKey = 0,
+  onChanged,
+}: {
+  refreshKey?: number;
+  onChanged?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const currency = user?.firm?.defaultCurrency || "USD";
   const isManagingPartner = user?.role?.code === "managing_partner";
 
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [targetCents, setTargetCents] = useState<number | null>(null);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -71,6 +80,7 @@ export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number
     }
     setLoadError(null);
     setBalanceCents(result.balanceCents);
+    setTargetCents(result.targetCents);
     setMovements(result.movements);
   }, []);
 
@@ -86,10 +96,13 @@ export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number
     };
   }, [apply, refreshKey]);
 
-  function open(next: Mode) {
+  const topUpCents =
+    balanceCents != null && targetCents != null ? Math.max(0, targetCents - balanceCents) : 0;
+
+  function open(next: Mode, prefillCents = 0) {
     setMode(next);
-    setAmountDollars("");
-    setText("");
+    setAmountDollars(prefillCents ? (prefillCents / 100).toFixed(2) : "");
+    setText(prefillCents ? "Monthly top-up" : "");
     setAccount("1010");
     setFormError(null);
   }
@@ -125,6 +138,7 @@ export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number
       toast(mode === "fund" ? "Float funded." : "Float excess returned.");
       setMode(null);
       await load();
+      onChanged?.();
     } catch {
       setFormError("Could not post the float movement.");
     } finally {
@@ -139,6 +153,9 @@ export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number
           <h3>Disbursement float</h3>
           <p className="panel-subtitle muted">
             Firm money for advancing client disbursements when trust is short. Recoveries return here.
+            {targetCents != null
+              ? ` Monthly target ${centsToDisplay(targetCents, currency)}.`
+              : ""}
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -146,7 +163,12 @@ export function DisbursementFloatPanel({ refreshKey = 0 }: { refreshKey?: number
             {balanceCents == null ? "…" : centsToDisplay(balanceCents, currency)}
           </strong>
           <Can permission="finance.post">
-            <Button size="sm" onClick={() => open("fund")}>
+            {topUpCents > 0 && targetCents != null ? (
+              <Button size="sm" onClick={() => open("fund", topUpCents)}>
+                Top up to {centsToDisplay(targetCents, currency)}
+              </Button>
+            ) : null}
+            <Button size="sm" variant={topUpCents > 0 ? "outline" : undefined} onClick={() => open("fund")}>
               Fund float
             </Button>
             {isManagingPartner ? (

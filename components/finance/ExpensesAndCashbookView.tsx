@@ -76,7 +76,7 @@ export function ExpensesAndCashbookView() {
   const [expDate, setExpDate] = useState(todayInput);
   const [expCategory, setExpCategory] = useState("9070");
   const [expBudgetMonth, setExpBudgetMonth] = useState("");
-  const [expPaymentSource, setExpPaymentSource] = useState<"cash" | "petty">("cash");
+  const [expPaymentSource, setExpPaymentSource] = useState<"cash" | "cashbook" | "petty">("cash");
   const [expPayee, setExpPayee] = useState("");
   const [expAmount, setExpAmount] = useState("");
   const [expMatterId, setExpMatterId] = useState("");
@@ -353,11 +353,11 @@ export function ExpensesAndCashbookView() {
   } = useTableSort(cashbook, cashbookAccessors, { key: "date", dir: "desc" });
 
   return (
-    <section className="view active scrollable finance-desk-view" aria-label="Expenses and cashbook">
+    <section className="view active scrollable finance-desk-view" aria-label="Expenses and bank register">
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h3>Expenses & cashbook</h3>
+            <h3>Expenses & bank register</h3>
             <p className="panel-subtitle muted">Firm operating money · not trust</p>
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
@@ -365,7 +365,10 @@ export function ExpensesAndCashbookView() {
               Requisitions
             </Link>
             <Link href="/finance/payments" className="btn btn-ghost btn-sm">
-              Payments
+              Receipts / Receivables
+            </Link>
+            <Link href="/finance/transfers" className="btn btn-ghost btn-sm">
+              Funds transfer
             </Link>
           </div>
         </div>
@@ -377,7 +380,7 @@ export function ExpensesAndCashbookView() {
               Expenses
             </Button>
             <Button size="sm" variant={tab === "cashbook" ? "primary" : "outline"} onClick={() => setTab("cashbook")}>
-              Cashbook
+              Bank register
             </Button>
             <Button size="sm" variant={tab === "recon" ? "primary" : "outline"} onClick={() => setTab("recon")}>
               Business bank recon
@@ -449,10 +452,11 @@ export function ExpensesAndCashbookView() {
                       <select
                         value={expPaymentSource}
                         onChange={(e) =>
-                          setExpPaymentSource(e.target.value as "cash" | "petty")
+                          setExpPaymentSource(e.target.value as "cash" | "cashbook" | "petty")
                         }
                       >
-                        <option value="cash">Business bank (1010)</option>
+                        <option value="cash">Operating bank (1010)</option>
+                        <option value="cashbook">Business Cash Book (1020)</option>
                         <option value="petty">Petty cash (1050)</option>
                       </select>
                     </div>
@@ -559,7 +563,11 @@ export function ExpensesAndCashbookView() {
               </Can>
               {cbOpen ? (
                 <form onSubmit={submitCashbook} className="panel" style={{ padding: "1rem", marginBottom: "1rem" }}>
-                  <h4 style={{ marginTop: 0 }}>Cashbook entry</h4>
+                  <h4 style={{ marginTop: 0 }}>Bank register entry</h4>
+                  <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                    A memo line for matching the business bank statement. It does not move money in the
+                    ledger; use Funds transfer or Expenses for that.
+                  </p>
                   <div className="grid-2">
                     <div className="form-group">
                       <label>Type</label>

@@ -454,9 +454,8 @@ export async function listDashboardTrustAttention(firmId: string) {
       currency: trustAccounts.currency,
       isActive: trustAccounts.isActive,
       balanceCents: sql<number>`coalesce((
-        select sum(${trustLedgerEntries.amountCents}) from ${trustLedgerEntries}
-        where ${trustLedgerEntries.firmId} = ${firmId}
-          and ${trustLedgerEntries.trustAccountId} = ${trustAccounts.id}
+        select sum(tle.amount_cents) from trust_ledger_entries tle
+        where tle.firm_id = ${firmId} and tle.trust_account_id = "trust_accounts"."id"
       ), 0)::int`,
     })
     .from(trustAccounts)

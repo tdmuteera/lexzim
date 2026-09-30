@@ -29,7 +29,14 @@ async function findPostedJournal(
   return rows[0] ?? null;
 }
 
-/** Post firm expense paid from cash: Dr expense, Cr operating bank. */
+/** Firm cash account an expense is paid from: petty cash, the cash book, or the operating bank. */
+export function expenseCashCode(paymentSource: string): "1010" | "1020" | "1050" {
+  if (paymentSource === "petty") return "1050";
+  if (paymentSource === "cashbook") return "1020";
+  return "1010";
+}
+
+/** Post firm expense: Dr expense, Cr the cash account it was paid from. */
 export async function postFirmExpenseGl(
   firmId: string,
   userId: string,
@@ -57,10 +64,7 @@ export async function postFirmExpenseGl(
     throw new AuthError("validation", "Expense GL account not found.");
   }
 
-  const cashAccount =
-    expense.paymentSource === "petty"
-      ? await ensureGlAccountByCode(firmId, "1050")
-      : await ensureGlAccountByCode(firmId, "1010");
+  const cashAccount = await ensureGlAccountByCode(firmId, expenseCashCode(expense.paymentSource));
 
   return postManualJournal(
     firmId,

@@ -14,7 +14,8 @@ import {
 import type { CashbookEntryInput, ExpenseInput } from "@/lib/finance/firm-finance-validation";
 import { resolveExpenseGlAccountId } from "@/lib/finance/expense-gl-tree";
 import { reverseJournalBySource } from "@/lib/gl/journals";
-import { postFirmExpenseGl } from "@/lib/gl/posting-expenses";
+import { expenseCashCode, postFirmExpenseGl } from "@/lib/gl/posting-expenses";
+import { lockAndAssertCashCanPay } from "@/lib/repos/firm-cash";
 
 export async function listFirmExpenses(
   firmId: string,
@@ -61,31 +62,35 @@ export async function createFirmExpense(firmId: string, userId: string, input: E
   const glAccountId =
     input.glAccountId ?? (await resolveExpenseGlAccountId(firmId, input.category));
 
-  const db = getDb();
-  const rows = await db
-    .insert(firmExpenses)
-    .values({
-      firmId,
-      expenseDate: input.expenseDate,
-      category: input.category,
-      payee: input.payee,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      matterId: input.matterId,
-      paymentMethod: input.paymentMethod,
-      notes: input.notes,
-      glAccountId,
-      paymentSource: input.paymentSource,
-      budgetMonth: input.budgetMonth,
-      createdBy: userId,
-      updatedAt: new Date(),
-    })
-    .returning();
-  const expense = rows[0]!;
-  if (input.paymentSource !== "ap") {
-    await postFirmExpenseGl(firmId, userId, expense.id);
-  }
-  return expense;
+  return runInTransaction(async () => {
+    if (input.paymentSource !== "ap") {
+      await lockAndAssertCashCanPay(firmId, expenseCashCode(input.paymentSource), input.amountCents);
+    }
+    const rows = await getDb()
+      .insert(firmExpenses)
+      .values({
+        firmId,
+        expenseDate: input.expenseDate,
+        category: input.category,
+        payee: input.payee,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        matterId: input.matterId,
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+        glAccountId,
+        paymentSource: input.paymentSource,
+        budgetMonth: input.budgetMonth,
+        createdBy: userId,
+        updatedAt: new Date(),
+      })
+      .returning();
+    const expense = rows[0]!;
+    if (input.paymentSource !== "ap") {
+      await postFirmExpenseGl(firmId, userId, expense.id);
+    }
+    return expense;
+  });
 }
 
 async function assertExpenseNotFromRequisition(firmId: string, id: string) {
@@ -146,7 +151,10 @@ export async function updateFirmExpense(
     const actor = userId ?? before.expense.createdBy;
     if (updated && moneyChanged && actor) {
       await reverseJournalBySource(firmId, actor, "expense", id, `Expense corrected: ${updated.payee}`);
-      if (updated.paymentSource !== "ap") await postFirmExpenseGl(firmId, actor, id);
+      if (updated.paymentSource !== "ap") {
+        await lockAndAssertCashCanPay(firmId, expenseCashCode(updated.paymentSource), updated.amountCents);
+        await postFirmExpenseGl(firmId, actor, id);
+      }
     }
     return updated;
   });

@@ -117,7 +117,7 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_bank") return "Trust bank";
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank";
-  if (destination === "fee_vault") return "Fee vault";
+  if (destination === "fee_vault") return "Business Cash Book";
   return destination;
 }
 
@@ -353,7 +353,7 @@ export function ClientAccountsView() {
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
             <Link href="/finance/payments" className="btn btn-ghost btn-sm">
-              Payments
+              Receipts
             </Link>
             <Link href="/finance/trust" className="btn btn-ghost btn-sm">
               Trust
@@ -499,7 +499,7 @@ export function ClientAccountsView() {
                   Trust desk
                 </Link>
                 <Link href="/finance/payments" className="btn btn-ghost btn-sm">
-                  Payments
+                  Receipts
                 </Link>
               </div>
 

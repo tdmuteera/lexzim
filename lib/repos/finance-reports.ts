@@ -10,6 +10,7 @@ import {
 import { toCsv } from "@/lib/reports/csv";
 import { sumFeePaymentsInPeriod } from "@/lib/repos/billing";
 import { listDebtors, type DebtorsReport } from "@/lib/repos/debtors";
+import { getFirmCashPositions, type FirmCashPosition } from "@/lib/repos/firm-cash";
 import {
   getBusinessCashbookBalance,
   listFirmExpenses,
@@ -59,6 +60,8 @@ export type WeeklyFinancePack = {
   outstandingInvoices: OutstandingInvoiceRow[];
   trustSnapshot: TrustOverview;
   businessCashbook: BusinessCashbookSnapshot;
+  /** Firm cash accounts from the general ledger. */
+  firmCash: FirmCashPosition[];
 };
 
 export type ReconRunSummary = {
@@ -245,6 +248,7 @@ export async function getWeeklyFinancePack(
 
   const trustSnapshot = await getTrustOverview(firmId);
   const businessCashbook = await buildBusinessCashbookSnapshot(firmId, asOf);
+  const firmCash = await getFirmCashPositions(firmId);
 
   return {
     pack: "weekly",
@@ -253,6 +257,7 @@ export async function getWeeklyFinancePack(
     outstandingInvoices,
     trustSnapshot,
     businessCashbook,
+    firmCash,
   };
 }
 
@@ -416,7 +421,16 @@ export function weeklyPackToCsv(pack: WeeklyFinancePack): string {
   );
   sections.push("");
 
-  sections.push("BUSINESS CASHBOOK");
+  sections.push("FIRM CASH (GENERAL LEDGER)");
+  sections.push(
+    toCsv(
+      ["Code", "Account", "Balance cents"],
+      pack.firmCash.map((p) => [p.code, p.label, p.balanceCents]),
+    ).trim(),
+  );
+  sections.push("");
+
+  sections.push("BANK REGISTER (MEMO)");
   sections.push(`Book balance cents: ${pack.businessCashbook.bookBalanceCents}`);
   if (pack.businessCashbook.lastRecon) {
     sections.push(

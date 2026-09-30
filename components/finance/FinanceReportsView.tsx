@@ -441,21 +441,18 @@ export function FinanceReportsView() {
                     {centsToDisplay(trustVaultTotal, "USD")}
                   </div>
                 </div>
-                <div className="trust-overview-card panel">
-                  <div className="trust-overview-card-label">Business bank (book)</div>
-                  <div className="trust-overview-card-balance">
-                    {centsToDisplay(weeklyPack.businessCashbook.bookBalanceCents, "USD")}
+                {(weeklyPack.firmCash ?? []).map((p) => (
+                  <div key={p.code} className="trust-overview-card panel">
+                    <div className="trust-overview-card-label">{p.label}</div>
+                    <div className="trust-overview-card-balance">{centsToDisplay(p.balanceCents, "USD")}</div>
+                    {p.code === "1010" && weeklyPack.businessCashbook.lastRecon ? (
+                      <span className="muted" style={{ fontSize: "0.85rem" }}>
+                        Last stmt{" "}
+                        {centsToDisplay(weeklyPack.businessCashbook.lastRecon.statementBalanceCents, "USD")}
+                      </span>
+                    ) : null}
                   </div>
-                  {weeklyPack.businessCashbook.lastRecon ? (
-                    <span className="muted" style={{ fontSize: "0.85rem" }}>
-                      Last stmt{" "}
-                      {centsToDisplay(
-                        weeklyPack.businessCashbook.lastRecon.statementBalanceCents,
-                        "USD",
-                      )}
-                    </span>
-                  ) : null}
-                </div>
+                ))}
               </div>
 
               <h4 style={{ marginBottom: "0.5rem" }}>Outstanding invoices</h4>

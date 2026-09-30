@@ -83,7 +83,7 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_bank") return "Trust bank";
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank";
-  if (destination === "fee_vault") return "Fee vault";
+  if (destination === "fee_vault") return "Business Cash Book";
   return destination;
 }
 
@@ -114,8 +114,8 @@ function PaymentMoneyCallout() {
       <div className="finance-desk-callout-title">Money in (one receipt)</div>
       <p>
         Record cash once and split it across trust hold, fee revenue, and disbursement float.
-        Trust destination is the default. Fee bank is for banked firm fees. Fee vault is for
-        firm fee cash still on hand (not trust money). Trust and fee ledgers stay separate;
+        Trust destination is the default. Fee bank is for banked firm fees. Business Cash Book is
+        for firm fee cash still on hand (not trust money). Trust and fee ledgers stay separate;
         the same cash is never double-counted.
       </p>
       <p className="finance-desk-callout-link">
@@ -425,11 +425,11 @@ export function PaymentsView() {
   });
 
   return (
-    <section className="view active scrollable finance-desk-view" aria-label="Payments">
+    <section className="view active scrollable finance-desk-view" aria-label="Receipts / Receivables">
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h3>Payments</h3>
+            <h3>Receipts / Receivables</h3>
             <p className="panel-subtitle muted">Cash in · split to trust / fees · one receipt</p>
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -541,7 +541,7 @@ export function PaymentsView() {
                     <option value="trust_bank">Trust bank (default)</option>
                     <option value="trust_vault">Trust vault</option>
                     <option value="fee_bank">Fee bank (fees only)</option>
-                    <option value="fee_vault">Fee vault (cash fees on hand)</option>
+                    <option value="fee_vault">Business Cash Book (cash fees on hand)</option>
                   </select>
                 </label>
                 {!isFeesOnlyUi(destination) ? (
@@ -786,7 +786,7 @@ export function PaymentsView() {
                 <option value="trust_bank">Trust bank</option>
                 <option value="trust_vault">Trust vault</option>
                 <option value="fee_bank">Fee bank</option>
-                <option value="fee_vault">Fee vault</option>
+                <option value="fee_vault">Business Cash Book</option>
               </select>
             </label>
             <label className="finance-filter-field">

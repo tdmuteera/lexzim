@@ -27,7 +27,7 @@ export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) 
         }}
       >
         <div>
-          <strong>Fee / business vault</strong>
+          <strong>Business Cash Book</strong>
           <br />
           Firm cash on hand (GL 1020)
         </div>
@@ -48,7 +48,7 @@ export function TrustMoneyCallout({ variant = "desk" }: TrustMoneyCalloutProps) 
         </div>
       </div>
       <p className="finance-desk-callout-link">
-        <Link href="/finance/payments">Payments</Link>
+        <Link href="/finance/payments">Receipts / Receivables</Link>
         <span className="muted"> · </span>
         <Link href="/finance/client-accounts">Client accounts</Link>
         <span className="muted"> · </span>
