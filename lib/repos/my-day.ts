@@ -111,8 +111,9 @@ async function generateRecurrences(firmId: string, userId: string, today: string
 }
 
 /**
- * Lazy daily roll-over (no scheduler needed): unfinished one-off items move to today;
- * missed recurring occurrences are closed so they do not pile up.
+ * Lazy daily roll-over (no scheduler needed): every unfinished item moves to today.
+ * A repeating item carries over once: if today already has its occurrence, older missed
+ * copies merge into it; otherwise the latest missed copy moves to today.
  */
 async function rollOver(firmId: string, userId: string, today: string) {
   const db = getDb();
@@ -133,9 +134,9 @@ async function rollOver(firmId: string, userId: string, today: string) {
       ),
     );
 
-  await db
-    .update(myDayItems)
-    .set({ status: "dropped", lastCarriedOn: today, updatedAt: new Date() })
+  const missed = await db
+    .select({ id: myDayItems.id, recurrenceId: myDayItems.recurrenceId, dueDate: myDayItems.dueDate })
+    .from(myDayItems)
     .where(
       and(
         ownerScope(firmId, userId),
@@ -143,7 +144,60 @@ async function rollOver(firmId: string, userId: string, today: string) {
         sql`${myDayItems.recurrenceId} IS NOT NULL`,
         lt(myDayItems.dueDate, today),
       ),
+    )
+    .orderBy(desc(myDayItems.dueDate));
+  if (!missed.length) return;
+
+  const recIds = [...new Set(missed.map((m) => m.recurrenceId!))];
+  const todays = await db
+    .select({ id: myDayItems.id, recurrenceId: myDayItems.recurrenceId })
+    .from(myDayItems)
+    .where(
+      and(
+        ownerScope(firmId, userId),
+        eq(myDayItems.status, "open"),
+        eq(myDayItems.dueDate, today),
+        inArray(myDayItems.recurrenceId, recIds),
+      ),
     );
+  const todayByRec = new Map(todays.map((t) => [t.recurrenceId!, t.id]));
+
+  const carryIds: string[] = [];
+  const mergeIds: string[] = [];
+  const seen = new Set<string>();
+  for (const m of missed) {
+    const rec = m.recurrenceId!;
+    if (seen.has(rec)) {
+      mergeIds.push(m.id);
+      continue;
+    }
+    seen.add(rec);
+    const existing = todayByRec.get(rec);
+    if (existing) {
+      mergeIds.push(m.id);
+      carryIds.push(existing);
+    } else {
+      carryIds.push(m.id);
+    }
+  }
+
+  if (mergeIds.length) {
+    await db
+      .update(myDayItems)
+      .set({ status: "dropped", lastCarriedOn: today, updatedAt: new Date() })
+      .where(and(ownerScope(firmId, userId), inArray(myDayItems.id, mergeIds)));
+  }
+  if (carryIds.length) {
+    await db
+      .update(myDayItems)
+      .set({
+        dueDate: today,
+        carriedCount: sql`${myDayItems.carriedCount} + 1`,
+        lastCarriedOn: today,
+        updatedAt: new Date(),
+      })
+      .where(and(ownerScope(firmId, userId), inArray(myDayItems.id, carryIds)));
+  }
 }
 
 async function getPrefs(firmId: string, userId: string) {
@@ -266,10 +320,8 @@ export async function getMyDayPayload(
   userId: string,
   today: string,
 ): Promise<MyDayPayload> {
-  const prefs = await syncMyDay(firmId, userId, today);
+  await syncMyDay(firmId, userId, today);
   const db = getDb();
-  const lastReviewOn = prefs?.lastReviewOn ?? null;
-  const since = lastReviewOn ?? addDays(today, -1);
 
   const rowsQuery = db
     .select()
@@ -298,43 +350,13 @@ export async function getMyDayPayload(
     .where(and(eq(myDayRecurrences.firmId, firmId), eq(myDayRecurrences.userId, userId)))
     .orderBy(asc(myDayRecurrences.createdAt));
 
-  const doneQuery = db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(myDayItems)
-    .where(
-      and(
-        ownerScope(firmId, userId),
-        eq(myDayItems.status, "done"),
-        gte(myDayItems.completedOn, since),
-        lt(myDayItems.completedOn, today),
-      ),
-    );
-  const missedQuery = db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(myDayItems)
-    .where(
-      and(
-        ownerScope(firmId, userId),
-        eq(myDayItems.status, "dropped"),
-        eq(myDayItems.lastCarriedOn, today),
-        sql`${myDayItems.recurrenceId} IS NOT NULL`,
-      ),
-    );
-
-  const [rows, recRows, [doneRow], [missedRow], streak] = await Promise.all([
+  const [rows, recRows, streak] = await Promise.all([
     rowsQuery,
     recQuery,
-    doneQuery,
-    missedQuery,
     computeStreak(firmId, userId, today),
   ]);
 
   const items = await hydrate(rows);
-  const carried = items.filter(
-    (i) => i.status === "open" && i.dueDate === today && rows.find((r) => r.id === i.id)?.lastCarriedOn === today,
-  );
-  const doneCount = doneRow?.n ?? 0;
-  const missedRecurring = missedRow?.n ?? 0;
 
   return {
     today,
@@ -350,19 +372,8 @@ export async function getMyDayPayload(
         dueTime: r.dueTime,
       }),
     ),
-    review: {
-      show: lastReviewOn !== today && (carried.length > 0 || doneCount > 0 || missedRecurring > 0),
-      sinceDate: lastReviewOn,
-      doneCount,
-      carried,
-      missedRecurring,
-    },
     streak,
   };
-}
-
-export async function markMyDayReviewed(firmId: string, userId: string, today: string) {
-  await upsertPrefs(firmId, userId, { lastReviewOn: today });
 }
 
 export async function createMyDayItem(

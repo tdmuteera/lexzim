@@ -390,7 +390,7 @@ export function PaymentsView() {
           reference: reference || null,
           notes: notes || null,
           lines: lines
-            .filter((line) => !isSplit || dollarsToCentsLocal(line.amountDollars) > 0)
+            .filter((line) => !isSplit || line.amountDollars.trim() !== "")
             .map((line) => ({
               lineType: line.lineType,
               feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
@@ -487,7 +487,8 @@ export function PaymentsView() {
                 <h4>New receipt</h4>
                 <p className="muted">
                   One purpose? Just choose the type below; it takes the full amount. Splitting is
-                  optional: a split line left blank or at 0 is not used and is not recorded.
+                  optional: enter 0 on a split line to show it on the receipt as not used (no
+                  entry is posted); a blank split line is left out.
                 </p>
               </div>
 
@@ -713,7 +714,13 @@ export function PaymentsView() {
                       <label>
                         <span>
                           Amount
-                          {unused ? <em className="muted"> · not used</em> : null}
+                          {unused ? (
+                            <em className="muted">
+                              {line.amountDollars.trim()
+                                ? " · not used, shows as 0.00 on receipt"
+                                : " · blank, left out"}
+                            </em>
+                          ) : null}
                         </span>
                         <input
                           className="filter-select"

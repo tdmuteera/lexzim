@@ -289,16 +289,6 @@ export function useMyDay() {
     [],
   );
 
-  const finishReview = useCallback(async () => {
-    setData((prev) =>
-      prev ? { ...prev, review: { ...prev.review, show: false } } : prev,
-    );
-    await call("/api/my-day/review", {
-      method: "POST",
-      body: JSON.stringify({ today: todayRef.current }),
-    }).catch(() => undefined);
-  }, []);
-
   const stopRecurrence = useCallback(
     async (id: string) => {
       beginSave();
@@ -347,7 +337,6 @@ export function useMyDay() {
     act,
     remove,
     promote,
-    finishReview,
     stopRecurrence,
   };
 }

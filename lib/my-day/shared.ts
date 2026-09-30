@@ -54,19 +54,10 @@ export type MyDayRecurrenceDto = {
   dueTime: string | null;
 };
 
-export type MyDayReviewDto = {
-  show: boolean;
-  sinceDate: string | null;
-  doneCount: number;
-  carried: MyDayItemDto[];
-  missedRecurring: number;
-};
-
 export type MyDayPayload = {
   today: string;
   items: MyDayItemDto[];
   recurrences: MyDayRecurrenceDto[];
-  review: MyDayReviewDto;
   streak: number;
 };
 

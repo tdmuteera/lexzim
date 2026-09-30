@@ -6,7 +6,7 @@ import { Confetti, FlameIcon, ProgressRing, RepeatIcon } from "@/components/my-d
 import { MyDayItemRow } from "@/components/my-day/MyDayItemRow";
 import { MyDayPromoteModal } from "@/components/my-day/MyDayPromoteModal";
 import { MyDayQuickAdd } from "@/components/my-day/MyDayQuickAdd";
-import { MyDayReviewPanel } from "@/components/my-day/MyDayReviewPanel";
+import { MyDayMotivation } from "@/components/my-day/MyDayMotivation";
 import { useMyDay, type MyDayApi } from "@/components/my-day/useMyDay";
 import {
   addDays,
@@ -133,6 +133,9 @@ export function MyDayView() {
             Your private to-do list. Plan today and the next two weeks. Nothing here sends emails
             or appears on the shared calendar.
           </p>
+          {api.loading ? null : (
+            <MyDayMotivation open={groups.todayOpen.length} total={groups.todayTotal} count={2} />
+          )}
           <div className="myday-hero-pills">
             <span className={`myday-pill is-streak${streak ? "" : " is-zero"}`}>
               <FlameIcon />
@@ -155,15 +158,13 @@ export function MyDayView() {
         </p>
       ) : null}
 
-      <MyDayReviewPanel api={api} today={today} />
-
       <div className="myday-card">
         <MyDayQuickAdd api={api} today={today} variant="page" />
       </div>
 
       <p className="myday-hint">
-        Tip: click any day in the next 14 days to plan on it, or drag an item onto a day to move it. Unfinished items roll over to the next day
-        automatically.
+        Tip: click any day in the next 14 days to plan on it, or drag an item onto a day to move it. Anything unfinished,
+        including repeating items, carries over to the next day automatically.
       </p>
 
       <div className="myday-board">

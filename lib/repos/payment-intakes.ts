@@ -298,11 +298,11 @@ async function createPaymentIntakeTx(
 
   if (trustAccountId) {
     const trustParts = input.lines
-      .filter((l) => l.lineType === "trust_hold" || l.lineType === "disbursement_float")
+      .filter((l) => l.amountCents > 0 && (l.lineType === "trust_hold" || l.lineType === "disbursement_float"))
       .map((l) => `${lineTypeLabel(l.lineType)} ${l.amountCents / 100}`)
       .join("; ");
     const feeParts = input.lines
-      .filter((l) => l.lineType === "fee_revenue")
+      .filter((l) => l.amountCents > 0 && l.lineType === "fee_revenue")
       .map((l) => `fee ${l.feeCategory} ${l.amountCents / 100}`)
       .join("; ");
 
@@ -333,7 +333,7 @@ async function createPaymentIntakeTx(
     });
 
     for (const line of lineRows) {
-      if (line.lineType !== "fee_revenue" || !line.feeCategory) continue;
+      if (line.lineType !== "fee_revenue" || !line.feeCategory || line.amountCents <= 0) continue;
       await applyFeeRevenueFromTrust(firmId, userId, {
         intakeId: intake!.id,
         amountCents: line.amountCents,
@@ -350,7 +350,7 @@ async function createPaymentIntakeTx(
     const cashGlCode = feeDestinationCashGlCode(input.destination as PaymentDestination);
     let feeIndex = 0;
     for (const line of lineRows) {
-      if (line.lineType !== "fee_revenue" || !line.feeCategory) continue;
+      if (line.lineType !== "fee_revenue" || !line.feeCategory || line.amountCents <= 0) continue;
       await applyFeeRevenueDirect(firmId, userId, {
         intakeId: intake!.id,
         lineId: line.id,
@@ -588,6 +588,7 @@ export async function listPaymentIntakes(
       lineCount: sql<number>`(
         select count(*)::int from ${financePaymentAllocationLines}
         where ${financePaymentAllocationLines.intakeId} = ${financePaymentIntakes.id}
+          and ${financePaymentAllocationLines.amountCents} > 0
       )`,
     })
     .from(financePaymentIntakes)

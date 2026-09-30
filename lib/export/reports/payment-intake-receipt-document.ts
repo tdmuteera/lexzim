@@ -56,14 +56,17 @@ export async function paymentIntakeReceiptToExportDocument(
       { key: "detail", header: "Detail" },
       { key: "amount", header: "Amount" },
     ],
-    rows: full.lines.map((line) => ({
-      type: lineTypeLabel(line.lineType),
-      detail:
+    rows: full.lines.map((line) => {
+      const detail =
         line.lineType === "fee_revenue" && line.feeCategory
           ? FEE_CATEGORY_LABELS[line.feeCategory as FeeCategory] ?? line.feeCategory
-          : line.notes ?? "—",
-      amount: centsToDisplay(line.amountCents, full.intake.currency),
-    })),
+          : line.notes ?? "";
+      return {
+        type: lineTypeLabel(line.lineType),
+        detail: line.amountCents === 0 ? `${detail ? `${detail}. ` : ""}Not used (no entry)` : detail,
+        amount: centsToDisplay(line.amountCents, full.intake.currency),
+      };
+    }),
     note: full.intake.notes ?? undefined,
   };
 }

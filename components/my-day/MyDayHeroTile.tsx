@@ -7,7 +7,7 @@ import { Confetti, FlameIcon, ProgressRing } from "@/components/my-day/MyDayBits
 import { MyDayItemRow } from "@/components/my-day/MyDayItemRow";
 import { MyDayPromoteModal } from "@/components/my-day/MyDayPromoteModal";
 import { MyDayQuickAdd } from "@/components/my-day/MyDayQuickAdd";
-import { MyDayReviewPanel } from "@/components/my-day/MyDayReviewPanel";
+import { MyDayMotivation } from "@/components/my-day/MyDayMotivation";
 import { useMyDay } from "@/components/my-day/useMyDay";
 import { addDays, friendlyDay, tagMeta, type MyDayItemDto } from "@/lib/my-day/shared";
 
@@ -69,6 +69,7 @@ export function MyDayHeroTile() {
         </div>
         <h3 className="myday-hero-date">{longDate(today)}</h3>
         <p className="myday-hero-headline">{headline}</p>
+        {api.loading ? null : <MyDayMotivation open={openCount} total={total} />}
 
         <div className="myday-hero-stats">
           <ProgressRing done={doneCount} total={total} />
@@ -106,8 +107,6 @@ export function MyDayHeroTile() {
             {api.error}
           </p>
         ) : null}
-
-        <MyDayReviewPanel api={api} today={today} />
 
         <div className="myday-hero-list">
           {api.loading ? (
