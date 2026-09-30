@@ -71,6 +71,7 @@ type DraftLine = {
   amountDollars: string;
   invoiceId: string;
   notes: string;
+  feeMode: "" | "invoice" | "direct";
 };
 
 function todayInput() {
@@ -99,6 +100,7 @@ function newLine(lineType: AllocationLineType = "trust_hold"): DraftLine {
     amountDollars: "",
     invoiceId: "",
     notes: "",
+    feeMode: "",
   };
 }
 
@@ -175,6 +177,14 @@ export function PaymentsView() {
     ? lines.filter((line) => dollarsToCentsLocal(line.amountDollars) > 0).length
     : 1;
   const splitOk = amountCents > 0 && usedLineCount > 0 && lineSumCents === amountCents;
+  const feesOnly = isFeesOnlyUi(destination);
+  const feeChoiceMissing =
+    feesOnly &&
+    lines.some(
+      (line) =>
+        (!isSplit || dollarsToCentsLocal(line.amountDollars) > 0) &&
+        (!line.feeMode || (line.feeMode === "invoice" && !line.invoiceId)),
+    );
 
   function startSplit() {
     setLines((prev) => {
@@ -370,7 +380,7 @@ export function PaymentsView() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!splitOk || !clientId) return;
+    if (!splitOk || !clientId || feeChoiceMissing) return;
     setSaving(true);
     setError(null);
     try {
@@ -395,7 +405,7 @@ export function PaymentsView() {
               lineType: line.lineType,
               feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
               amountDollars: isSplit ? line.amountDollars : amountDollars,
-              invoiceId: line.invoiceId || null,
+              invoiceId: feesOnly && line.feeMode !== "invoice" ? null : line.invoiceId || null,
               notes: line.notes || null,
             })),
         }),
@@ -614,7 +624,9 @@ export function PaymentsView() {
                   <div>
                     <h4>{isSplit ? "Allocation split" : "What is this money for?"}</h4>
                     <p className="muted">
-                      {isSplit
+                      {feesOnly
+                        ? "Firm money. If the client owes on an invoice, choose \"Pays an invoice\" so their balance goes down. Use \"New fee\" only for work that was never invoiced."
+                        : isSplit
                         ? "Each line is trust hold, disbursement float, or fee revenue. Lines must add up to the cash received."
                         : "Trust hold, disbursement float, or fee revenue. Split only if the money covers more than one purpose."}
                     </p>
@@ -651,12 +663,34 @@ export function PaymentsView() {
                       className="finance-allocation-row"
                       style={unused ? { opacity: 0.55 } : undefined}
                     >
+                      {feesOnly ? (
+                        <label>
+                          <span>This money</span>
+                          <select
+                            className="filter-select"
+                            value={line.feeMode}
+                            onChange={(e) => {
+                              const feeMode = e.target.value as DraftLine["feeMode"];
+                              setLines((prev) =>
+                                prev.map((row, i) =>
+                                  i === index
+                                    ? { ...row, feeMode, invoiceId: feeMode === "invoice" ? row.invoiceId : "" }
+                                    : row,
+                                ),
+                              );
+                            }}
+                          >
+                            <option value="">Choose…</option>
+                            <option value="invoice">Pays an invoice (debtor)</option>
+                            <option value="direct">New fee, no invoice</option>
+                          </select>
+                        </label>
+                      ) : (
                       <label>
                         <span>Type</span>
                         <select
                           className="filter-select"
                           value={line.lineType}
-                          disabled={isFeesOnlyUi(destination)}
                           onChange={(e) => {
                             const lineType = e.target.value as AllocationLineType;
                             setLines((prev) =>
@@ -671,6 +705,7 @@ export function PaymentsView() {
                           <option value="fee_revenue">Fee revenue</option>
                         </select>
                       </label>
+                      )}
                       {line.lineType === "fee_revenue" ? (
                         <label>
                           <span>Fee category</span>
@@ -741,7 +776,37 @@ export function PaymentsView() {
                           }}
                         />
                       </label>
-                      {line.lineType === "fee_revenue" ? (
+                      {feesOnly && line.feeMode === "invoice" ? (
+                        <label>
+                          <span>Invoice being paid</span>
+                          <select
+                            className="filter-select"
+                            value={line.invoiceId}
+                            onChange={(e) => {
+                              const invoiceId = e.target.value;
+                              setLines((prev) =>
+                                prev.map((row, i) =>
+                                  i === index ? { ...row, invoiceId } : row,
+                                ),
+                              );
+                            }}
+                          >
+                            <option value="">
+                              {clientId
+                                ? clientInvoices.length
+                                  ? "Choose invoice…"
+                                  : "No invoices for this client"
+                                : "Pick the client first"}
+                            </option>
+                            {clientInvoices.map((inv) => (
+                              <option key={inv.id} value={inv.id}>
+                                {inv.invoiceNumber} ·{" "}
+                                {centsToDisplay(inv.totalCents, inv.currency)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : !feesOnly && line.lineType === "fee_revenue" ? (
                         <label>
                           <span>Invoice (optional)</span>
                           <select
@@ -788,10 +853,15 @@ export function PaymentsView() {
               </div>
 
               <div className="finance-intake-form-foot">
-                <Button type="submit" disabled={saving || !splitOk || !clientId}>
+                <Button type="submit" disabled={saving || !splitOk || !clientId || feeChoiceMissing}>
                   {saving ? "Saving…" : "Record receipt"}
                 </Button>
-                {!splitOk && amountCents > 0 && isSplit ? (
+                {feeChoiceMissing && amountCents > 0 ? (
+                  <span className="muted">
+                    For each line, choose whether it pays an invoice or is a new fee, and pick the
+                    invoice being paid.
+                  </span>
+                ) : !splitOk && amountCents > 0 && isSplit ? (
                   <span className="muted">
                     {usedLineCount === 0
                       ? "Give at least one line an amount."

@@ -5,6 +5,9 @@ import {
   FEE_CATEGORY_LABELS,
   type FeeCategory,
 } from "@/lib/finance/payment-intake-validation";
+import { and, eq, inArray } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { invoices } from "@/lib/db/schema";
 import type { ExportDocument } from "@/lib/export/types";
 import { getPaymentIntake } from "@/lib/repos/payment-intakes";
 
@@ -36,6 +39,16 @@ export async function paymentIntakeReceiptToExportDocument(
   });
   const receiptNo = full.intake.receiptNumber ?? full.intake.id.slice(0, 8);
 
+  const invoiceIds = [...new Set(full.lines.map((l) => l.invoiceId).filter(Boolean))] as string[];
+  const invoiceNumbers = new Map<string, string>();
+  if (invoiceIds.length) {
+    const rows = await getDb()
+      .select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+      .from(invoices)
+      .where(and(eq(invoices.firmId, firmId), inArray(invoices.id, invoiceIds)));
+    for (const r of rows) invoiceNumbers.set(r.id, r.invoiceNumber);
+  }
+
   return {
     title: `Cash receipt ${receiptNo}`,
     subtitle: full.clientName,
@@ -61,8 +74,9 @@ export async function paymentIntakeReceiptToExportDocument(
         line.lineType === "fee_revenue" && line.feeCategory
           ? FEE_CATEGORY_LABELS[line.feeCategory as FeeCategory] ?? line.feeCategory
           : line.notes ?? "";
+      const invoiceNumber = line.invoiceId ? invoiceNumbers.get(line.invoiceId) : undefined;
       return {
-        type: lineTypeLabel(line.lineType),
+        type: invoiceNumber ? `Payment on invoice ${invoiceNumber}` : lineTypeLabel(line.lineType),
         detail: line.amountCents === 0 ? `${detail ? `${detail}. ` : ""}Not used (no entry)` : detail,
         amount: centsToDisplay(line.amountCents, full.intake.currency),
       };
