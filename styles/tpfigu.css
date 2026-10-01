@@ -1367,6 +1367,9 @@ table.data-table tbody tr.row-selected {
 .finance-allocation-spacer {
   min-height: 1px;
 }
+.finance-allocation-row.has-destination {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+}
 .finance-allocation-row-action {
   display: flex;
   align-items: flex-end;

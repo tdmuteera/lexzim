@@ -1,9 +1,11 @@
 /**
  * Finance → Payments intakes (Phase 11 P11-05).
  * Orchestrates trust_ledger_entries and fee_payments / fee GL. Does not merge ledgers.
+ * Each line has a destination; a split receipt may send lines to different destinations
+ * under one receipt number, and each destination posts only its own lines.
  *
  * Trust destination posting rule (documented):
- * 1) One trust receipt for the FULL cash amount (bank/vault + liability).
+ * 1) One trust receipt per trust account for the total of that account's lines.
  * 2) fee_revenue lines: trust ledger disbursement with skipGl, then either
  *    apply retainer (invoice) or fee-earned-from-trust GL (no invoice).
  * 3) trust_hold and disbursement_float remain as trust liability.
@@ -32,6 +34,7 @@ import type {
 } from "@/lib/finance/payment-intake-validation";
 import {
   feeDestinationCashGlCode,
+  MIXED_DESTINATION,
 } from "@/lib/finance/payment-intake-validation";
 import { postDirectFeeCashGl } from "@/lib/gl/posting-payment-intake";
 import { reverseJournalBySource } from "@/lib/gl/journals";
@@ -243,20 +246,23 @@ async function createPaymentIntakeTx(
   await lockClientTrust(firmId, input.clientId);
   await assertInvoiceLines(firmId, input.clientId, input.lines);
 
-  let trustAccountId: string | null = null;
-  if (input.destination === "trust_bank" || input.destination === "trust_vault") {
-    const account = await getTrustAccount(firmId, input.trustAccountId!);
+  const checkedAccounts = new Set<string>();
+  for (const line of input.lines) {
+    if (!line.trustAccountId || checkedAccounts.has(`${line.destination}:${line.trustAccountId}`)) {
+      continue;
+    }
+    const account = await getTrustAccount(firmId, line.trustAccountId);
     if (!account || !account.isActive) {
       throw new AuthError("validation", "Active trust account not found.");
     }
-    const expectedKind = input.destination === "trust_vault" ? "vault" : "bank";
+    const expectedKind = line.destination === "trust_vault" ? "vault" : "bank";
     if (account.accountKind !== expectedKind) {
       throw new AuthError(
         "validation",
-        `Trust account must be a ${expectedKind} account for destination ${input.destination}.`,
+        `Trust account must be a ${expectedKind} account for destination ${line.destination}.`,
       );
     }
-    trustAccountId = account.id;
+    checkedAccounts.add(`${line.destination}:${line.trustAccountId}`);
   }
 
   const receiptNumber = await allocatePaymentIntakeReceiptNumber(firmId);
@@ -292,17 +298,28 @@ async function createPaymentIntakeTx(
         amountCents: line.amountCents,
         invoiceId: line.invoiceId,
         notes: line.notes,
+        destination: line.destination,
+        trustAccountId: line.trustAccountId,
       })),
     )
     .returning();
 
-  if (trustAccountId) {
-    const trustParts = input.lines
-      .filter((l) => l.amountCents > 0 && (l.lineType === "trust_hold" || l.lineType === "disbursement_float"))
+  const used = lineRows.filter((l) => l.amountCents > 0);
+  const trustGroups = new Map<string, typeof lineRows>();
+  for (const line of used) {
+    if (!line.trustAccountId) continue;
+    trustGroups.set(line.trustAccountId, [...(trustGroups.get(line.trustAccountId) ?? []), line]);
+  }
+  const isMixed = input.destination === MIXED_DESTINATION;
+
+  for (const [trustAccountId, group] of trustGroups) {
+    const groupCents = group.reduce((s, l) => s + l.amountCents, 0);
+    const trustParts = group
+      .filter((l) => l.lineType === "trust_hold" || l.lineType === "disbursement_float")
       .map((l) => `${lineTypeLabel(l.lineType)} ${l.amountCents / 100}`)
       .join("; ");
-    const feeParts = input.lines
-      .filter((l) => l.amountCents > 0 && l.lineType === "fee_revenue")
+    const feeParts = group
+      .filter((l) => l.lineType === "fee_revenue")
       .map((l) => `fee ${l.feeCategory} ${l.amountCents / 100}`)
       .join("; ");
 
@@ -311,13 +328,15 @@ async function createPaymentIntakeTx(
       matterId: input.matterId,
       clientId: input.clientId,
       entryType: "receipt",
-      amountCents: input.amountCents,
+      amountCents: groupCents,
       currency: input.currency,
       occurredAt: input.receivedAt,
       reference: input.reference ?? receiptNumber,
       referenceNumber: receiptNumber,
       narrative: [
-        `Payment intake ${receiptNumber}`,
+        isMixed
+          ? `Payment intake ${receiptNumber} (trust part ${groupCents / 100} of ${input.amountCents / 100})`
+          : `Payment intake ${receiptNumber}`,
         trustParts ? `Held: ${trustParts}` : null,
         feeParts ? `Then allocated: ${feeParts}` : null,
         input.notes,
@@ -332,8 +351,8 @@ async function createPaymentIntakeTx(
       intakeId: intake!.id,
     });
 
-    for (const line of lineRows) {
-      if (line.lineType !== "fee_revenue" || !line.feeCategory || line.amountCents <= 0) continue;
+    for (const line of group) {
+      if (line.lineType !== "fee_revenue" || !line.feeCategory) continue;
       await applyFeeRevenueFromTrust(firmId, userId, {
         intakeId: intake!.id,
         amountCents: line.amountCents,
@@ -346,28 +365,27 @@ async function createPaymentIntakeTx(
         trustAccountId,
       });
     }
-  } else {
-    const cashGlCode = feeDestinationCashGlCode(input.destination as PaymentDestination);
-    let feeIndex = 0;
-    for (const line of lineRows) {
-      if (line.lineType !== "fee_revenue" || !line.feeCategory || line.amountCents <= 0) continue;
-      await applyFeeRevenueDirect(firmId, userId, {
-        intakeId: intake!.id,
-        lineId: line.id,
-        lineIndex: feeIndex++,
-        amountCents: line.amountCents,
-        currency: input.currency,
-        receivedAt: input.receivedAt,
-        receiptNumber,
-        feeCategory: asFeeCategory(line.feeCategory),
-        invoiceId: line.invoiceId,
-        clientId: input.clientId,
-        matterId: input.matterId,
-        method: input.method,
-        reference: input.reference,
-        cashGlCode,
-      });
-    }
+  }
+
+  let feeIndex = 0;
+  for (const line of used) {
+    if (line.trustAccountId || line.lineType !== "fee_revenue" || !line.feeCategory) continue;
+    await applyFeeRevenueDirect(firmId, userId, {
+      intakeId: intake!.id,
+      lineId: line.id,
+      lineIndex: feeIndex++,
+      amountCents: line.amountCents,
+      currency: input.currency,
+      receivedAt: input.receivedAt,
+      receiptNumber,
+      feeCategory: asFeeCategory(line.feeCategory),
+      invoiceId: line.invoiceId,
+      clientId: input.clientId,
+      matterId: input.matterId,
+      method: input.method,
+      reference: input.reference,
+      cashGlCode: feeDestinationCashGlCode(line.destination as PaymentDestination),
+    });
   }
 
   return getPaymentIntake(firmId, intake!.id);
@@ -408,8 +426,8 @@ export async function reversePaymentIntake(
       }
     }
 
-    const receipt = trustRows.find((r) => r.sourceType === "intake" && !r.reversedById);
-    if (receipt) {
+    const receipts = trustRows.filter((r) => r.sourceType === "intake" && !r.reversedById);
+    for (const receipt of receipts) {
       const bal = await getClientTrustBalance(firmId, intake.clientId, {
         trustAccountId: receipt.trustAccountId,
       });
@@ -558,7 +576,12 @@ export async function listPaymentIntakes(
     conditions.push(eq(financePaymentIntakes.matterId, filters.matterId));
   }
   if (filters.destination) {
-    conditions.push(eq(financePaymentIntakes.destination, filters.destination));
+    conditions.push(
+      sql`(${financePaymentIntakes.destination} = ${filters.destination} or exists (
+        select 1 from "finance_payment_allocation_lines" fl
+        where fl."intake_id" = "finance_payment_intakes"."id"
+          and fl."destination" = ${filters.destination} and fl."amount_cents" > 0))`,
+    );
   }
   if (filters.from) {
     conditions.push(gte(financePaymentIntakes.receivedAt, filters.from));

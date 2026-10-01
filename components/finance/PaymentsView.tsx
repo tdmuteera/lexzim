@@ -72,7 +72,26 @@ type DraftLine = {
   invoiceId: string;
   notes: string;
   feeMode: "" | "invoice" | "direct";
+  destination: PaymentDestination;
+  trustAccountId: string;
 };
+
+const METHOD_SUGGESTIONS = ["Cash", "Bank transfer", "EcoCash", "Card", "Cheque"];
+
+const DESTINATION_OPTIONS: { value: PaymentDestination; label: string }[] = [
+  { value: "trust_bank", label: "Trust bank (default)" },
+  { value: "trust_vault", label: "Trust vault" },
+  { value: "fee_bank", label: "Fee bank (fees only)" },
+  { value: "fee_vault", label: "Business Cash Book (cash fees on hand)" },
+];
+
+function isVaultUi(destination: string): boolean {
+  return destination === "trust_vault" || destination === "fee_vault";
+}
+
+function isCashUi(method: string): boolean {
+  return method.trim().toLowerCase() === "cash";
+}
 
 function todayInput() {
   const d = new Date();
@@ -85,6 +104,7 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank";
   if (destination === "fee_vault") return "Business Cash Book";
+  if (destination === "mixed") return "Split destinations";
   return destination;
 }
 
@@ -92,7 +112,11 @@ function isFeesOnlyUi(destination: string): boolean {
   return destination === "fee_bank" || destination === "fee_vault";
 }
 
-function newLine(lineType: AllocationLineType = "trust_hold"): DraftLine {
+function newLine(
+  lineType: AllocationLineType = "trust_hold",
+  destination: PaymentDestination = "trust_bank",
+  trustAccountId = "",
+): DraftLine {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     lineType,
@@ -101,6 +125,8 @@ function newLine(lineType: AllocationLineType = "trust_hold"): DraftLine {
     invoiceId: "",
     notes: "",
     feeMode: "",
+    destination,
+    trustAccountId,
   };
 }
 
@@ -177,24 +203,78 @@ export function PaymentsView() {
     ? lines.filter((line) => dollarsToCentsLocal(line.amountDollars) > 0).length
     : 1;
   const splitOk = amountCents > 0 && usedLineCount > 0 && lineSumCents === amountCents;
-  const feesOnly = isFeesOnlyUi(destination);
-  const feeChoiceMissing =
-    feesOnly &&
+  const lineDestination = (line: DraftLine) => (isSplit ? line.destination : destination);
+  const isLineUsed = (line: DraftLine) => !isSplit || dollarsToCentsLocal(line.amountDollars) > 0;
+  const feeChoiceMissing = lines.some(
+    (line) =>
+      isLineUsed(line) &&
+      isFeesOnlyUi(lineDestination(line)) &&
+      (!line.feeMode || (line.feeMode === "invoice" && !line.invoiceId)),
+  );
+  const trustAccountMissing =
+    isSplit &&
     lines.some(
-      (line) =>
-        (!isSplit || dollarsToCentsLocal(line.amountDollars) > 0) &&
-        (!line.feeMode || (line.feeMode === "invoice" && !line.invoiceId)),
+      (line) => isLineUsed(line) && !isFeesOnlyUi(line.destination) && !line.trustAccountId,
     );
+  const vaultNeedsCash =
+    !isCashUi(method) && lines.some((line) => isLineUsed(line) && isVaultUi(lineDestination(line)));
+  const formBlocked = feeChoiceMissing || trustAccountMissing || vaultNeedsCash;
+
+  function firstTrustAccount(dest: PaymentDestination): string {
+    const kind = dest === "trust_vault" ? "vault" : "bank";
+    return accounts.find((a) => a.accountKind === kind)?.id ?? "";
+  }
 
   function startSplit() {
     setLines((prev) => {
-      const first = prev.length === 1 && !prev[0].amountDollars ? { ...prev[0], amountDollars } : prev[0];
+      const base =
+        prev.length === 1
+          ? {
+              ...prev[0],
+              amountDollars: prev[0].amountDollars || amountDollars,
+              destination,
+              trustAccountId: isFeesOnlyUi(destination) ? "" : trustAccountId,
+            }
+          : prev[0];
       return [
-        first,
+        base,
         ...prev.slice(1),
-        newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold"),
+        newLine(
+          isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold",
+          destination,
+          isFeesOnlyUi(destination) ? "" : trustAccountId,
+        ),
       ];
     });
+  }
+
+  function stopSplit() {
+    const first = lines[0];
+    setDestination(first.destination);
+    if (!isFeesOnlyUi(first.destination)) setTrustAccountId(first.trustAccountId);
+    setLines([first]);
+  }
+
+  function setLineDestination(index: number, dest: PaymentDestination) {
+    if (isVaultUi(dest)) setMethod("Cash");
+    setLines((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const toFees = isFeesOnlyUi(dest);
+        return {
+          ...row,
+          destination: dest,
+          lineType: toFees ? "fee_revenue" : row.lineType,
+          trustAccountId: toFees
+            ? ""
+            : row.destination === dest && row.trustAccountId
+              ? row.trustAccountId
+              : firstTrustAccount(dest),
+          feeMode: toFees ? row.feeMode : "",
+          invoiceId: toFees && row.feeMode !== "invoice" ? "" : row.invoiceId,
+        };
+      }),
+    );
   }
 
   const clientMatters = useMemo(
@@ -380,7 +460,7 @@ export function PaymentsView() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!splitOk || !clientId || feeChoiceMissing) return;
+    if (!splitOk || !clientId || formBlocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -394,20 +474,30 @@ export function PaymentsView() {
           receivedAt: new Date(receivedAt).toISOString(),
           amountDollars,
           currency,
-          destination,
-          trustAccountId: isFeesOnlyUi(destination) ? null : trustAccountId,
+          destination: isSplit ? null : destination,
+          trustAccountId: isSplit || isFeesOnlyUi(destination) ? null : trustAccountId,
           method: method || null,
           reference: reference || null,
           notes: notes || null,
           lines: lines
             .filter((line) => !isSplit || line.amountDollars.trim() !== "")
-            .map((line) => ({
-              lineType: line.lineType,
-              feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
-              amountDollars: isSplit ? line.amountDollars : amountDollars,
-              invoiceId: feesOnly && line.feeMode !== "invoice" ? null : line.invoiceId || null,
-              notes: line.notes || null,
-            })),
+            .map((line) => {
+              const dest = lineDestination(line);
+              return {
+                lineType: line.lineType,
+                feeCategory: line.lineType === "fee_revenue" ? line.feeCategory : null,
+                amountDollars: isSplit ? line.amountDollars : amountDollars,
+                invoiceId:
+                  isFeesOnlyUi(dest) && line.feeMode !== "invoice" ? null : line.invoiceId || null,
+                notes: line.notes || null,
+                ...(isSplit
+                  ? {
+                      destination: dest,
+                      trustAccountId: isFeesOnlyUi(dest) ? null : line.trustAccountId || null,
+                    }
+                  : {}),
+              };
+            }),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -420,7 +510,7 @@ export function PaymentsView() {
       setAmountDollars("");
       setReference("");
       setNotes("");
-      setLines([newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold")]);
+      setLines([newLine(isFeesOnlyUi(destination) ? "fee_revenue" : "trust_hold", destination)]);
       await loadRegister();
       if (intakeId) {
         window.open(
@@ -559,6 +649,12 @@ export function PaymentsView() {
                     onChange={(e) => setAmountDollars(e.target.value)}
                   />
                 </label>
+                {isSplit ? (
+                  <label>
+                    <span>Destination</span>
+                    <input className="filter-select" value="Set on each line below" disabled />
+                  </label>
+                ) : (
                 <label>
                   <span>Destination</span>
                   <select
@@ -566,13 +662,15 @@ export function PaymentsView() {
                     value={destination}
                     onChange={(e) => setDestination(e.target.value as PaymentDestination)}
                   >
-                    <option value="trust_bank">Trust bank (default)</option>
-                    <option value="trust_vault">Trust vault</option>
-                    <option value="fee_bank">Fee bank (fees only)</option>
-                    <option value="fee_vault">Business Cash Book (cash fees on hand)</option>
+                    {DESTINATION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                {!isFeesOnlyUi(destination) ? (
+                )}
+                {!isSplit && !isFeesOnlyUi(destination) ? (
                   <label>
                     <span>Trust account</span>
                     <select
@@ -594,10 +692,16 @@ export function PaymentsView() {
                   <span>Method</span>
                   <input
                     className="filter-select"
+                    list="receipt-method-options"
                     value={method}
                     onChange={(e) => setMethod(e.target.value)}
                     placeholder="Bank, cash, transfer…"
                   />
+                  <datalist id="receipt-method-options">
+                    {METHOD_SUGGESTIONS.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
                 </label>
                 <label>
                   <span>Bank / payer reference</span>
@@ -624,11 +728,11 @@ export function PaymentsView() {
                   <div>
                     <h4>{isSplit ? "Allocation split" : "What is this money for?"}</h4>
                     <p className="muted">
-                      {feesOnly
+                      {isSplit
+                        ? "Each line has its own destination: trust lines hold client money; Business Cash Book and fee bank lines either pay an invoice (debtor) or are a new fee. Lines must add up to the cash received."
+                        : isFeesOnlyUi(destination)
                         ? "Firm money. If the client owes on an invoice, choose \"Pays an invoice\" so their balance goes down. Use \"New fee\" only for work that was never invoiced."
-                        : isSplit
-                        ? "Each line is trust hold, disbursement float, or fee revenue. Lines must add up to the cash received."
-                        : "Trust hold, disbursement float, or fee revenue. Split only if the money covers more than one purpose."}
+                        : "Trust hold, disbursement float, or fee revenue. Split if part of the money goes somewhere else, e.g. part to trust and part to the Business Cash Book."}
                     </p>
                   </div>
                   <div className="finance-allocation-actions">
@@ -646,7 +750,7 @@ export function PaymentsView() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => setLines((prev) => [prev[0]])}
+                        onClick={stopSplit}
                       >
                         Don&apos;t split
                       </Button>
@@ -657,13 +761,58 @@ export function PaymentsView() {
                 <div className="finance-allocation-rows">
                   {lines.map((line, index) => {
                     const unused = isSplit && dollarsToCentsLocal(line.amountDollars) === 0;
+                    const dest = lineDestination(line);
+                    const lineFees = isFeesOnlyUi(dest);
+                    const lineAccounts = accounts.filter(
+                      (a) => a.accountKind === (dest === "trust_vault" ? "vault" : "bank"),
+                    );
                     return (
                     <div
                       key={line.key}
-                      className="finance-allocation-row"
+                      className={`finance-allocation-row${isSplit ? " has-destination" : ""}`}
                       style={unused ? { opacity: 0.55 } : undefined}
                     >
-                      {feesOnly ? (
+                      {isSplit ? (
+                        <label>
+                          <span>Destination</span>
+                          <select
+                            className="filter-select"
+                            value={line.destination}
+                            onChange={(e) =>
+                              setLineDestination(index, e.target.value as PaymentDestination)
+                            }
+                          >
+                            {DESTINATION_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.value === "trust_bank" ? "Trust bank" : o.label}
+                              </option>
+                            ))}
+                          </select>
+                          {!lineFees && lineAccounts.length > 1 ? (
+                            <select
+                              className="filter-select"
+                              style={{ marginTop: "0.35rem" }}
+                              value={line.trustAccountId}
+                              onChange={(e) => {
+                                const trustAccountId = e.target.value;
+                                setLines((prev) =>
+                                  prev.map((row, i) =>
+                                    i === index ? { ...row, trustAccountId } : row,
+                                  ),
+                                );
+                              }}
+                            >
+                              <option value="">Select trust account</option>
+                              {lineAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
+                        </label>
+                      ) : null}
+                      {lineFees ? (
                         <label>
                           <span>This money</span>
                           <select
@@ -776,7 +925,7 @@ export function PaymentsView() {
                           }}
                         />
                       </label>
-                      {feesOnly && line.feeMode === "invoice" ? (
+                      {lineFees && line.feeMode === "invoice" ? (
                         <label>
                           <span>Invoice being paid</span>
                           <select
@@ -806,7 +955,7 @@ export function PaymentsView() {
                             ))}
                           </select>
                         </label>
-                      ) : !feesOnly && line.lineType === "fee_revenue" ? (
+                      ) : !lineFees && line.lineType === "fee_revenue" ? (
                         <label>
                           <span>Invoice (optional)</span>
                           <select
@@ -853,10 +1002,17 @@ export function PaymentsView() {
               </div>
 
               <div className="finance-intake-form-foot">
-                <Button type="submit" disabled={saving || !splitOk || !clientId || feeChoiceMissing}>
+                <Button type="submit" disabled={saving || !splitOk || !clientId || formBlocked}>
                   {saving ? "Saving…" : "Record receipt"}
                 </Button>
-                {feeChoiceMissing && amountCents > 0 ? (
+                {vaultNeedsCash && amountCents > 0 ? (
+                  <span className="muted">
+                    Only a Cash payment can go into the Business Cash Book or the trust vault. Set
+                    the method to Cash, or send that line to a bank destination.
+                  </span>
+                ) : trustAccountMissing && amountCents > 0 ? (
+                  <span className="muted">Choose the trust account on each trust line.</span>
+                ) : feeChoiceMissing && amountCents > 0 ? (
                   <span className="muted">
                     For each line, choose whether it pays an invoice or is a new fee, and pick the
                     invoice being paid.
@@ -900,6 +1056,7 @@ export function PaymentsView() {
                 <option value="trust_vault">Trust vault</option>
                 <option value="fee_bank">Fee bank</option>
                 <option value="fee_vault">Business Cash Book</option>
+                <option value="mixed">Split destinations</option>
               </select>
             </label>
             <label className="finance-filter-field">

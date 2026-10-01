@@ -16,6 +16,7 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank (fees only)";
   if (destination === "fee_vault") return "Business Cash Book (cash fees on hand)";
+  if (destination === "mixed") return "Split (see each line)";
   return destination;
 }
 
@@ -49,6 +50,8 @@ export async function paymentIntakeReceiptToExportDocument(
     for (const r of rows) invoiceNumbers.set(r.id, r.invoiceNumber);
   }
 
+  const mixed = full.intake.destination === "mixed";
+
   return {
     title: `Cash receipt ${receiptNo}`,
     subtitle: full.clientName,
@@ -66,6 +69,7 @@ export async function paymentIntakeReceiptToExportDocument(
     ].filter(Boolean),
     columns: [
       { key: "type", header: "Allocation" },
+      ...(mixed ? [{ key: "destination", header: "Destination" }] : []),
       { key: "detail", header: "Detail" },
       { key: "amount", header: "Amount" },
     ],
@@ -77,6 +81,7 @@ export async function paymentIntakeReceiptToExportDocument(
       const invoiceNumber = line.invoiceId ? invoiceNumbers.get(line.invoiceId) : undefined;
       return {
         type: invoiceNumber ? `Payment on invoice ${invoiceNumber}` : lineTypeLabel(line.lineType),
+        destination: destinationLabel(line.destination ?? full.intake.destination),
         detail: line.amountCents === 0 ? `${detail ? `${detail}. ` : ""}Not used (no entry)` : detail,
         amount: centsToDisplay(line.amountCents, full.intake.currency),
       };

@@ -2723,6 +2723,11 @@ export const financePaymentAllocationLines = pgTable(
     amountCents: integer("amount_cents").notNull(),
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
     notes: text("notes"),
+    /** trust_bank | trust_vault | fee_bank | fee_vault; null = the intake's destination */
+    destination: text("destination"),
+    trustAccountId: uuid("trust_account_id").references(() => trustAccounts.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [

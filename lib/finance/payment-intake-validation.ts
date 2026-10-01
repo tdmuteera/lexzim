@@ -9,9 +9,26 @@ export const PAYMENT_DESTINATIONS = [
 ] as const;
 export type PaymentDestination = (typeof PAYMENT_DESTINATIONS)[number];
 
+/** Intake-level destination when split lines go to different places. */
+export const MIXED_DESTINATION = "mixed";
+export type IntakeDestination = PaymentDestination | typeof MIXED_DESTINATION;
+
 /** Firm fee destinations never touch the trust ledger. */
 export function isFeesOnlyDestination(destination: string): boolean {
   return destination === "fee_bank" || destination === "fee_vault";
+}
+
+export function isTrustDestination(destination: string): boolean {
+  return destination === "trust_bank" || destination === "trust_vault";
+}
+
+/** Vaults hold physical cash, so only a Cash payment can land in one. */
+export function isVaultDestination(destination: string): boolean {
+  return destination === "trust_vault" || destination === "fee_vault";
+}
+
+export function isCashMethod(method: string | null): boolean {
+  return (method ?? "").trim().toLowerCase() === "cash";
 }
 
 /** GL cash asset for fees-only intakes: banked vs cash on hand. */
@@ -66,6 +83,9 @@ export type PaymentAllocationLineInput = {
   amountCents: number;
   invoiceId: string | null;
   notes: string | null;
+  destination: PaymentDestination;
+  /** Set for trust destinations. */
+  trustAccountId: string | null;
 };
 
 export type PaymentIntakeInput = {
@@ -74,12 +94,11 @@ export type PaymentIntakeInput = {
   receivedAt: Date;
   amountCents: number;
   currency: string;
-  destination: PaymentDestination;
+  /** The lines' shared destination, or "mixed" when split lines go to different places. */
+  destination: IntakeDestination;
   method: string | null;
   reference: string | null;
   notes: string | null;
-  /** Required when destination is trust_bank or trust_vault. */
-  trustAccountId: string | null;
   lines: PaymentAllocationLineInput[];
 };
 
@@ -162,12 +181,20 @@ function isFeeCategory(value: unknown): value is FeeCategory {
 function parseLine(
   raw: unknown,
   index: number,
+  defaults: { destination: unknown; trustAccountId: string | null },
   fullAmountCents?: number,
 ): PaymentAllocationLineInput | null {
   if (!raw || typeof raw !== "object") {
     throw new AuthError("validation", `Allocation line ${index + 1} is invalid.`);
   }
   const row = raw as Record<string, unknown>;
+  const destination = row.destination ?? defaults.destination;
+  if (!isDestination(destination)) {
+    throw new AuthError(
+      "validation",
+      `Allocation line ${index + 1}: destination must be trust_bank, trust_vault, fee_bank, or fee_vault.`,
+    );
+  }
   if (!isLineType(row.lineType)) {
     throw new AuthError(
       "validation",
@@ -193,12 +220,32 @@ function parseLine(
     );
   }
 
+  if (isFeesOnlyDestination(destination) && row.lineType !== "fee_revenue") {
+    throw new AuthError(
+      "validation",
+      `Allocation line ${index + 1}: fee bank and Business Cash Book lines can only be fees (an invoice payment or a new fee).`,
+    );
+  }
+
+  let trustAccountId: string | null = null;
+  if (isTrustDestination(destination)) {
+    trustAccountId = trimOrNull(row.trustAccountId) ?? defaults.trustAccountId;
+    if (!trustAccountId && amountCents > 0) {
+      throw new AuthError(
+        "validation",
+        `Allocation line ${index + 1}: choose the trust account for this line.`,
+      );
+    }
+  }
+
   return {
     lineType: row.lineType,
     feeCategory,
     amountCents,
     invoiceId: amountCents > 0 ? trimOrNull(row.invoiceId) : null,
     notes: trimOrNull(row.notes),
+    destination,
+    trustAccountId,
   };
 }
 
@@ -207,7 +254,8 @@ function parseLine(
  * Splitting is optional: a single line with no amount takes the full cash received.
  * Blank split lines are dropped. Lines entered as 0 are kept for display on the receipt only
  * (they post nothing). The lines must sum to cash received and at least one must be above 0.
- * fee_bank / fee_vault intakes may only use fee_revenue lines.
+ * Each line may carry its own destination (split receipts); otherwise it uses the intake's.
+ * fee_bank / fee_vault lines may only be fee_revenue; vault lines need a Cash method.
  */
 export function parsePaymentIntakeInput(
   body: unknown,
@@ -220,7 +268,7 @@ export function parsePaymentIntakeInput(
   const clientId = typeof raw.clientId === "string" ? raw.clientId.trim() : "";
   if (!clientId) throw new AuthError("validation", "Client is required.");
 
-  if (!isDestination(raw.destination)) {
+  if (raw.destination != null && raw.destination !== "" && !isDestination(raw.destination)) {
     throw new AuthError(
       "validation",
       "destination must be trust_bank, trust_vault, fee_bank, or fee_vault.",
@@ -233,8 +281,12 @@ export function parsePaymentIntakeInput(
     throw new AuthError("validation", "At least one allocation line is required.");
   }
   const single = linesRaw.length === 1 ? amountCents : undefined;
+  const lineDefaults = {
+    destination: raw.destination,
+    trustAccountId: trimOrNull(raw.trustAccountId),
+  };
   const lines = linesRaw
-    .map((line, i) => parseLine(line, i, single))
+    .map((line, i) => parseLine(line, i, lineDefaults, single))
     .filter((line): line is PaymentAllocationLineInput => line != null);
   if (!lines.some((line) => line.amountCents > 0)) {
     throw new AuthError("validation", "At least one allocation line needs an amount.");
@@ -247,25 +299,18 @@ export function parsePaymentIntakeInput(
     );
   }
 
-  if (isFeesOnlyDestination(raw.destination)) {
-    const bad = lines.find((l) => l.lineType !== "fee_revenue");
-    if (bad) {
-      throw new AuthError(
-        "validation",
-        "Fees-only intakes (fee bank or fee vault) may only include fee_revenue allocation lines.",
-      );
-    }
+  const method = trimOrNull(raw.method);
+  if (!isCashMethod(method) && lines.some((l) => l.amountCents > 0 && isVaultDestination(l.destination))) {
+    throw new AuthError(
+      "validation",
+      "Only a Cash payment can go into the Business Cash Book or the trust vault. Set the method to Cash, or send this line to a bank destination.",
+    );
   }
 
-  const trustAccountId = trimOrNull(raw.trustAccountId);
-  if (raw.destination === "trust_bank" || raw.destination === "trust_vault") {
-    if (!trustAccountId) {
-      throw new AuthError(
-        "validation",
-        "trustAccountId is required for trust destinations.",
-      );
-    }
-  }
+  const used = lines.filter((l) => l.amountCents > 0);
+  const destinations = new Set(used.map((l) => l.destination));
+  const destination: IntakeDestination =
+    destinations.size === 1 ? used[0].destination : MIXED_DESTINATION;
 
   return {
     clientId,
@@ -276,11 +321,10 @@ export function parsePaymentIntakeInput(
       (typeof raw.currency === "string" && raw.currency.trim()) ||
       defaults?.currency ||
       "USD",
-    destination: raw.destination,
-    method: trimOrNull(raw.method),
+    destination,
+    method,
     reference: trimOrNull(raw.reference),
     notes: trimOrNull(raw.notes),
-    trustAccountId,
     lines,
   };
 }
