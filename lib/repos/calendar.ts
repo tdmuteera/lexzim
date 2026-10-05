@@ -756,20 +756,7 @@ export async function createCalendarEvent(
   }
 
   const primary = firstEvent!;
-  try {
-    const { notifyCalendarEventCreated } = await import(
-      "@/lib/calendar/calendar-event-emails"
-    );
-    await notifyCalendarEventCreated({
-      firmId,
-      eventId: primary.id,
-      createdByUserId: userId,
-      sharedUserIds: visibility === "people" ? (input.sharedUserIds ?? []) : [],
-    });
-  } catch {
-    // SMTP / notify must never roll back event create
-  }
-
+  // No email on create. The only calendar email is the 08:00 Harare reminder on the day.
   return primary;
 }
 

@@ -235,6 +235,7 @@ export async function notifyRequisitionApprovers(input: {
   requesterName?: string | null;
   excludeUserId?: string | null;
 }) {
+  // Only people who can approve. Opening Requisitions to request money is not enough.
   const ids = await listUsersWithPermissionCode(
     input.firmId,
     "finance.requisitions.approve",

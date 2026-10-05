@@ -38,11 +38,10 @@ Write-Host ""
 Write-Host "=== After deploy finishes, test with: ===" -ForegroundColor Cyan
 Write-Host "curl -X GET `"$appUrl/api/cron/calendar-event-emails?forceSlot=day_of`" -H `"Authorization: Bearer $secret`""
 Write-Host ""
-Write-Host "Schedule two daily HTTP jobs to:" -ForegroundColor Cyan
+Write-Host "Schedule one daily HTTP job to:" -ForegroundColor Cyan
 Write-Host "  $appUrl/api/cron/calendar-event-emails"
 Write-Host "  Header: Authorization: Bearer <CRON_SECRET>"
-Write-Host "  15:00 UTC (day-before / 17:00 Harare)"
-Write-Host "  06:00 UTC (day-of / 08:00 Harare)"
+Write-Host "  06:00 UTC (08:00 Harare, day of the event only)"
 Write-Host ""
 if (Test-Path $handoff) {
   Write-Host "Full copy-paste handoff: $handoff" -ForegroundColor Yellow

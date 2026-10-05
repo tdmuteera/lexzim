@@ -72,9 +72,9 @@ function withProtectedMp(roleCode: string, codes: string[]): string[] {
 }
 
 /**
- * Anyone with the Finance desk tick also gets Phase 11 money-desk codes so
- * Payments / Requisitions / Commission tabs appear without a second migration
- * wait for per-person access rows.
+ * Anyone with the Finance desk tick also gets the Phase 11 tabs for receipts,
+ * requesting money, and commission. Approval and payment of requisitions stay
+ * separate rights, so opening those tabs does not subscribe someone to approval emails.
  */
 function withFinanceDeskPhase11(codes: string[]): string[] {
   const set = new Set(codes);
@@ -85,8 +85,6 @@ function withFinanceDeskPhase11(codes: string[]): string[] {
   set.add("finance.payments.create");
   set.add("finance.requisitions.view");
   set.add("finance.requisitions.request");
-  set.add("finance.requisitions.approve");
-  set.add("finance.requisitions.pay");
   set.add("finance.commission.view");
   return [...set];
 }

@@ -9,14 +9,12 @@ import {
  * Cron endpoint for calendar event reminder emails.
  * Secure with CRON_SECRET header: Authorization: Bearer <CRON_SECRET>
  *
- * Railway: prefer every 15 minutes so 30-minute-before reminders fire.
- * Day-before (17:00 Harare) and day-of (08:00 Harare) still only send in those hours.
- * Africa/Harare = UTC+2:
- * - 15:00 UTC → 17:00 Harare (day-before emails)
- * - 06:00 UTC → 08:00 Harare (day-of emails)
- * - every ~15 min → 30-minute-before scan
+ * The only calendar reminder is 08:00 Africa/Harare on the day of the event
+ * (06:00 UTC). Creation emails, day-before emails, and 30-minute reminders
+ * are not sent. Run once during that hour. Repeat calls the same morning
+ * do not send a second copy.
  *
- * Optional query: ?forceSlot=day_before|day_of|thirty_before for manual tests.
+ * Optional query: ?forceSlot=day_of for a manual test outside that hour.
  */
 export async function GET(request: Request) {
   try {
@@ -31,10 +29,8 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const forceRaw = url.searchParams.get("forceSlot");
-    const forceSlot =
-      forceRaw === "day_before" || forceRaw === "day_of" || forceRaw === "thirty_before"
-        ? (forceRaw as CalendarEmailSlot)
-        : undefined;
+    const forceSlot: CalendarEmailSlot | undefined =
+      forceRaw === "day_of" ? "day_of" : undefined;
 
     const results = await sendCalendarEventEmailsForAllFirms({ forceSlot });
     const emailed = results.reduce((n, r) => n + r.emailed, 0);
@@ -44,7 +40,7 @@ export async function GET(request: Request) {
       results,
       note: forceSlot
         ? `Forced slot ${forceSlot}`
-        : "Day slots run at Harare 17:00 / 08:00. Thirty-minute reminders scan on every call (schedule every ~15 minutes).",
+        : "Calendar reminders send at 08:00 Africa/Harare on the day of the event only.",
     });
   } catch (err) {
     return jsonError(err, request);

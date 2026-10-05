@@ -143,8 +143,8 @@ export function RemindersCenter() {
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
             Calendar lists every diary event you can see. Other tabs keep overdue work, due soon,
-            meetings, and hearings. Automatic calendar emails go out at 5:00 pm the day before and
-            8:00 am on the day (Africa/Harare).
+            meetings, and hearings. The only automatic calendar email is an 8:00 am reminder
+            on the day of the event (Africa/Harare).
           </p>
 
           {error ? (

@@ -4,27 +4,22 @@ LexZim sends transactional documents (quotations, invoices, receipts) and generi
 
 **Client greetings:** birthday emails from CRM are **craft-then-send** (staff write the message, then click Send). They are not silent cron campaigns.
 
-**Staff workflow emails are automatic** (in-app + SMTP via `notifyStaffEvent`): invoice approval request/outcome, task assigned/completed, requisition submit/approve, and scheduled calendar event reminders.
+**Staff workflow emails are automatic** (in-app + SMTP via `notifyStaffEvent`). Tasks and invoice approval email as soon as they are created. A requisition emails as soon as it is submitted, and only to people who can approve requisitions. Being able to open Requisitions and request money does not put someone on that email. Calendar events do not email on create.
 
 ## Calendar event reminder emails (cron)
 
 Endpoint: `GET`/`POST` `/api/cron/calendar-event-emails`  
 Auth: `Authorization: Bearer $CRON_SECRET`
 
-Timezone: **Africa/Harare**. Sends:
-- **17:00** day before
-- **08:00** day of
-- **~30 minutes before** (window scanned on every cron hit)
+Timezone: **Africa/Harare**. The only calendar email is **08:00 on the day of the event**. There is no email when the event is created, no email the day before, and no 30-minute reminder. A postponement still emails immediately, because the time has changed.
 
-Recipients: creator + shared staff (LexZim staff emails). Optional external/client guests get firm-branded emails (no LexZim CTA) with **Created by**.
+Recipients: creator + shared staff (LexZim staff emails). Optional external/client guests get the same day-of reminder as a firm-branded email (no LexZim CTA) with **Created by**.
 
-Railway: add `CRON_SECRET`, then schedule HTTP jobs about **every 15 minutes** so the 30-minute reminder can fire. Day-before / day-of still only send in their Harare hours.
+Railway: add `CRON_SECRET`, then schedule one HTTP job during the 08:00 Harare hour (06:00 UTC). Extra calls that same morning do not send a second copy.
 
-| UTC time | Harare | Slot |
+| UTC time | Harare | What sends |
 |---|---|---|
-| 15:00 | 17:00 | day before |
-| 06:00 | 08:00 | day of |
-| every ~15 min | — | 30 minutes before |
+| 06:00 | 08:00 | reminder for events happening that day |
 
 Production URL (T Pfigu pilot): `https://lexzim-production.up.railway.app/api/cron/calendar-event-emails`  
 Header: `Authorization: Bearer $CRON_SECRET`
@@ -33,7 +28,7 @@ Local helpers (secrets stay out of git):
 - `.env.railway` + `ops-calendar-cron-handoff.md` (generated secret + copy-paste)
 - `powershell -File scripts/push-cron-secret.ps1` after `npx @railway/cli login` and `link`
 
-Manual test: `?forceSlot=day_before`, `?forceSlot=day_of`, or `?forceSlot=thirty_before` with the same Bearer token.
+Manual test: `?forceSlot=day_of` with the same Bearer token. `day_before` and `thirty_before` are ignored.
 
 ## Email transport: firm BYO vs server env
 

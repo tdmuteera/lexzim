@@ -1,8 +1,9 @@
 /**
  * Scheduled calendar event emails (firm-wide).
- * Slots (Africa/Harare): 17:00 day before, 08:00 day of.
+ * One reminder only: 08:00 Africa/Harare on the day of the event.
+ * No email when the event is created, and no email the day before.
  * Recipients: creator + shared people. Subject = event title.
- * All calendar event types.
+ * All calendar event types. A postponement still emails immediately.
  */
 import "server-only";
 
@@ -221,21 +222,11 @@ function harareDayBounds(y: number, m: number, day: number): { start: Date; end:
   return { start, end };
 }
 
-function addHarareCalendarDays(y: number, m: number, day: number, delta: number) {
-  const utc = new Date(Date.UTC(y, m - 1, day + delta));
-  return {
-    y: utc.getUTCFullYear(),
-    m: utc.getUTCMonth() + 1,
-    day: utc.getUTCDate(),
-  };
-}
-
 export function resolveCalendarEmailSlot(now = new Date()): {
   slot: CalendarEmailSlot | null;
   hour: number;
 } {
   const { hour } = harareParts(now);
-  if (hour === 17) return { slot: "day_before", hour };
   if (hour === 8) return { slot: "day_of", hour };
   return { slot: null, hour };
 }
@@ -295,26 +286,20 @@ export async function sendCalendarEventEmailsForFirm(
 ): Promise<{ slot: CalendarEmailSlot | null; emailed: number; skipped: number }> {
   const now = opts?.now ?? new Date();
   const resolved = resolveCalendarEmailSlot(now);
+  // day_before and thirty_before are retired. Only the 08:00 day-of reminder sends.
   const daySlot =
-    opts?.forceSlot === "day_before" || opts?.forceSlot === "day_of"
-      ? opts.forceSlot
-      : opts?.forceSlot === "thirty_before"
-        ? null
-        : resolved.slot;
+    opts?.forceSlot === "day_of" || (!opts?.forceSlot && resolved.slot === "day_of")
+      ? "day_of"
+      : null;
 
   let emailed = 0;
   let skipped = 0;
 
-  if (daySlot === "day_before" || daySlot === "day_of") {
+  if (daySlot === "day_of") {
     const dayResult = await sendDaySlotEmails(firmId, daySlot, now);
     emailed += dayResult.emailed;
     skipped += dayResult.skipped;
   }
-
-  // Always scan for 30-minute reminders (needs a frequent cron, e.g. every 15 min).
-  const thirty = await sendThirtyMinuteReminders(firmId, now);
-  emailed += thirty.emailed;
-  skipped += thirty.skipped;
 
   return {
     slot: opts?.forceSlot ?? resolved.slot,
@@ -325,13 +310,11 @@ export async function sendCalendarEventEmailsForFirm(
 
 async function sendDaySlotEmails(
   firmId: string,
-  slot: "day_before" | "day_of",
+  slot: "day_of",
   now: Date,
 ): Promise<{ emailed: number; skipped: number }> {
   const { y, m, day } = harareParts(now);
-  const dayTarget =
-    slot === "day_before" ? addHarareCalendarDays(y, m, day, 1) : { y, m, day };
-  const { start, end } = harareDayBounds(dayTarget.y, dayTarget.m, dayTarget.day);
+  const { start, end } = harareDayBounds(y, m, day);
 
   const db = getDb();
   const events = await db
@@ -413,11 +396,8 @@ async function sendDaySlotEmails(
       client: clientLabel,
       matter: matterLabel,
       createdBy: createdByName,
-      headline: slot === "day_before" ? "Reminder: tomorrow" : "Reminder: today",
-      intro:
-        slot === "day_before"
-          ? "Reminder: this calendar event is tomorrow."
-          : "Reminder: this calendar event is today.",
+      headline: "Reminder: today",
+      intro: "Reminder: this calendar event is today.",
       audience: "staff",
     });
     const subject = row.event.title;
@@ -437,7 +417,7 @@ async function sendDaySlotEmails(
         inApp: {
           type: CALENDAR_EVENT_EMAIL_TYPE,
           title: subject,
-          body: `${slot === "day_before" ? "Tomorrow" : "Today"} · ${when}`,
+          body: `Today · ${when}`,
           href: "/calendar",
           metadata: {
             calendarEventId: row.event.id,
@@ -487,10 +467,7 @@ async function sendDaySlotEmails(
         year: "numeric",
       });
       const subject = `Public holiday: ${holiday.name}`;
-      const intro =
-        slot === "day_before"
-          ? "Reminder: a public holiday is tomorrow."
-          : "Reminder: today is a public holiday.";
+      const intro = "Reminder: today is a public holiday.";
       const { text, html } = buildCalendarEventCreatedBodies({
         title: holiday.name,
         when: `${whenLabel} · All day`,
@@ -531,161 +508,6 @@ async function sendDaySlotEmails(
   }
 
   return { emailed, skipped };
-}
-
-async function sendThirtyMinuteReminders(
-  firmId: string,
-  now: Date,
-): Promise<{ emailed: number; skipped: number }> {
-  const windowStart = new Date(now.getTime() + 25 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 40 * 60 * 1000);
-  const db = getDb();
-  const events = await db
-    .select({
-      event: calendarEvents,
-      clientType: clients.clientType,
-      clientFullName: clients.fullName,
-      clientLegalName: clients.legalName,
-      clientTradingName: clients.tradingName,
-      matterTitle: matters.title,
-      matterNumber: matters.matterNumber,
-      creatorName: users.fullName,
-      firmName: firms.name,
-    })
-    .from(calendarEvents)
-    .leftJoin(clients, and(eq(clients.id, calendarEvents.clientId), eq(clients.firmId, firmId)))
-    .leftJoin(matters, and(eq(matters.id, calendarEvents.matterId), eq(matters.firmId, firmId)))
-    .leftJoin(users, eq(users.id, calendarEvents.createdBy))
-    .innerJoin(firms, eq(firms.id, calendarEvents.firmId))
-    .where(
-      and(
-        eq(calendarEvents.firmId, firmId),
-        eq(calendarEvents.allDay, false),
-        gte(calendarEvents.startsAt, windowStart),
-        lt(calendarEvents.startsAt, windowEnd),
-      ),
-    );
-
-  if (!events.length) return { emailed: 0, skipped: 0 };
-
-  const eventIds = events.map((e) => e.event.id);
-  const sharesByEvent = new Map<string, string[]>();
-  const shareRows = await db
-    .select({
-      eventId: calendarEventShares.eventId,
-      userId: calendarEventShares.userId,
-    })
-    .from(calendarEventShares)
-    .where(
-      and(eq(calendarEventShares.firmId, firmId), inArray(calendarEventShares.eventId, eventIds)),
-    );
-  for (const row of shareRows) {
-    const list = sharesByEvent.get(row.eventId) ?? [];
-    list.push(row.userId);
-    sharesByEvent.set(row.eventId, list);
-  }
-
-  const sentKeys = await loadAlreadySentKeys(firmId);
-  const slot = "thirty_before";
-  let emailed = 0;
-  let skipped = 0;
-
-  for (const row of events) {
-    const recipients = new Set<string>();
-    if (row.event.createdBy) recipients.add(row.event.createdBy);
-    for (const uid of sharesByEvent.get(row.event.id) ?? []) recipients.add(uid);
-
-    const when = formatEventWhen({
-      startsAt: row.event.startsAt,
-      endsAt: row.event.endsAt,
-      allDay: false,
-    });
-    const createdByName = row.creatorName?.trim() || "A colleague";
-    const clientLabel =
-      row.clientType != null
-        ? clientDisplayName({
-            clientType: row.clientType,
-            fullName: row.clientFullName,
-            legalName: row.clientLegalName,
-            tradingName: row.clientTradingName,
-          })
-        : null;
-    const matterLabel = row.matterNumber
-      ? `Matter ${row.matterNumber}`
-      : row.matterTitle;
-    const { text, html } = buildCalendarEventBodies({
-      title: row.event.title,
-      when,
-      location: row.event.location,
-      client: clientLabel,
-      matter: matterLabel,
-      createdBy: createdByName,
-      headline: "Starting in 30 minutes",
-      intro: "Reminder: this calendar event starts in about 30 minutes.",
-      audience: "staff",
-    });
-    const subject = `In 30 minutes: ${row.event.title}`;
-
-    for (const userId of recipients) {
-      const key = `${row.event.id}:${slot}:${userId}`;
-      if (sentKeys.has(key)) {
-        skipped += 1;
-        continue;
-      }
-      const result = await notifyStaffEvent({
-        firmId,
-        userIds: [userId],
-        subject,
-        body: text,
-        html,
-        inApp: {
-          type: CALENDAR_EVENT_EMAIL_TYPE,
-          title: subject,
-          body: `In ~30 minutes · ${when}`,
-          href: "/calendar",
-          metadata: {
-            calendarEventId: row.event.id,
-            slot,
-            userId,
-          },
-        },
-      });
-      emailed += result.emailed;
-      sentKeys.add(key);
-    }
-
-    const guestResult = await notifyEventGuests({
-      firmId,
-      eventId: row.event.id,
-      firmName: row.firmName,
-      createdByName,
-      title: row.event.title,
-      when,
-      location: row.event.location,
-      client: clientLabel,
-      matter: matterLabel,
-      kind: "reminder",
-    });
-    emailed += guestResult.emailed;
-  }
-
-  return { emailed, skipped };
-}
-
-/**
- * On event create: email the creator and everyone shared on the event
- * with the title and key details. Best-effort (does not throw to callers).
- */
-export async function notifyCalendarEventCreated(input: {
-  firmId: string;
-  eventId: string;
-  createdByUserId: string;
-  sharedUserIds?: string[];
-}): Promise<{ emailed: number; emailFailed: number }> {
-  return notifyCalendarEventLifecycle({
-    ...input,
-    kind: "created",
-  });
 }
 
 export async function notifyCalendarEventPostponed(input: {
