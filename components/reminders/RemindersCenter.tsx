@@ -34,6 +34,7 @@ export type RemindersPayload = {
     hearings: number;
     meetings: number;
     calendar?: number;
+    tracking?: number;
     total: number;
   };
   overdue: ReminderItem[];
@@ -41,12 +42,22 @@ export type RemindersPayload = {
   hearings: ReminderItem[];
   meetings: ReminderItem[];
   calendar?: ReminderItem[];
+  tracking?: ReminderItem[];
   settings?: { browserNotificationsEnabled: boolean };
 };
 
-type Tab = "calendar" | "overdue" | "dueSoon" | "hearings" | "meetings";
+type Tab = "calendar" | "overdue" | "dueSoon" | "hearings" | "meetings" | "tracking";
 
-function formatWhen(iso: string) {
+function formatWhen(iso: string, kind?: string) {
+  if (kind === "tracking") {
+    return new Date(iso).toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
   return new Date(iso).toLocaleString(undefined, {
     weekday: "short",
     day: "numeric",
@@ -113,9 +124,11 @@ export function RemindersCenter() {
         ? data?.overdue ?? []
         : tab === "dueSoon"
           ? data?.dueSoon ?? []
-          : tab === "meetings"
-            ? data?.meetings ?? []
-            : data?.hearings ?? [];
+      : tab === "meetings"
+        ? data?.meetings ?? []
+        : tab === "tracking"
+          ? data?.tracking ?? []
+          : data?.hearings ?? [];
 
   const sortAccessors = useMemo(
     () => ({
@@ -142,9 +155,10 @@ export function RemindersCenter() {
         </div>
         <div className="panel-body">
           <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-            Calendar lists every diary event you can see. Other tabs keep overdue work, due soon,
-            meetings, and hearings. The only automatic calendar email is an 8:00 am reminder
-            on the day of the event (Africa/Harare).
+            Calendar lists every diary event you can see. Matter tracking is what someone wrote
+            on a case, with its date. Other tabs keep overdue work, due soon, meetings, and
+            hearings. The only automatic calendar email is an 8:00 am reminder on the day of
+            the event (Africa/Harare).
           </p>
 
           {error ? (
@@ -189,6 +203,13 @@ export function RemindersCenter() {
             >
               Hearings ({data?.counts.hearings ?? 0})
             </Button>
+            <Button
+              size="sm"
+              variant={tab === "tracking" ? "primary" : "outline"}
+              onClick={() => setTab("tracking")}
+            >
+              Matter tracking ({data?.counts.tracking ?? 0})
+            </Button>
           </div>
 
           {loading && !data ? (
@@ -208,9 +229,11 @@ export function RemindersCenter() {
                       ? "Nothing due soon"
                       : tab === "meetings"
                         ? "No meetings in window"
-                        : "No hearings in window"
+                        : tab === "tracking"
+                          ? "No matter tracking in the next 60 days"
+                          : "No hearings in window"
               }
-              detail="When procedures, filing deadlines, client meetings, or hearings need attention, they appear here."
+              detail="When procedures, filing deadlines, client meetings, hearings, or a matter tracking date need attention, they appear here."
             />
           ) : (
             <table className="data">
@@ -271,7 +294,7 @@ export function RemindersCenter() {
                           : undefined
                       }
                     >
-                      {formatWhen(item.dueAt)}
+                      {formatWhen(item.dueAt, item.kind)}
                     </td>
                     <td>
                       {item.matterId ? (

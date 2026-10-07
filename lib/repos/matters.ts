@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clients, matterTeam, matters, users } from "@/lib/db/schema";
+import { latestTrackingByMatter } from "@/lib/repos/matter-tracking";
 import { clientDisplayLabel } from "@/lib/clients/display";
 import type { MatterInput } from "@/lib/matters/validation";
 import {
@@ -42,6 +43,8 @@ export type ListMattersOpts = {
 export type MatterListRow = typeof matters.$inferSelect & {
   clientDisplayName: string;
   responsibleLawyerName: string | null;
+  trackingSummary: string | null;
+  trackingOn: string | null;
 };
 
 function valuesFromInput(input: MatterInput) {
@@ -161,7 +164,7 @@ export async function listMatters(firmId: string, opts?: ListMattersOpts): Promi
     .where(and(...conditions))
     .orderBy(orderFn(orderCol));
 
-  return rows.map((row) => ({
+  const listed = rows.map((row) => ({
     ...row.matter,
     clientDisplayName: clientDisplayLabel({
       clientNumber: row.clientNumber,
@@ -175,6 +178,18 @@ export async function listMatters(firmId: string, opts?: ListMattersOpts): Promi
     }),
     responsibleLawyerName: row.lawyerName ?? null,
   }));
+  const tracking = await latestTrackingByMatter(
+    firmId,
+    listed.map((row) => row.id),
+  );
+  return listed.map((row) => {
+    const current = tracking.get(row.id);
+    return {
+      ...row,
+      trackingSummary: current?.summary ?? null,
+      trackingOn: current?.happensOn ?? null,
+    };
+  });
 }
 
 export async function getMatterById(firmId: string, matterId: string) {

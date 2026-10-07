@@ -7,6 +7,7 @@ import { Can } from "@/components/auth/Can";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MatterDeadlinesPanel } from "@/components/matters/MatterDeadlinesPanel";
+import { MatterTrackingPanel } from "@/components/matters/MatterTrackingPanel";
 import { MatterDisbursementsPanel } from "@/components/matters/MatterDisbursementsPanel";
 import { MatterTimePanel } from "@/components/matters/MatterTimePanel";
 import { MatterProceduresPanel } from "@/components/matters/MatterProceduresPanel";
@@ -176,6 +177,8 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
           {error ? (
             <p style={{ color: "var(--danger)", marginBottom: "0.75rem" }}>{error}</p>
           ) : null}
+
+          <MatterTrackingPanel matterId={matter.id} />
 
           <div className="toolbar" style={{ marginBottom: "1rem" }}>
             {tabs.map((t) => (

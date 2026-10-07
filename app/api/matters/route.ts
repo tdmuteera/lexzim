@@ -53,6 +53,8 @@ export async function GET(request: Request) {
         serializeMatter(row, {
           clientDisplayName: row.clientDisplayName,
           responsibleLawyerName: row.responsibleLawyerName,
+          trackingSummary: row.trackingSummary,
+          trackingOn: row.trackingOn,
         }),
       ),
       viewAll,

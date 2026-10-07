@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SortableTh } from "@/components/ui/SortableTh";
 import { AREA_OF_LAW_OPTIONS } from "@/lib/db/mvp-types";
+import { formatTrackingDate } from "@/lib/matters/tracking";
 import { MATTER_STATUSES, statusLabel } from "@/lib/matters/validation";
 import { useTableSort } from "@/lib/ui/table-sort";
 
@@ -23,6 +24,8 @@ type SerializedMatter = {
   nextHearingAt: string | null;
   priority: string | null;
   updatedAt: string;
+  trackingSummary: string | null;
+  trackingOn: string | null;
 };
 
 type Lawyer = { id: string; fullName: string; email: string };
@@ -117,6 +120,7 @@ export function MattersListView({
       client: (m: SerializedMatter) => m.clientDisplayName,
       area: (m: SerializedMatter) => m.areaOfLaw,
       status: (m: SerializedMatter) => m.statusLabel,
+      tracking: (m: SerializedMatter) => m.trackingOn,
       lawyer: (m: SerializedMatter) => m.responsibleLawyerName,
       hearing: (m: SerializedMatter) => m.nextHearingAt,
     }),
@@ -246,6 +250,13 @@ export function MattersListView({
                     onSort={toggleSort}
                   />
                   <SortableTh
+                    label="Tracking"
+                    columnKey="tracking"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTh
                     label="Lawyer"
                     columnKey="lawyer"
                     activeKey={sortKey}
@@ -264,13 +275,13 @@ export function MattersListView({
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="muted">
+                    <td colSpan={7} className="muted">
                       Loading matters…
                     </td>
                   </tr>
                 ) : sortedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <EmptyState
                         icon="list"
                         title="No matters match your filters"
@@ -297,6 +308,18 @@ export function MattersListView({
                         <Badge tone={statusTone(matter.status)}>
                           {matter.statusLabel}
                         </Badge>
+                      </td>
+                      <td>
+                        {matter.trackingSummary && matter.trackingOn ? (
+                          <>
+                            {matter.trackingSummary}
+                            <div className="muted" style={{ fontSize: "0.8rem" }}>
+                              {formatTrackingDate(matter.trackingOn)}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="muted">Not set</span>
+                        )}
                       </td>
                       <td>{matter.responsibleLawyerName ?? "—"}</td>
                       <td>

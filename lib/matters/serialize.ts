@@ -8,6 +8,8 @@ export function serializeMatter(
   extras?: {
     clientDisplayName?: string | null;
     responsibleLawyerName?: string | null;
+    trackingSummary?: string | null;
+    trackingOn?: string | null;
   },
 ) {
   return {
@@ -33,5 +35,7 @@ export function serializeMatter(
     updatedAt: row.updatedAt.toISOString(),
     clientDisplayName: extras?.clientDisplayName ?? null,
     responsibleLawyerName: extras?.responsibleLawyerName ?? null,
+    trackingSummary: extras?.trackingSummary ?? null,
+    trackingOn: extras?.trackingOn ?? null,
   };
 }

@@ -34,6 +34,7 @@ const TITLES: Record<string, string> = {
   "users.lawyer_flag_update": "Updated the lawyer list",
   "delegation.grant": "Granted an approval right",
   "clients.update": "Updated a client",
+  "matters.tracking_update": "Updated where a matter stands",
   "clients.kyc_pdf.download": "Downloaded a KYC pack",
   "proformas.create": "Created a pro forma",
   "proformas.update": "Updated a pro forma",
@@ -125,7 +126,7 @@ export function activityCategory(action: string): ActivityCategoryId {
   }
   if (action.startsWith("ai.")) return "ai";
   if (action.startsWith("users.") || action.startsWith("delegation.")) return "people";
-  if (action.startsWith("clients.")) return "clients";
+  if (action.startsWith("clients.") || action.startsWith("matters.")) return "clients";
   if (action.startsWith("export.")) return "documents";
   if (action.startsWith("settings.") || action.startsWith("onboarding.")) return "settings";
   return "other";

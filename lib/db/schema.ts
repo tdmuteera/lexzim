@@ -433,6 +433,28 @@ export const pendingProcedures = pgTable(
   ],
 );
 
+/** Latest row is the current "where this matter stands" line. Older rows stay as history. */
+export const matterTrackingEntries = pgTable(
+  "matter_tracking_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    matterId: uuid("matter_id")
+      .notNull()
+      .references(() => matters.id, { onDelete: "cascade" }),
+    summary: text("summary").notNull(),
+    happensOn: date("happens_on", { mode: "string" }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("matter_tracking_firm_id_idx").on(t.firmId),
+    index("matter_tracking_matter_created_idx").on(t.matterId, t.createdAt),
+  ],
+);
+
 export const matterEvents = pgTable(
   "matter_events",
   {
@@ -2887,6 +2909,7 @@ export const schema = {
   matterTeam,
   relatedParties,
   pendingProcedures,
+  matterTrackingEntries,
   matterEvents,
   templates,
   templateVersions,

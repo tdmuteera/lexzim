@@ -2,7 +2,7 @@
  * In-app reminders aggregates (P3-04). Firm-scoped; matter access when !viewAll.
  * No SMTP / push cloud — browser notifications are optional and in-session only.
  */
-import { and, asc, eq, gte, inArray, isNotNull, lt, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, notInArray, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   calendarEventShares,
@@ -10,9 +10,11 @@ import {
   clients,
   matterDeadlines,
   matterTeam,
+  matterTrackingEntries,
   matters,
   pendingProcedures,
 } from "@/lib/db/schema";
+import { addCalendarDays, harareToday, trackingDueAt } from "@/lib/matters/tracking";
 import { clientDisplayName } from "@/lib/clients/display";
 import { serializeMatterDeadline } from "@/lib/deadlines/serialize";
 import { serializeProcedure } from "@/lib/procedures/serialize";
@@ -49,12 +51,15 @@ export type ReminderBuckets = {
     hearings: number;
     meetings: number;
     calendar: number;
+    tracking: number;
     total: number;
   };
   overdue: ReminderItem[];
   dueSoon: ReminderItem[];
   hearings: ReminderItem[];
   meetings: ReminderItem[];
+  /** Current matter-tracking lines whose date is still ahead, up to 60 days. */
+  tracking: ReminderItem[];
   /** All calendar diary events the viewer can see (every event type). */
   calendar: ReminderItem[];
 };
@@ -67,7 +72,8 @@ export type ReminderItem = {
     | "hearing"
     | "calendar_hearing"
     | "meeting"
-    | "calendar_event";
+    | "calendar_event"
+    | "tracking";
   title: string;
   dueAt: string;
   matterId: string | null;
@@ -106,6 +112,7 @@ export async function getReminders(input: {
     hearings,
     meetings,
     calendar,
+    trackingSplit,
   ] = await Promise.all([
     listProcedureReminders({ ...input, mode: "overdue", now, soonEnd, limit }),
     listProcedureReminders({ ...input, mode: "due_soon", now, soonEnd, limit }),
@@ -136,11 +143,15 @@ export async function getReminders(input: {
       soonEnd: calendarEnd,
       limit: Math.max(limit, 80),
     }),
+    listTrackingReminders({ ...input, limit }),
   ]);
 
-  const overdue = [...overdueProcedures, ...overdueDeadlines, ...overdueHearings].sort((a, b) =>
-    a.dueAt.localeCompare(b.dueAt),
-  );
+  const overdue = [
+    ...overdueProcedures,
+    ...overdueDeadlines,
+    ...overdueHearings,
+    ...trackingSplit.overdue,
+  ].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const dueSoon = [...dueSoonProcedures, ...dueSoonDeadlines].sort((a, b) =>
     a.dueAt.localeCompare(b.dueAt),
   );
@@ -151,12 +162,14 @@ export async function getReminders(input: {
     hearings: hearings.length,
     meetings: meetings.length,
     calendar: calendar.length,
+    tracking: trackingSplit.upcoming.length,
     total:
       overdue.length +
       dueSoon.length +
       hearings.length +
       meetings.length +
-      calendar.length,
+      calendar.length +
+      trackingSplit.upcoming.length,
   };
 
   return {
@@ -170,6 +183,63 @@ export async function getReminders(input: {
     hearings: hearings.slice(0, limit),
     meetings: meetings.slice(0, limit),
     calendar: calendar.slice(0, Math.max(limit, 80)),
+    tracking: trackingSplit.upcoming.slice(0, limit),
+  };
+}
+
+const TRACKING_HORIZON_DAYS = 60;
+
+async function listTrackingReminders(input: {
+  firmId: string;
+  userId: string;
+  viewAll: boolean;
+  limit: number;
+}): Promise<{ overdue: ReminderItem[]; upcoming: ReminderItem[] }> {
+  const db = getDb();
+  const matterAccess = matterAccessCondition(input.firmId, input.userId, input.viewAll);
+  const today = harareToday();
+  const horizon = addCalendarDays(today, TRACKING_HORIZON_DAYS);
+  const rows = await db
+    .selectDistinctOn([matterTrackingEntries.matterId], {
+      id: matterTrackingEntries.id,
+      matterId: matterTrackingEntries.matterId,
+      summary: matterTrackingEntries.summary,
+      happensOn: matterTrackingEntries.happensOn,
+      matterTitle: matters.title,
+    })
+    .from(matterTrackingEntries)
+    .innerJoin(matters, and(eq(matters.id, matterTrackingEntries.matterId), matterAccess))
+    .where(
+      and(
+        eq(matterTrackingEntries.firmId, input.firmId),
+        notInArray(matters.status, ["closed", "archived"]),
+      ),
+    )
+    .orderBy(matterTrackingEntries.matterId, desc(matterTrackingEntries.createdAt));
+
+  const overdue: ReminderItem[] = [];
+  const upcoming: ReminderItem[] = [];
+  for (const row of rows) {
+    if (row.happensOn > horizon) continue;
+    const item: ReminderItem = {
+      id: `tracking:${row.id}`,
+      kind: "tracking",
+      title: row.summary,
+      dueAt: trackingDueAt(row.happensOn),
+      matterId: row.matterId,
+      matterTitle: row.matterTitle,
+      href: `/matters/${row.matterId}`,
+      isOverdue: row.happensOn < today,
+      meta: "Matter tracking",
+    };
+    if (item.isOverdue) overdue.push(item);
+    else upcoming.push(item);
+  }
+  overdue.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  upcoming.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  return {
+    overdue: overdue.slice(0, input.limit),
+    upcoming: upcoming.slice(0, input.limit),
   };
 }
 
