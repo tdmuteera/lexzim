@@ -1,10 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
-import { SortableTh } from "@/components/ui/SortableTh";
-import { formatDateTime } from "@/lib/format/dates";
-import { useTableSort } from "@/lib/ui/table-sort";
+import {
+  ACTIVITY_CATEGORIES,
+  activityCategory,
+  activityCategoryLabel,
+  activityFacts,
+  activitySummary,
+  activityTitle,
+  activityWhere,
+  type ActivityCategoryId,
+} from "@/lib/staff/activity-copy";
 
 type LoginOption = {
   id: string;
@@ -25,36 +32,49 @@ type ActivityRow = {
   createdAt: string;
 };
 
-function formatMetadata(meta: Record<string, unknown>): string {
-  const keys = Object.keys(meta);
-  if (keys.length === 0) return "";
-  const parts: string[] = [];
-  for (const key of keys.slice(0, 4)) {
-    const val = meta[key];
-    if (val == null || val === "") continue;
-    const text = typeof val === "object" ? JSON.stringify(val) : String(val);
-    if (text.length > 80) {
-      parts.push(`${key}: ${text.slice(0, 77)}…`);
-    } else {
-      parts.push(`${key}: ${text}`);
-    }
-  }
-  if (keys.length > 4) parts.push(`+${keys.length - 4} more`);
-  return parts.join(" · ");
+const TZ = "Africa/Harare";
+
+function dayKey(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ });
 }
 
-function entityLabel(row: ActivityRow): string {
-  if (!row.entityType && !row.entityId) return "—";
-  if (row.entityType && row.entityId) return `${row.entityType} ${row.entityId}`;
-  return row.entityType ?? row.entityId ?? "—";
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    timeZone: TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function recordLabel(entityType: string | null): string | null {
+  if (!entityType) return null;
+  return entityType.replace(/[_-]/g, " ");
 }
 
 export function UserActivityPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ActivityRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [loginUsers, setLoginUsers] = useState<LoginOption[]>([]);
   const [filterUserId, setFilterUserId] = useState("");
+  const [category, setCategory] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [limit, setLimit] = useState(120);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const sortedLogins = useMemo(
     () => [...loginUsers].sort((a, b) => a.fullName.localeCompare(b.fullName)),
@@ -65,77 +85,115 @@ export function UserActivityPanel() {
     setLoading(true);
     setError(null);
     try {
-      const q = filterUserId ? `?userId=${encodeURIComponent(filterUserId)}` : "";
-      const res = await fetch(`/api/staff/activity${q}`, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (filterUserId) params.set("userId", filterUserId);
+      if (category) params.set("category", category);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      if (appliedQuery) params.set("q", appliedQuery);
+      params.set("limit", String(limit));
+      const res = await fetch(`/api/staff/activity?${params.toString()}`, { credentials: "include" });
       const body = (await res.json()) as {
         ok: boolean;
-        data?: { items: ActivityRow[]; loginUsers?: LoginOption[] };
+        data?: { items: ActivityRow[]; total?: number; loginUsers?: LoginOption[] };
         error?: { message: string };
       };
       if (!res.ok || !body.ok || !body.data) {
         setError(body.error?.message ?? "Could not load user activity.");
         setItems([]);
+        setTotal(0);
         return;
       }
       setItems(body.data.items);
+      setTotal(body.data.total ?? body.data.items.length);
       if (body.data.loginUsers) setLoginUsers(body.data.loginUsers);
     } catch {
       setError("Could not load user activity.");
       setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [filterUserId]);
+  }, [filterUserId, category, from, to, appliedQuery, limit]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const sortAccessors = useMemo(
-    () => ({
-      when: (r: ActivityRow) => r.createdAt,
-      user: (r: ActivityRow) => r.userFullName ?? r.userEmail ?? "",
-      action: (r: ActivityRow) => r.action,
-      record: (r: ActivityRow) => entityLabel(r),
-      details: (r: ActivityRow) => formatMetadata(r.metadata),
-    }),
-    [],
-  );
-  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(items, sortAccessors, {
-    key: "when",
-    dir: "desc",
-  });
+  const groups = useMemo(() => {
+    const buckets: { key: string; label: string; rows: ActivityRow[] }[] = [];
+    for (const row of items) {
+      const key = dayKey(row.createdAt);
+      const last = buckets[buckets.length - 1];
+      if (last?.key === key) last.rows.push(row);
+      else buckets.push({ key, label: dayLabel(row.createdAt), rows: [row] });
+    }
+    return buckets;
+  }, [items]);
+
+  const visibleCounts = useMemo(() => {
+    const people = new Set(items.map((row) => row.userId).filter(Boolean));
+    const byCategory = new Map<ActivityCategoryId, number>();
+    for (const row of items) {
+      const id = activityCategory(row.action);
+      byCategory.set(id, (byCategory.get(id) ?? 0) + 1);
+    }
+    return { people: people.size, byCategory };
+  }, [items]);
+
+  function applySearch(event?: FormEvent) {
+    event?.preventDefault();
+    setLimit(120);
+    setAppliedQuery(query.trim());
+  }
 
   return (
-    <div className="settings-form">
-      <div className="settings-form-head">
-        <p className="settings-lede">
-          Recent actions in your firm: logins, edits, downloads, and approvals. Grant{" "}
-          <strong>View user activity</strong> under Edit access to let others open this section
-          without the full Audit Log.
-        </p>
+    <div className="user-activity">
+      <p className="settings-lede">
+        Who did what in the firm, in the order it happened. Open an event for the amount, the
+        record, and where they were signed in from.
+      </p>
+
+      <div className="user-activity-stats" aria-label="Activity summary">
+        <div>
+          <strong>{total}</strong>
+          <span>matching events</span>
+        </div>
+        <div>
+          <strong>{items.length}</strong>
+          <span>shown</span>
+        </div>
+        <div>
+          <strong>{visibleCounts.people}</strong>
+          <span>people in this list</span>
+        </div>
+        <div>
+          <strong>{visibleCounts.byCategory.get("sign-in") ?? 0}</strong>
+          <span>sign-ins shown</span>
+        </div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          marginBottom: "0.85rem",
-        }}
-      >
+      <form className="user-activity-filters" onSubmit={applySearch}>
         <label>
-          <div className="muted" style={{ fontSize: "0.8rem" }}>
-            User
-          </div>
+          <span>Search</span>
+          <input
+            className="filter-select"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, receipt, subject, question..."
+          />
+        </label>
+        <label>
+          <span>Person</span>
           <select
             className="filter-select"
             value={filterUserId}
-            onChange={(e) => setFilterUserId(e.target.value)}
+            onChange={(e) => {
+              setLimit(120);
+              setFilterUserId(e.target.value);
+            }}
           >
-            <option value="">All users</option>
+            <option value="">Everyone</option>
             {sortedLogins.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.fullName}
@@ -143,10 +201,57 @@ export function UserActivityPanel() {
             ))}
           </select>
         </label>
-        <Button variant="ghost" onClick={() => void load()} disabled={loading}>
-          Refresh
-        </Button>
-      </div>
+        <label>
+          <span>Kind</span>
+          <select
+            className="filter-select"
+            value={category}
+            onChange={(e) => {
+              setLimit(120);
+              setCategory(e.target.value);
+            }}
+          >
+            <option value="">All kinds</option>
+            {ACTIVITY_CATEGORIES.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>From</span>
+          <input
+            className="filter-select"
+            type="date"
+            value={from}
+            onChange={(e) => {
+              setLimit(120);
+              setFrom(e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          <span>To</span>
+          <input
+            className="filter-select"
+            type="date"
+            value={to}
+            onChange={(e) => {
+              setLimit(120);
+              setTo(e.target.value);
+            }}
+          />
+        </label>
+        <div className="user-activity-filter-actions">
+          <Button type="submit" variant="outline" disabled={loading}>
+            Search
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => void load()} disabled={loading}>
+            Refresh
+          </Button>
+        </div>
+      </form>
 
       {error ? (
         <p className="form-error" role="alert">
@@ -154,80 +259,96 @@ export function UserActivityPanel() {
         </p>
       ) : null}
 
-      {loading ? <p className="muted">Loading…</p> : null}
+      {loading ? <p className="muted">Loading activity...</p> : null}
 
       {!loading && !error && items.length === 0 ? (
-        <p className="muted">No activity recorded yet for this filter.</p>
+        <p className="muted">Nothing recorded for this filter.</p>
       ) : null}
 
-      {!loading && items.length > 0 ? (
-        <div className="hr-activity-table-wrap">
-          <table className="hr-activity-table">
-            <thead>
-              <tr>
-                <SortableTh
-                  label="When"
-                  columnKey="when"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortableTh
-                  label="User"
-                  columnKey="user"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortableTh
-                  label="Action"
-                  columnKey="action"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortableTh
-                  label="Record"
-                  columnKey="record"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortableTh
-                  label="Details"
-                  columnKey="details"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={toggleSort}
-                />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((row) => {
-                const meta = formatMetadata(row.metadata);
-                return (
-                  <tr key={row.id}>
-                    <td>{formatDateTime(row.createdAt)}</td>
-                    <td>
+      {groups.map((group) => (
+        <section key={group.key} className="user-activity-day">
+          <h4>{group.label}</h4>
+          <ol>
+            {group.rows.map((row) => {
+              const summary = activitySummary(row.action, row.metadata);
+              const facts = activityFacts(row.metadata);
+              const where = activityWhere(row.ipOrUserAgent);
+              const open = openId === row.id;
+              const kind = activityCategory(row.action);
+              return (
+                <li key={row.id} className={`user-activity-event is-${kind}`}>
+                  <time dateTime={row.createdAt}>{timeLabel(row.createdAt)}</time>
+                  <div>
+                    <div className="user-activity-event-head">
+                      <span className={`user-activity-kind is-${kind}`}>{activityCategoryLabel(kind)}</span>
+                      <strong>{activityTitle(row.action)}</strong>
+                    </div>
+                    <p className="user-activity-who">
                       {row.userFullName ?? "System"}
-                      {row.userEmail ? (
-                        <div className="muted" style={{ fontSize: "0.75rem" }}>
-                          {row.userEmail}
+                      {row.userEmail ? <span>{row.userEmail}</span> : null}
+                    </p>
+                    {summary ? <p className="user-activity-summary">{summary}</p> : null}
+                    <button
+                      type="button"
+                      className="user-activity-more"
+                      aria-expanded={open}
+                      onClick={() => setOpenId(open ? null : row.id)}
+                    >
+                      {open ? "Hide details" : "Show details"}
+                    </button>
+                    {open ? (
+                      <dl className="user-activity-detail">
+                        <div>
+                          <dt>Recorded as</dt>
+                          <dd>{row.action}</dd>
                         </div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <code style={{ fontSize: "0.78rem" }}>{row.action}</code>
-                    </td>
-                    <td style={{ fontSize: "0.82rem" }}>{entityLabel(row)}</td>
-                    <td className="muted" style={{ fontSize: "0.78rem" }}>
-                      {meta || "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        {recordLabel(row.entityType) ? (
+                          <div>
+                            <dt>Record</dt>
+                            <dd>{recordLabel(row.entityType)}</dd>
+                          </div>
+                        ) : null}
+                        {facts.map((fact) => (
+                          <div key={fact.label}>
+                            <dt>{fact.label}</dt>
+                            <dd>{fact.value}</dd>
+                          </div>
+                        ))}
+                        {where.device ? (
+                          <div>
+                            <dt>Device</dt>
+                            <dd>{where.device}</dd>
+                          </div>
+                        ) : null}
+                        {where.ip ? (
+                          <div>
+                            <dt>Network</dt>
+                            <dd>{where.ip}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ))}
+
+      {!loading && items.length > 0 && items.length < total ? (
+        <div className="user-activity-more-rows">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || limit >= 400}
+            onClick={() => setLimit((n) => Math.min(400, n + 120))}
+          >
+            Show earlier events
+          </Button>
+          <span className="muted">
+            {items.length} of {total}
+          </span>
         </div>
       ) : null}
     </div>
