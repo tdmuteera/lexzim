@@ -171,7 +171,6 @@ export function MatterDetailView({ matter, events }: MatterDetailViewProps) {
         </div>
         <p className="muted" style={{ margin: "0 1rem 0.75rem", fontSize: "0.85rem" }}>
           Closing or archiving a matter keeps fee invoices and payments for revenue history.
-          Permanent client/finance wipe is LexZim development/ops only.
         </p>
         <div className="panel-body">
           {error ? (

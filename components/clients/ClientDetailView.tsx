@@ -186,7 +186,7 @@ export function ClientDetailView({
     const action = isArchived ? "restore" : "archive";
     if (action === "archive") {
       const ok = window.confirm(
-        `Archive client "${client.displayName}"?\n\nThis soft-archives the client. They leave Active lists and cannot get new matters.\n\nFee invoices and payments are KEPT for revenue history. Outstanding fees for this client stop counting on the dashboard while archived.\n\nPermanent wipe (including money history) is LexZim development/ops only, not available here.`,
+        `Archive client "${client.displayName}"?\n\nThis archives the client. They leave Active lists and cannot get new matters.\n\nFee invoices and payments are kept for revenue history. Outstanding fees for this client stop counting on the dashboard while archived.`,
       );
       if (!ok) return;
     } else {

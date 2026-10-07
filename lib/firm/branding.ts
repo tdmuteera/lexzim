@@ -26,7 +26,7 @@ export function getFirmBranding(
     platformName: PLATFORM_PRODUCT_NAME,
     logoInitials: initialsFromName(displayName),
     logoUrl: session?.firm.logoUrl ?? null,
-    tagline: session?.firm.isDemo ? "Demo workspace" : "Practice Platform",
+    tagline: "Practice Platform",
     isDemo: session?.firm.isDemo ?? false,
     status: session?.firm.status ?? "active",
   };

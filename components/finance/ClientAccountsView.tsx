@@ -370,15 +370,6 @@ export function ClientAccountsView() {
           </div>
         </div>
         <div className="panel-body">
-          <div className="finance-desk-callout" role="note">
-            <div className="finance-desk-callout-title">Client money vs firm fees</div>
-            <p>
-              Bookkeeper view of each client&apos;s trust balance, fee billing, unbilled
-              disbursements, and payment intakes. Trust money stays separate from firm fee
-              revenue.
-            </p>
-          </div>
-
           {error ? (
             <div className="finance-status-banner finance-status-banner-error" role="alert">
               {error}

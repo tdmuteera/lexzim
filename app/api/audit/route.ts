@@ -1,10 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { auditLogs } from "@/lib/db/schema";
+import { auditLogs, users } from "@/lib/db/schema";
 import { jsonError, jsonOk } from "@/lib/auth/http";
 import { requirePermission } from "@/lib/rbac/guards";
 
-/** Sample protected route: requires audit.view (P0-08). */
+/** Firm audit history. Requires audit.view. */
 export async function GET(request: Request) {
   try {
     const session = await requirePermission("audit.view");
@@ -15,11 +15,11 @@ export async function GET(request: Request) {
         id: auditLogs.id,
         action: auditLogs.action,
         entityType: auditLogs.entityType,
-        entityId: auditLogs.entityId,
-        userId: auditLogs.userId,
         createdAt: auditLogs.createdAt,
+        actorName: users.fullName,
       })
       .from(auditLogs)
+      .leftJoin(users, eq(users.id, auditLogs.userId))
       .where(eq(auditLogs.firmId, session.firm.id))
       .orderBy(desc(auditLogs.createdAt))
       .limit(50);

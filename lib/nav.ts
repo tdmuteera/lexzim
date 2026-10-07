@@ -603,7 +603,7 @@ export const routeMeta: Record<string, RouteMeta> = {
     title: "Audit Log",
     subtitle: "Sensitive actions · immutable history",
     purpose: "Review sensitive actions recorded for accountability.",
-    phaseBadge: "Phase 0 placeholder",
+    phaseBadge: "Phase 1+",
   },
   "/settings": {
     title: "Settings",

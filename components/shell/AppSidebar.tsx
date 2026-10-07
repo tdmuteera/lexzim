@@ -278,7 +278,7 @@ export function AppSidebar() {
 
       <div className="sidebar-foot">
         <strong>{branding.displayName}</strong>
-        {branding.platformName} · {branding.isDemo ? "Demo tenant" : "Multi-tenant SaaS"}
+        {branding.platformName}
       </div>
     </aside>
   );

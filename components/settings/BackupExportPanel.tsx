@@ -192,17 +192,15 @@ export function BackupExportPanel() {
         </div>
 
         <p className="settings-hint">
-          Platform backups (Supabase PITR / daily backups and Railway redeploys) are separate from
-          this firm export. See docs/BACKUP.md and docs/cloud/RETENTION.md. Desktop/local wipe is
-          not applicable (hosted SaaS only).
+          This download is a copy of the firm's own records. It is separate from the platform's own backups.
         </p>
       </section>
 
       <div className="settings-danger-zone">
         <strong className="settings-section-title">Deactivate firm (suspend)</strong>
         <p className="settings-hint">
-          Soft-disable: blocks staff login. Export first. Permanent purge is LexZim ops only
-          (typed DELETE FIRM).
+          Suspending the firm blocks staff login. Download an export first. This does not delete
+          clients, matters, or money.
         </p>
         <label className="settings-field">
           <span>Type firm slug to confirm{firmSlug ? ` (${firmSlug})` : ""}</span>
