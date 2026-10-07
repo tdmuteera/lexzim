@@ -1,5 +1,5 @@
 import type { PermissionCode } from "@/lib/db/types";
-import { navSections } from "@/lib/nav";
+import { navSectionItems, navSections } from "@/lib/nav";
 
 export type AccessTick = {
   code: PermissionCode;
@@ -147,7 +147,7 @@ export function accessTicksFromNav(): AccessTick[] {
   const seen = new Set<string>();
   for (const section of navSections) {
     const labelsByCode = new Map<string, string[]>();
-    for (const item of section.items) {
+    for (const item of navSectionItems(section)) {
       if (!item.permission) continue;
       const labels = labelsByCode.get(item.permission) ?? [];
       labels.push(item.label);

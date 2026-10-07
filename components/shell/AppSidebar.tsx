@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { Icon } from "@/components/ui/Icon";
 import { setModuleCache } from "@/lib/client/module-cache";
 import { getFirmBranding } from "@/lib/firm/branding";
-import { filterNavSections } from "@/lib/nav";
+import { filterNavSections, type NavItem } from "@/lib/nav";
 import { isModuleTabActive, FINANCE_TABS, HR_TABS } from "@/lib/module-nav";
 import { useUiStore } from "@/lib/store";
 
@@ -121,6 +121,24 @@ export function AppSidebar() {
     },
     [canEditPins, pinBusy],
   );
+
+  function renderNavItem(item: NavItem) {
+    const active = isNavItemActive(pathname, item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        prefetch
+        className={["nav-item", active ? "active" : ""].filter(Boolean).join(" ")}
+        onClick={() => setMobileNavOpen(false)}
+        onMouseEnter={() => warmModule(item.href)}
+        onFocus={() => warmModule(item.href)}
+      >
+        <Icon name={item.icon} />
+        <span>{item.label}</span>
+      </Link>
+    );
+  }
 
   const sidebarClass = [
     "sidebar",
@@ -241,25 +259,16 @@ export function AppSidebar() {
                   ) : null}
                 </div>
                 {showItems
-                  ? section.items.map((item) => {
-                      const active = isNavItemActive(pathname, item.href);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          prefetch
-                          className={["nav-item", active ? "active" : ""]
-                            .filter(Boolean)
-                            .join(" ")}
-                          onClick={() => setMobileNavOpen(false)}
-                          onMouseEnter={() => warmModule(item.href)}
-                          onFocus={() => warmModule(item.href)}
-                        >
-                          <Icon name={item.icon} />
-                          <span>{item.label}</span>
-                        </Link>
-                      );
-                    })
+                  ? (section.groups?.length ? section.groups : [{ title: "", items: section.items }]).map(
+                      (group) => (
+                        <div key={group.title || section.title} className="nav-group">
+                          {group.title ? (
+                            <div className="nav-group-label">{group.title}</div>
+                          ) : null}
+                          {group.items.map((item) => renderNavItem(item))}
+                        </div>
+                      ),
+                    )
                   : null}
               </div>
             );

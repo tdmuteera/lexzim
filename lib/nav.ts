@@ -37,10 +37,23 @@ export type NavItem = {
   anyOf?: string[];
 };
 
-export type NavSection = {
+export type NavGroup = {
   title: string;
   items: NavItem[];
 };
+
+export type NavSection = {
+  title: string;
+  items: NavItem[];
+  /** When set, the sidebar shows these headings inside the section. */
+  groups?: NavGroup[];
+};
+
+/** Flat item list. Grouped sections (Finance) keep items inside groups. */
+export function navSectionItems(section: NavSection): NavItem[] {
+  if (section.groups?.length) return section.groups.flatMap((group) => group.items);
+  return section.items;
+}
 
 export const navSections: NavSection[] = [
   {
@@ -87,100 +100,139 @@ export const navSections: NavSection[] = [
   },
   {
     title: "Finance",
-    items: [
+    items: [],
+    groups: [
       {
-        href: "/finance/invoicing",
-        label: "Invoicing",
-        icon: "invoice",
-        permission: "billing.view",
-        anyOf: ["billing.view", "billing.my_clients.view"],
+        title: "Money in",
+        items: [
+          {
+            href: "/finance/invoicing",
+            label: "Invoicing",
+            icon: "invoice",
+            permission: "billing.view",
+            anyOf: ["billing.view", "billing.my_clients.view"],
+          },
+          {
+            href: "/finance/proforma",
+            label: "Pro forma",
+            icon: "clipboard",
+            permission: "billing.view",
+            anyOf: ["billing.view", "finance.quote.manage"],
+          },
+          {
+            href: "/finance/quotations",
+            label: "Quotations",
+            icon: "clipboard",
+            permission: "billing.view",
+          },
+          {
+            href: "/finance/debtors",
+            label: "Debtors",
+            icon: "list",
+            permission: "billing.view",
+            anyOf: ["billing.view", "billing.my_clients.view"],
+          },
+          {
+            href: "/finance/payments",
+            label: "Receipts / Receivables",
+            icon: "invoice",
+            permission: "finance.payments.view",
+            anyOf: ["finance.payments.view", "billing.my_clients.view"],
+          },
+        ],
       },
       {
-        href: "/finance/proforma",
-        label: "Pro forma",
-        icon: "clipboard",
-        permission: "billing.view",
-        anyOf: ["billing.view", "finance.quote.manage"],
+        title: "Client money",
+        items: [
+          {
+            href: "/finance/trust",
+            label: "Trust",
+            icon: "shield",
+            permission: "trust.view",
+          },
+          {
+            href: "/finance/client-accounts",
+            label: "Client accounts",
+            icon: "list",
+            permission: "finance.view",
+          },
+        ],
       },
       {
-        href: "/finance/debtors",
-        label: "Debtors",
-        icon: "list",
-        permission: "billing.view",
-        anyOf: ["billing.view", "billing.my_clients.view"],
+        title: "Office cash",
+        items: [
+          {
+            href: "/finance/cash-book",
+            label: "Business Cash Book",
+            icon: "list",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/petty-cash",
+            label: "Petty cash",
+            icon: "invoice",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/disbursements",
+            label: "Disbursement float",
+            icon: "shield",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/transfers",
+            label: "Funds transfer",
+            icon: "check",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/expenses",
+            label: "Expenses & bank register",
+            icon: "clipboard",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/creditors",
+            label: "Creditors",
+            icon: "clipboard",
+            permission: "finance.view",
+          },
+        ],
       },
       {
-        href: "/finance/trust",
-        label: "Trust",
-        icon: "shield",
-        permission: "trust.view",
-      },
-      {
-        href: "/finance/payments",
-        label: "Receipts / Receivables",
-        icon: "invoice",
-        permission: "finance.payments.view",
-        anyOf: ["finance.payments.view", "billing.my_clients.view"],
-      },
-      {
-        href: "/finance/client-accounts",
-        label: "Client accounts",
-        icon: "list",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/requisitions",
-        label: "Requisitions",
-        icon: "clipboard",
-        permission: "finance.requisitions.view",
-      },
-      {
-        href: "/finance/disbursements",
-        label: "Disbursement float",
-        icon: "shield",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/cash-book",
-        label: "Business Cash Book",
-        icon: "list",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/petty-cash",
-        label: "Petty cash",
-        icon: "invoice",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/transfers",
-        label: "Funds transfer",
-        icon: "check",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/reconciliations",
-        label: "Reconciliations",
-        icon: "check",
-        permission: "finance.reconcile",
-      },
-      {
-        href: "/finance/expenses",
-        label: "Expenses & bank register",
-        icon: "clipboard",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/reports",
-        label: "Finance reports",
-        icon: "chart",
-        permission: "finance.view",
-      },
-      {
-        href: "/finance/commission",
-        label: "Commission",
-        icon: "chart",
-        permission: "finance.commission.view",
+        title: "Control",
+        items: [
+          {
+            href: "/finance/requisitions",
+            label: "Requisitions",
+            icon: "clipboard",
+            permission: "finance.requisitions.view",
+          },
+          {
+            href: "/finance/reconciliations",
+            label: "Reconciliations",
+            icon: "check",
+            permission: "finance.reconcile",
+          },
+          {
+            href: "/finance/accounting",
+            label: "General ledger",
+            icon: "chart",
+            permission: "finance.gl.view",
+          },
+          {
+            href: "/finance/reports",
+            label: "Finance reports",
+            icon: "chart",
+            permission: "finance.view",
+          },
+          {
+            href: "/finance/commission",
+            label: "Commission",
+            icon: "chart",
+            permission: "finance.commission.view",
+          },
+        ],
       },
     ],
   },
@@ -348,6 +400,12 @@ export const routeMeta: Record<string, RouteMeta> = {
       "Draft legal-fees and conveyancing estimates. Prefills are editable. Does not post to debtors or GL.",
     phaseBadge: "Phase 11",
   },
+  "/finance/quotations": {
+    title: "Quotations",
+    subtitle: "Service catalogue quotes",
+    purpose: "Client quotations. They do not post to the ledger until converted to an invoice.",
+    phaseBadge: "Phase 11",
+  },
   "/finance/debtors": {
     title: "Debtors",
     subtitle: "Outstanding fees · ageing · weekly collections focus",
@@ -382,6 +440,42 @@ export const routeMeta: Record<string, RouteMeta> = {
     title: "Reconciliations",
     subtitle: "Trust bank · vault · business bank",
     purpose: "Three-way trust reconciliation and business bank matching workflows.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/creditors": {
+    title: "Creditors",
+    subtitle: "Accounts payable · who we owe",
+    purpose: "Supplier bills the firm must pay, and payments against those bills.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/accounting": {
+    title: "General ledger",
+    subtitle: "Chart of accounts · journals · statements",
+    purpose: "Firm books: accounts, journals, trial balance, and financial statements.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/accounting/accounts": {
+    title: "General ledger",
+    subtitle: "Chart of accounts",
+    purpose: "Firm books: accounts, journals, trial balance, and financial statements.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/accounting/journals": {
+    title: "General ledger",
+    subtitle: "Journals",
+    purpose: "Firm books: accounts, journals, trial balance, and financial statements.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/accounting/trial-balance": {
+    title: "General ledger",
+    subtitle: "Trial balance",
+    purpose: "Firm books: accounts, journals, trial balance, and financial statements.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/accounting/statements": {
+    title: "General ledger",
+    subtitle: "Financial statements",
+    purpose: "Firm books: accounts, journals, trial balance, and financial statements.",
     phaseBadge: "Phase 6+",
   },
   "/finance/expenses": {
@@ -551,7 +645,7 @@ export function getRoutePermissions(pathname: string): string[] {
   if (fromRules.length) return fromRules;
 
   for (const section of navSections) {
-    for (const item of section.items) {
+    for (const item of navSectionItems(section)) {
       if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
         if (item.anyOf?.length) return item.anyOf;
         if (item.permission) return [item.permission];
@@ -567,16 +661,33 @@ export function getRoutePermission(pathname: string): string | undefined {
   return getRoutePermissions(pathname)[0];
 }
 
+function navItemVisible(item: NavItem, can: (code: string) => boolean): boolean {
+  if (item.anyOf?.length) return item.anyOf.some((code) => can(code));
+  if (item.permission) return can(item.permission);
+  return true;
+}
+
 /** Filter nav sections/items by permission checker (sidebar P0-10). */
 export function filterNavSections(can: (code: string) => boolean): NavSection[] {
   return navSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => {
-        if (item.anyOf?.length) return item.anyOf.some((code) => can(code));
-        if (item.permission) return can(item.permission);
-        return true;
-      }),
-    }))
-    .filter((section) => section.items.length > 0);
+    .map((section) => {
+      if (section.groups?.length) {
+        const groups = section.groups
+          .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => navItemVisible(item, can)),
+          }))
+          .filter((group) => group.items.length > 0);
+        return {
+          ...section,
+          groups,
+          items: groups.flatMap((group) => group.items),
+        };
+      }
+      return {
+        ...section,
+        items: section.items.filter((item) => navItemVisible(item, can)),
+      };
+    })
+    .filter((section) => navSectionItems(section).length > 0);
 }

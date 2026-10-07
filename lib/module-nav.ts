@@ -36,6 +36,11 @@ export const FINANCE_TABS: ModuleTab[] = [
     anyOf: ["billing.view", "finance.quote.manage"],
   },
   {
+    href: "/finance/quotations",
+    label: "Quotations",
+    permission: "billing.view",
+  },
+  {
     href: "/finance/debtors",
     label: "Debtors",
     permission: "billing.view",
@@ -92,6 +97,16 @@ export const FINANCE_TABS: ModuleTab[] = [
     href: "/finance/expenses",
     label: "Expenses & bank register",
     permission: "finance.view",
+  },
+  {
+    href: "/finance/creditors",
+    label: "Creditors",
+    permission: "finance.view",
+  },
+  {
+    href: "/finance/accounting",
+    label: "General ledger",
+    permission: "finance.gl.view",
   },
   {
     href: "/finance/reports",
