@@ -145,7 +145,7 @@ async function unbilledDisbursementTotalsByClient(
   const rows = await db
     .select({
       clientId: matters.clientId,
-      total: sql<number>`coalesce(sum(${disbursements.amountCents}), 0)::int`,
+      total: sql<number>`coalesce(sum(${disbursements.amountCents} - ${disbursements.recoveredCents}), 0)::int`,
     })
     .from(disbursements)
     .innerJoin(
@@ -157,6 +157,7 @@ async function unbilledDisbursementTotalsByClient(
         eq(disbursements.firmId, firmId),
         eq(disbursements.billable, true),
         isNull(disbursements.invoiceId),
+        sql`${disbursements.amountCents} > ${disbursements.recoveredCents}`,
         inArray(matters.clientId, clientIds),
       ),
     )
@@ -461,6 +462,7 @@ export async function getClientAccountDetail(
           inArray(disbursements.matterId, matterIds),
           eq(disbursements.billable, true),
           isNull(disbursements.invoiceId),
+          sql`${disbursements.amountCents} > ${disbursements.recoveredCents}`,
         ),
       )
       .orderBy(desc(disbursements.incurredAt));
@@ -472,7 +474,7 @@ export async function getClientAccountDetail(
         matterTitle: meta?.title ?? null,
         matterNumber: meta?.matterNumber ?? null,
         description: d.description,
-        amountCents: d.amountCents,
+        amountCents: d.amountCents - d.recoveredCents,
         currency: d.currency,
         incurredAt: d.incurredAt.toISOString(),
         paidFrom: d.paidFrom,

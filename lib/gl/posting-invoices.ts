@@ -140,7 +140,9 @@ export async function postInvoiceSentGl(
   // Disbursements already booked as client cost advances (Dr 1320) are recovered, not earned:
   // billing them clears 1320 instead of crediting reimbursed revenue.
   const advancedRows = await db
-    .select({ total: sql<string>`coalesce(sum(${disbursements.amountCents}), 0)` })
+    .select({
+      total: sql<string>`coalesce(sum(${disbursements.amountCents} - ${disbursements.recoveredCents}), 0)`,
+    })
     .from(disbursements)
     .where(
       and(
@@ -217,7 +219,7 @@ export async function postFeePaymentGl(
   firmId: string,
   userId: string,
   paymentId: string,
-  opts?: { cashGlCode?: "1010" | "1020" },
+  opts?: { cashGlCode?: "1010" | "1020" | "1060" },
 ) {
   const existing = await findPostedJournal(firmId, "payment", paymentId);
   if (existing) return existing;

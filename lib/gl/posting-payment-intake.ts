@@ -74,3 +74,60 @@ export async function postDirectFeeCashGl(
     input.sourceId,
   );
 }
+
+/**
+ * Client cost already paid by the firm, recovered before it is billed.
+ * Dr 1010 (disbursement account / Operating Bank) or Dr 1060 (disbursement float), Cr 1320.
+ * An invoice payment does not use this: billing already cleared 1320, so that receipt credits 1310.
+ */
+export async function postCostRecoveryGl(
+  firmId: string,
+  userId: string,
+  input: {
+    sourceId: string;
+    amountCents: number;
+    currency: string;
+    entryDate: Date;
+    reference: string;
+    clientId: string;
+    matterId: string | null;
+    cashGlCode: "1010" | "1060";
+    memo?: string;
+  },
+) {
+  if (input.amountCents < 1) {
+    throw new AuthError("validation", "Recovery amount must be positive.");
+  }
+  const cash = await ensureGlAccountByCode(firmId, input.cashGlCode);
+  const advances = await ensureGlAccountByCode(firmId, "1320");
+  const place = input.cashGlCode === "1060" ? "disbursement float" : "disbursement account";
+  return postManualJournal(
+    firmId,
+    userId,
+    {
+      entryDate: input.entryDate,
+      reference: input.reference,
+      memo: input.memo ?? `Recovery of client costs into the ${place}`,
+      lines: [
+        {
+          accountId: cash.id,
+          debitCents: input.amountCents,
+          creditCents: 0,
+          clientId: input.clientId,
+          matterId: input.matterId,
+          currency: input.currency,
+        },
+        {
+          accountId: advances.id,
+          debitCents: 0,
+          creditCents: input.amountCents,
+          clientId: input.clientId,
+          matterId: input.matterId,
+          currency: input.currency,
+        },
+      ],
+    },
+    "payment_intake",
+    input.sourceId,
+  );
+}

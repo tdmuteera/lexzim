@@ -16,6 +16,8 @@ function destinationLabel(destination: string): string {
   if (destination === "trust_vault") return "Trust vault";
   if (destination === "fee_bank") return "Fee bank (fees only)";
   if (destination === "fee_vault") return "Business Cash Book (cash fees on hand)";
+  if (destination === "disbursement_account") return "Disbursement account (Operating Bank)";
+  if (destination === "disbursement_float_account") return "Disbursement float";
   if (destination === "mixed") return "Split (see each line)";
   return destination;
 }
@@ -24,6 +26,7 @@ function lineTypeLabel(lineType: string): string {
   if (lineType === "trust_hold") return "Trust hold";
   if (lineType === "disbursement_float") return "Disbursement float (still trust)";
   if (lineType === "fee_revenue") return "Fee revenue";
+  if (lineType === "cost_recovery") return "Cost recovery";
   return lineType;
 }
 

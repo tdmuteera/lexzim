@@ -813,7 +813,7 @@ export function RequisitionsView() {
                       type="button"
                       variant="outline"
                       disabled={saving}
-                      title="Needs the billing invoice for this advance to be paid. The money goes back into the disbursement float."
+                      title="Needs the billing invoice for this advance to be paid. Moves money from the bank or cash book into the float. Skip this if the receipt already went into the disbursement float."
                       onClick={() => void runAction("settle_recoverable", { receivedInto })}
                     >
                       Mark recovered (return to float)

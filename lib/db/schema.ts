@@ -918,12 +918,42 @@ export const disbursements = pgTable(
     trustEntryId: uuid("trust_entry_id"),
     requisitionId: uuid("requisition_id"),
     glPostedAt: timestamp("gl_posted_at", { withTimezone: true }),
+    /** Cents of this advance already recovered by a receipt. The rest can still be billed or recovered. */
+    recoveredCents: integer("recovered_cents").notNull().default(0),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     index("disbursements_firm_id_idx").on(t.firmId),
     index("disbursements_matter_id_idx").on(t.matterId),
+  ],
+);
+
+/** Receipt lines that recovered part of a client cost advance (Dr cash, Cr 1320). */
+export const disbursementRecoveries = pgTable(
+  "disbursement_recoveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    disbursementId: uuid("disbursement_id")
+      .notNull()
+      .references(() => disbursements.id, { onDelete: "restrict" }),
+    intakeId: uuid("intake_id")
+      .notNull()
+      .references(() => financePaymentIntakes.id, { onDelete: "restrict" }),
+    allocationLineId: uuid("allocation_line_id").references(
+      () => financePaymentAllocationLines.id,
+      { onDelete: "restrict" },
+    ),
+    amountCents: integer("amount_cents").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("disbursement_recoveries_firm_id_idx").on(t.firmId),
+    index("disbursement_recoveries_intake_id_idx").on(t.intakeId),
+    index("disbursement_recoveries_disbursement_id_idx").on(t.disbursementId),
   ],
 );
 
@@ -2664,7 +2694,7 @@ export const diagnosticRepairActions = pgTable(
 
 /**
  * Phase 11: payment intake (cash event). Orchestrates trust and fee postings; does not merge ledgers.
- * destination: trust_bank | trust_vault | fee_bank | fee_vault
+ * destination: trust_bank | trust_vault | fee_bank | fee_vault | disbursement_account | disbursement_float_account | mixed
  */
 export const financePaymentIntakes = pgTable(
   "finance_payment_intakes",
@@ -2680,7 +2710,7 @@ export const financePaymentIntakes = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     amountCents: integer("amount_cents").notNull(),
     currency: text("currency").notNull().default("USD"),
-    /** trust_bank | trust_vault | fee_bank | fee_vault */
+    /** trust_bank | trust_vault | fee_bank | fee_vault | disbursement_account | disbursement_float_account | mixed */
     destination: text("destination").notNull(),
     method: text("method"),
     reference: text("reference"),
@@ -2703,7 +2733,7 @@ export const financePaymentIntakes = pgTable(
 
 /**
  * Split lines for a payment intake.
- * lineType: trust_hold | fee_revenue | disbursement_float
+ * lineType: trust_hold | fee_revenue | disbursement_float | cost_recovery
  * feeCategory used when lineType = fee_revenue
  */
 export const financePaymentAllocationLines = pgTable(
@@ -2716,14 +2746,14 @@ export const financePaymentAllocationLines = pgTable(
     intakeId: uuid("intake_id")
       .notNull()
       .references(() => financePaymentIntakes.id, { onDelete: "cascade" }),
-    /** trust_hold | fee_revenue | disbursement_float */
+    /** trust_hold | fee_revenue | disbursement_float | cost_recovery */
     lineType: text("line_type").notNull(),
     /** consultation | drafting | due_diligence | notarial | appearances | communications | correspondence | conveyancing | administration | other_fee */
     feeCategory: text("fee_category"),
     amountCents: integer("amount_cents").notNull(),
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
     notes: text("notes"),
-    /** trust_bank | trust_vault | fee_bank | fee_vault; null = the intake's destination */
+    /** trust_bank | trust_vault | fee_bank | fee_vault | disbursement_account | disbursement_float_account; null = the intake's destination */
     destination: text("destination"),
     trustAccountId: uuid("trust_account_id").references(() => trustAccounts.id, {
       onDelete: "restrict",

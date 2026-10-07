@@ -6,6 +6,8 @@ export const PAYMENT_DESTINATIONS = [
   "trust_vault",
   "fee_bank",
   "fee_vault",
+  "disbursement_account",
+  "disbursement_float_account",
 ] as const;
 export type PaymentDestination = (typeof PAYMENT_DESTINATIONS)[number];
 
@@ -22,9 +24,27 @@ export function isTrustDestination(destination: string): boolean {
   return destination === "trust_bank" || destination === "trust_vault";
 }
 
-/** Vaults hold physical cash, so only a Cash payment can land in one. */
+/** Vaults and the disbursement float hold physical cash, so only a Cash payment can land in one. */
 export function isVaultDestination(destination: string): boolean {
-  return destination === "trust_vault" || destination === "fee_vault";
+  return (
+    destination === "trust_vault" ||
+    destination === "fee_vault" ||
+    destination === "disbursement_float_account"
+  );
+}
+
+/** Money the firm already spent on the client's work, coming back. Not trust and not a fee. */
+export function isRecoveryDestination(destination: string): boolean {
+  return (
+    destination === "disbursement_account" || destination === "disbursement_float_account"
+  );
+}
+
+/** Operating Bank (1010) or Disbursement float (1060). */
+export function recoveryCashGlCode(
+  destination: PaymentDestination,
+): "1010" | "1060" {
+  return destination === "disbursement_float_account" ? "1060" : "1010";
 }
 
 export function isCashMethod(method: string | null): boolean {
@@ -40,6 +60,7 @@ export const ALLOCATION_LINE_TYPES = [
   "trust_hold",
   "fee_revenue",
   "disbursement_float",
+  "cost_recovery",
 ] as const;
 export type AllocationLineType = (typeof ALLOCATION_LINE_TYPES)[number];
 
@@ -192,13 +213,13 @@ function parseLine(
   if (!isDestination(destination)) {
     throw new AuthError(
       "validation",
-      `Allocation line ${index + 1}: destination must be trust_bank, trust_vault, fee_bank, or fee_vault.`,
+      `Allocation line ${index + 1}: destination must be trust bank, trust vault, fee bank, Business Cash Book, disbursement account, or disbursement float.`,
     );
   }
   if (!isLineType(row.lineType)) {
     throw new AuthError(
       "validation",
-      `Allocation line ${index + 1}: lineType must be trust_hold, fee_revenue, or disbursement_float.`,
+      `Allocation line ${index + 1}: lineType must be trust_hold, fee_revenue, disbursement_float, or cost_recovery.`,
     );
   }
   const parsed = parseLineCents(row, `Allocation line ${index + 1} amount`);
@@ -224,6 +245,18 @@ function parseLine(
     throw new AuthError(
       "validation",
       `Allocation line ${index + 1}: fee bank and Business Cash Book lines can only be fees (an invoice payment or a new fee).`,
+    );
+  }
+  if (isRecoveryDestination(destination) && row.lineType !== "cost_recovery") {
+    throw new AuthError(
+      "validation",
+      `Allocation line ${index + 1}: disbursement account and disbursement float lines recover client costs already paid.`,
+    );
+  }
+  if (!isRecoveryDestination(destination) && row.lineType === "cost_recovery") {
+    throw new AuthError(
+      "validation",
+      `Allocation line ${index + 1}: cost recovery only goes to the disbursement account or the disbursement float.`,
     );
   }
 
@@ -271,7 +304,7 @@ export function parsePaymentIntakeInput(
   if (raw.destination != null && raw.destination !== "" && !isDestination(raw.destination)) {
     throw new AuthError(
       "validation",
-      "destination must be trust_bank, trust_vault, fee_bank, or fee_vault.",
+      "destination must be trust bank, trust vault, fee bank, Business Cash Book, disbursement account, or disbursement float.",
     );
   }
 
@@ -303,7 +336,7 @@ export function parsePaymentIntakeInput(
   if (!isCashMethod(method) && lines.some((l) => l.amountCents > 0 && isVaultDestination(l.destination))) {
     throw new AuthError(
       "validation",
-      "Only a Cash payment can go into the Business Cash Book or the trust vault. Set the method to Cash, or send this line to a bank destination.",
+      "Only a Cash payment can go into the Business Cash Book, the trust vault, or the disbursement float. Set the method to Cash, or send this line to a bank destination.",
     );
   }
 

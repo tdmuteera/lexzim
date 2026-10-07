@@ -185,8 +185,9 @@ export async function runFinanceIntegrity(firmId: string): Promise<IntegrityRepo
   });
 
   const advances = await q<{ total: string }>(sql`
-    select coalesce(sum(d.amount_cents), 0)::bigint as total from disbursements d
+    select coalesce(sum(d.amount_cents - coalesce(d.recovered_cents, 0)), 0)::bigint as total from disbursements d
     where d.firm_id = ${firmId} and d.billable and d.gl_posted_at is not null
+      and d.amount_cents > coalesce(d.recovered_cents, 0)
       and (d.invoice_id is null or not exists (
         select 1 from gl_journal_entries j
         where j.firm_id = ${firmId} and j.source_type = 'invoice'

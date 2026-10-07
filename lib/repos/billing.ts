@@ -561,6 +561,7 @@ export async function countUnbilledDisbursements(firmId: string, matterId: strin
         eq(disbursements.matterId, matterId),
         eq(disbursements.billable, true),
         isNull(disbursements.invoiceId),
+        sql`${disbursements.amountCents} > ${disbursements.recoveredCents}`,
       ),
     );
   return rows[0]?.count ?? 0;
@@ -607,6 +608,7 @@ export async function createInvoiceFromUnbilled(
               eq(disbursements.matterId, matter.id),
               eq(disbursements.billable, true),
               isNull(disbursements.invoiceId),
+              sql`${disbursements.amountCents} > ${disbursements.recoveredCents}`,
             ),
           )
           .orderBy(asc(disbursements.incurredAt))
@@ -642,12 +644,14 @@ export async function createInvoiceFromUnbilled(
   }
 
   for (const d of disbRows) {
+    const open = d.amountCents - d.recoveredCents;
+    if (open < 1) continue;
     lineSpecs.push({
       lineType: "disbursement",
       description: d.description,
       quantity: 1,
-      unitAmountCents: d.amountCents,
-      amountCents: d.amountCents,
+      unitAmountCents: open,
+      amountCents: open,
       sourceId: d.id,
     });
   }

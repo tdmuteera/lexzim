@@ -12,15 +12,21 @@
  *
  * Fees-only (fee_bank / fee_vault): no trust posts. Invoice → createFeePayment using intake
  * receipt number; no invoice → direct fee cash GL (1010 bank or 1020 vault).
+ *
+ * Cost recovery (disbursement_account / disbursement_float_account): not trust and not a fee.
+ * Invoice → createFeePayment into 1010 or 1060 (billing already cleared 1320).
+ * No invoice → Dr that cash account, Cr 1320, and mark the client's unbilled advances recovered.
  */
 import "server-only";
 
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { AuthError } from "@/lib/auth/types";
 import { clientDisplayName } from "@/lib/clients/display";
-import { getDb, runInTransaction } from "@/lib/db";
+import { getDb, lockFinanceKey, runInTransaction } from "@/lib/db";
 import {
   clients,
+  disbursementRecoveries,
+  disbursements,
   feePayments,
   financePaymentAllocationLines,
   financePaymentIntakes,
@@ -34,9 +40,11 @@ import type {
 } from "@/lib/finance/payment-intake-validation";
 import {
   feeDestinationCashGlCode,
+  isRecoveryDestination,
   MIXED_DESTINATION,
+  recoveryCashGlCode,
 } from "@/lib/finance/payment-intake-validation";
-import { postDirectFeeCashGl } from "@/lib/gl/posting-payment-intake";
+import { postCostRecoveryGl, postDirectFeeCashGl } from "@/lib/gl/posting-payment-intake";
 import { reverseJournalBySource } from "@/lib/gl/journals";
 import { reverseTrustLedgerGl } from "@/lib/gl/posting-trust";
 import { createFeePayment, getInvoice, sumFeePayments } from "@/lib/repos/billing";
@@ -68,6 +76,7 @@ function lineTypeLabel(lineType: string): string {
   if (lineType === "trust_hold") return "Trust hold";
   if (lineType === "disbursement_float") return "Disbursement float";
   if (lineType === "fee_revenue") return "Fee revenue";
+  if (lineType === "cost_recovery") return "Cost recovery";
   return lineType;
 }
 
@@ -218,6 +227,141 @@ async function applyFeeRevenueDirect(
     clientId: opts.clientId,
     matterId: opts.matterId,
     cashGlCode: opts.cashGlCode,
+  });
+}
+
+/**
+ * Put recovered cash against the oldest unbilled advances for this client.
+ * Only advances not yet on an invoice: once billed, the receipt pays that invoice instead.
+ */
+async function applyUnbilledCostRecovery(
+  firmId: string,
+  opts: {
+    intakeId: string;
+    lineId: string;
+    amountCents: number;
+    currency: string;
+    clientId: string;
+    matterId: string | null;
+  },
+) {
+  await lockFinanceKey(`advances:${firmId}:${opts.clientId}`);
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: disbursements.id,
+      openCents: sql<number>`(${disbursements.amountCents} - ${disbursements.recoveredCents})::int`,
+    })
+    .from(disbursements)
+    .innerJoin(
+      matters,
+      and(eq(matters.id, disbursements.matterId), eq(matters.firmId, firmId)),
+    )
+    .where(
+      and(
+        eq(disbursements.firmId, firmId),
+        eq(disbursements.billable, true),
+        isNotNull(disbursements.glPostedAt),
+        isNull(disbursements.invoiceId),
+        eq(disbursements.currency, opts.currency),
+        eq(matters.clientId, opts.clientId),
+        opts.matterId ? eq(disbursements.matterId, opts.matterId) : undefined,
+        sql`${disbursements.amountCents} > ${disbursements.recoveredCents}`,
+      ),
+    )
+    .orderBy(asc(disbursements.incurredAt))
+    .for("update");
+
+  let left = opts.amountCents;
+  const applied: { id: string; cents: number }[] = [];
+  for (const row of rows) {
+    if (left <= 0) break;
+    const open = Number(row.openCents) || 0;
+    if (open <= 0) continue;
+    const take = Math.min(open, left);
+    applied.push({ id: row.id, cents: take });
+    left -= take;
+  }
+  if (left > 0) {
+    const open = ((opts.amountCents - left) / 100).toFixed(2);
+    const scope = opts.matterId ? "this matter" : "this client";
+    throw new AuthError(
+      "validation",
+      left === opts.amountCents
+        ? `There are no unrecovered client costs for ${scope} yet. If those costs were already billed, choose the invoice that billed them.`
+        : `This recovery is more than the unrecovered costs for ${scope} (${open} ${opts.currency} still open). If the rest was already billed, choose the invoice that billed them.`,
+    );
+  }
+
+  for (const item of applied) {
+    await db
+      .update(disbursements)
+      .set({
+        recoveredCents: sql`${disbursements.recoveredCents} + ${item.cents}`,
+      })
+      .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, item.id)));
+    await db.insert(disbursementRecoveries).values({
+      firmId,
+      disbursementId: item.id,
+      intakeId: opts.intakeId,
+      allocationLineId: opts.lineId,
+      amountCents: item.cents,
+    });
+  }
+}
+
+async function applyCostRecovery(
+  firmId: string,
+  userId: string,
+  opts: {
+    intakeId: string;
+    lineId: string;
+    lineIndex: number;
+    amountCents: number;
+    currency: string;
+    receivedAt: Date;
+    receiptNumber: string;
+    invoiceId: string | null;
+    clientId: string;
+    matterId: string | null;
+    method: string | null;
+    reference: string | null;
+    cashGlCode: "1010" | "1060";
+  },
+) {
+  if (opts.invoiceId) {
+    const full = await getInvoice(firmId, opts.invoiceId);
+    if (!full) throw new AuthError("validation", "Invoice not found for this recovery.");
+    if (full.invoice.clientId !== opts.clientId) {
+      throw new AuthError("validation", "Invoice client does not match payment client.");
+    }
+    await createFeePayment(firmId, userId, opts.invoiceId, {
+      amountCents: opts.amountCents,
+      currency: opts.currency,
+      paidAt: opts.receivedAt,
+      method: opts.method,
+      reference: opts.reference,
+      notes: `Payments intake ${opts.receiptNumber} (recovery of client costs)`,
+      receiptNumber:
+        opts.lineIndex === 0 ? opts.receiptNumber : `${opts.receiptNumber}/${opts.lineIndex + 1}`,
+      cashGlCode: opts.cashGlCode,
+      intakeId: opts.intakeId,
+    });
+    return;
+  }
+
+  await applyUnbilledCostRecovery(firmId, opts);
+  const place = opts.cashGlCode === "1060" ? "disbursement float" : "disbursement account";
+  await postCostRecoveryGl(firmId, userId, {
+    sourceId: `${opts.intakeId}-line-${opts.lineId}`,
+    amountCents: opts.amountCents,
+    currency: opts.currency,
+    entryDate: opts.receivedAt,
+    reference: opts.receiptNumber,
+    clientId: opts.clientId,
+    matterId: opts.matterId,
+    cashGlCode: opts.cashGlCode,
+    memo: `Recovery of client costs into the ${place} ${opts.receiptNumber}`,
   });
 }
 
@@ -388,6 +532,28 @@ async function createPaymentIntakeTx(
     });
   }
 
+  let recoveryIndex = 0;
+  for (const line of used) {
+    if (!isRecoveryDestination(line.destination ?? "") || line.lineType !== "cost_recovery") {
+      continue;
+    }
+    await applyCostRecovery(firmId, userId, {
+      intakeId: intake!.id,
+      lineId: line.id,
+      lineIndex: recoveryIndex++,
+      amountCents: line.amountCents,
+      currency: input.currency,
+      receivedAt: input.receivedAt,
+      receiptNumber,
+      invoiceId: line.invoiceId,
+      clientId: input.clientId,
+      matterId: input.matterId,
+      method: input.method,
+      reference: input.reference,
+      cashGlCode: recoveryCashGlCode(line.destination as PaymentDestination),
+    });
+  }
+
   return getPaymentIntake(firmId, intake!.id);
 }
 
@@ -493,6 +659,31 @@ export async function reversePaymentIntake(
         `${intakeId}-line-${line.id}`,
         `Reversal of payment ${intake.receiptNumber ?? ""}: ${reason.trim()}`,
       );
+    }
+
+    const recoveries = await db
+      .select()
+      .from(disbursementRecoveries)
+      .where(
+        and(eq(disbursementRecoveries.firmId, firmId), eq(disbursementRecoveries.intakeId, intakeId)),
+      );
+    for (const row of recoveries) {
+      await db
+        .update(disbursements)
+        .set({
+          recoveredCents: sql`greatest(${disbursements.recoveredCents} - ${row.amountCents}, 0)`,
+        })
+        .where(and(eq(disbursements.firmId, firmId), eq(disbursements.id, row.disbursementId)));
+    }
+    if (recoveries.length > 0) {
+      await db
+        .delete(disbursementRecoveries)
+        .where(
+          and(
+            eq(disbursementRecoveries.firmId, firmId),
+            eq(disbursementRecoveries.intakeId, intakeId),
+          ),
+        );
     }
 
     await db

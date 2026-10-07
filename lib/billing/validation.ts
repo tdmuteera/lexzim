@@ -213,8 +213,8 @@ export type FeePaymentInput = {
   notes: string | null;
   /** When set (e.g. Payments intake PAY-####), reuse that cash-event number instead of allocating RCP-####. */
   receiptNumber?: string | null;
-  /** Cash asset GL: 1010 operating bank (default) or 1020 business / fee vault. */
-  cashGlCode?: "1010" | "1020";
+  /** Cash asset GL: 1010 operating bank (default), 1020 business vault, or 1060 disbursement float. */
+  cashGlCode?: "1010" | "1020" | "1060";
 };
 
 export function parseCreateInvoiceInput(body: unknown): CreateInvoiceInput {

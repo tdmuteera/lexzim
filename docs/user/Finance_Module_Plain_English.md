@@ -56,14 +56,22 @@ When cash or a transfer comes in:
 - Client money: **Trust bank** or **Trust vault**
 - Firm fees already in the bank: **Fee bank**
 - Firm fees paid as cash and still in the drawer or safe: **Business Cash Book**
+- Client paying back costs the firm already spent from the bank: **Disbursement account**
+- Client paying that money back in cash, into the float: **Disbursement float**
 
 The Business Cash Book is firm revenue cash on hand. It is **not** client trust and **not** petty cash.
+The disbursement account is the Operating Bank. The disbursement float is physical cash kept for client costs. Neither is a fee and neither is trust.
 
 ## How receipts post in the books
 
 - Fee bank: Operating Bank (GL **1010**)
 - Business Cash Book: GL **1020**
 - Both credit fee revenue. Neither touches the trust ledger.
+- Disbursement account: debit Operating Bank (GL **1010**)
+- Disbursement float: debit Disbursement float (GL **1060**), and the method must be Cash
+- If the cost is not yet billed, the credit is client cost advances (GL **1320**)
+- If the line pays the invoice that billed those costs, the credit is accounts receivable (GL **1310**)
+- Do not also press Mark recovered on the requisition when the receipt already went into the float. That would put the same money into the float twice.
 
 ## Disbursement float rules
 
