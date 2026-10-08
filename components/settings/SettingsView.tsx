@@ -52,7 +52,7 @@ const NAV: Array<{
   { id: "licence", label: "Licence", icon: "lock" },
   { id: "ai", label: "AI", icon: "robot" },
   { id: "knowledge", label: "Knowledge pack", icon: "folder" },
-  { id: "retrieval", label: "RAG diagnostic", icon: "search" },
+  { id: "retrieval", label: "Source check", icon: "search" },
   { id: "firm-memory", label: "Firm memory", icon: "chart" },
   { id: "deadlines", label: "Deadline templates", icon: "calendar" },
   { id: "reminders", label: "Reminders", icon: "bell" },

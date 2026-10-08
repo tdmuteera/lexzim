@@ -221,7 +221,7 @@ export function FirmMemoryPanel() {
               </div>
             </div>
             <div className="settings-stat">
-              <div className="settings-label">Embeddings</div>
+              <div className="settings-label">Indexed</div>
               <div className="settings-stat-value">{stats.embeddingCount}</div>
             </div>
           </div>

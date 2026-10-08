@@ -95,15 +95,6 @@ export function AiSettingsPanel() {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [key, setKey] = useState<KeyInfo | null>(null);
-  const [help, setHelp] = useState<{
-    testing: string;
-    production: string;
-    byo: string;
-    embeddings?: string;
-    routing?: string;
-    safety?: string;
-    keyMode?: string;
-  } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(null);
   const [lastTestMessage, setLastTestMessage] = useState<string | null>(null);
   const [providerDefault, setProviderDefault] = useState<ProviderId>("claude");
@@ -196,7 +187,6 @@ export function AiSettingsPanel() {
       }
       setSettings(body.data.settings);
       setKey(body.data.key);
-      setHelp(body.data.help);
       setModels(body.data.models ?? null);
       setChatModelCatalog(body.data.chatModelCatalog ?? null);
       applySettingsToForm(body.data.settings, body.data.chatModelCatalog);
@@ -476,27 +466,26 @@ export function AiSettingsPanel() {
         </div>
 
         <section className="settings-section">
-          <h3 className="settings-section-title">Routing & models</h3>
+          <h3 className="settings-section-title">Which model the firm uses</h3>
           <div className="settings-fields">
             <label className="settings-field">
-              <span>Routing (firm-wide)</span>
+              <span>Model choice</span>
               <select
                 className="input"
                 value={routingMode}
                 onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
               >
                 <option value="manual">
-                  Manual: always use Default provider + Chat model for every user
+                  Use the provider and chat model saved here
                 </option>
                 <option value="auto">
-                  Auto: use Default when keyed, otherwise fall back Claude → OpenAI → Gemini
+                  Try the saved provider first, then another if its key is missing
                 </option>
               </select>
               <p className="settings-hint">
                 {routingMode === "manual"
-                  ? "Recommended. The provider and model you save here apply to the whole firm: AI chat, Matter Assist, and tests."
-                  : "Falls back to another provider only when the chosen API key is missing."}
-                {help?.routing ? ` ${help.routing}` : ""}
+                  ? "The provider and model you save here apply to the whole firm."
+                  : "Another provider is used only when the chosen key is missing."}
               </p>
             </label>
 
@@ -507,16 +496,18 @@ export function AiSettingsPanel() {
                 value={keyMode}
                 onChange={(e) => setKeyMode(e.target.value as "direct" | "proxy")}
               >
-                <option value="direct">Direct (BYO or managed server keys)</option>
+                <option value="direct">Keys saved for this firm, or the server key</option>
                 <option value="proxy" disabled={!proxyEligible}>
                   LexZim Proxy {proxyEligible ? "" : "(Firm edition required)"}
                 </option>
               </select>
-              {help?.keyMode ? <p className="settings-hint">{help.keyMode}</p> : null}
+              <p className="settings-hint">
+                Keys saved for this firm are used first. Otherwise the server key is used.
+              </p>
             </label>
 
             <label className="settings-field">
-              <span>Default provider (firm-wide API)</span>
+              <span>Provider</span>
               <select
                 className="input"
                 value={providerDefault}
@@ -530,19 +521,18 @@ export function AiSettingsPanel() {
                   >
                     {PROVIDER_LABELS[id]}
                     {key?.providers?.[id]?.status === "present"
-                      ? ` (${key.providers[id].source === "server_env" ? "server key" : "BYO"})`
+                      ? ` (${key.providers[id].source === "server_env" ? "server key" : "saved here"})`
                       : " (no key)"}
                   </option>
                 ))}
               </select>
               <p className="settings-hint">
-                Server keys come from <code>ANTHROPIC_API_KEY</code> in .env.local (local) or
-                Railway Variables (production). Paste a BYO key below to override for this firm only.
+                A key saved below is used for this firm. Otherwise the server key is used.
               </p>
             </label>
 
             <label className="settings-field">
-              <span>Chat model (firm-wide)</span>
+              <span>Chat model</span>
               <select
                 className="input"
                 value={modelPickerMode === "catalog" ? modelDefault : "__custom__"}
@@ -584,10 +574,8 @@ export function AiSettingsPanel() {
                 onChange={(e) => setEmbeddingsModel(e.target.value)}
               />
               <p className="settings-hint">
-                For OpenAI chat with the existing starter pack, keep{" "}
-                <code>gemini-embedding-001</code> so the 19 KB vectors still match. Changing
-                provider no longer overwrites embeddings automatically.
-                {help?.embeddings ? ` ${help.embeddings}` : ""}
+                Leave this as it is unless you have been told to change it. It must match the
+                knowledge pack.
               </p>
               <div className="settings-actions" style={{ marginTop: "0.5rem" }}>
                 <Button
@@ -602,7 +590,7 @@ export function AiSettingsPanel() {
             </label>
 
             <label className="settings-field">
-              <span>Max output tokens (256 to 4096)</span>
+              <span>Longest reply (256 to 4096)</span>
               <input
                 className="input"
                 type="number"
@@ -616,14 +604,14 @@ export function AiSettingsPanel() {
 
           <div className="settings-key-status">
             <div>
-              Key status: Gemini {key?.providers?.gemini?.status ?? "n/a"} (
-              {key?.providers?.gemini?.source ?? "n/a"})
+              Key status: Gemini {key?.providers?.gemini?.status === "present" ? "ready" : "missing"} (
+              {key?.providers?.gemini?.source === "server_env" ? "server key" : key?.providers?.gemini?.source === "byo" ? "saved here" : "none"})
             </div>
             <div>
-              Claude {key?.providers?.claude?.status ?? "n/a"} (
-              {key?.providers?.claude?.source ?? "n/a"}) · OpenAI{" "}
-              {key?.providers?.openai?.status ?? "n/a"} (
-              {key?.providers?.openai?.source ?? "n/a"})
+              Claude {key?.providers?.claude?.status === "present" ? "ready" : "missing"} (
+              {key?.providers?.claude?.source === "server_env" ? "server key" : key?.providers?.claude?.source === "byo" ? "saved here" : "none"})
+              {" · "}OpenAI {key?.providers?.openai?.status === "present" ? "ready" : "missing"} (
+              {key?.providers?.openai?.source === "server_env" ? "server key" : key?.providers?.openai?.source === "byo" ? "saved here" : "none"})
             </div>
           </div>
         </section>
@@ -637,9 +625,8 @@ export function AiSettingsPanel() {
               onChange={(e) => setWebLookupEnabled(e.target.checked)}
             />
             <span>
-              Trusted web lookup is ON by default for richer Zimbabwe links (ZimLII, Veritas,
-              Parliament). Results are always labelled <strong>[UNVERIFIED]</strong>. Local
-              knowledge-base RAG still runs first. A Managing Partner may turn this off.
+              Trusted web lookup stays on unless you turn it off. Extra Zimbabwe links are marked
+              unverified. The firm&apos;s own sources are checked first.
             </span>
           </label>
           <label className="settings-check">
@@ -649,14 +636,13 @@ export function AiSettingsPanel() {
               onChange={(e) => setMatterContextEnabled(e.target.checked)}
             />
             <span>
-              Allow Matter Assist to use matter-file context (live snapshot + firm memory). When
-              off, Matter Assist is blocked firm-wide.
+              Let the assistant use the open matter. When this is off, that help is blocked for
+              the whole firm.
             </span>
           </label>
           <p className="settings-hint">
             LexZim AI is assistive only. Always verify authorities against primary sources. Answers
             are not guaranteed correct. Disclaimer stays on and cannot be disabled.
-            {help?.safety ? ` ${help.safety}` : ""}
           </p>
         </section>
 
@@ -667,10 +653,10 @@ export function AiSettingsPanel() {
               <div style={{ fontSize: "0.9rem", color: "var(--text-2)", lineHeight: 1.5 }}>
                 Calls: {usage.callsThisMonth}
                 {usage.softBudgetUnlimited
-                  ? " (no soft budget)"
-                  : ` / ${usage.softBudget} soft budget`}
-                {usage.warnAt80 && !usage.exceeded ? " · approaching limit" : ""}
-                {usage.exceeded ? " · limit reached (new LLM calls soft-blocked)" : ""}
+                  ? " (no monthly limit)"
+                  : ` / ${usage.softBudget} monthly limit`}
+                {usage.warnAt80 && !usage.exceeded ? " · approaching the limit" : ""}
+                {usage.exceeded ? " · limit reached (new questions are paused)" : ""}
               </div>
               <p className="settings-hint">
                 Success {usage.successCalls} · Failed {usage.failedCalls}
@@ -686,7 +672,7 @@ export function AiSettingsPanel() {
               checked={budgetUnlimited}
               onChange={(e) => setBudgetUnlimited(e.target.checked)}
             />
-            <span>Unlimited monthly soft budget</span>
+            <span>No monthly limit</span>
           </label>
           {!budgetUnlimited ? (
             <label className="settings-field">
@@ -800,13 +786,13 @@ export function AiSettingsPanel() {
         </section>
 
         <section className="settings-section">
-          <h3 className="settings-section-title">Firm BYO API keys (optional)</h3>
+          <h3 className="settings-section-title">Keys for this firm (optional)</h3>
           <p className="settings-hint">
-            {key?.byoNote ?? "Encrypted per firm. Leave blank to keep existing / use env."}
+            {key?.byoNote ?? "Stored for this firm only. Leave a box blank to keep the key already saved."}
           </p>
           <div className="settings-fields">
             <label className="settings-field">
-              <span>Gemini BYO</span>
+              <span>Gemini key</span>
               <input
                 className="input"
                 type="password"
@@ -817,14 +803,14 @@ export function AiSettingsPanel() {
               />
             </label>
             <label className="settings-field">
-              <span>Claude BYO (optional override)</span>
+              <span>Claude key</span>
               <input
                 className="input"
                 type="password"
                 autoComplete="off"
                 value={byoClaude}
                 onChange={(e) => setByoClaude(e.target.value)}
-                placeholder="Leave blank to use Railway ANTHROPIC_API_KEY"
+                placeholder="Leave blank to use the server key"
               />
               <p className="settings-hint">
                 Must be a real API key starting with <code>sk-ant-</code>, not a workspace name.
@@ -832,7 +818,7 @@ export function AiSettingsPanel() {
               </p>
             </label>
             <label className="settings-field">
-              <span>OpenAI BYO</span>
+              <span>OpenAI key</span>
               <input
                 className="input"
                 type="password"
@@ -849,7 +835,7 @@ export function AiSettingsPanel() {
           <h3 className="settings-section-title">Conversation retention</h3>
           <p className="settings-hint">
             Minimize stored AI chat after {retentionDays} days (default). {expiringCount}{" "}
-            conversation(s) currently eligible. See docs/cloud/PRIVACY.md.
+            conversation(s) can be removed. Old chats are not kept forever.
           </p>
           <div className="settings-actions">
             <Button

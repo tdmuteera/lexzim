@@ -90,8 +90,8 @@ export function LicencePanel() {
           {licence ? <Badge tone={statusTone(licence.status)}>{licence.status}</Badge> : null}
           {loading ? <span className="muted">Loading…</span> : null}
           <p className="settings-lede">
-            SaaS activation for this firm. Edition flags and seats are described in
-            docs/EDITIONS.md. Export is never disabled by licence status.
+            This firm's licence: the edition, how many people can sign in, and when it runs to.
+            A lapsed licence does not block a firm export.
           </p>
           {error ? (
             <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem" }}>{error}</p>
@@ -149,8 +149,7 @@ export function LicencePanel() {
               ) : null}
               <p className="settings-hint">
                 New matters blocked: {licence.blocksNewMatters ? "yes" : "no"}. Export allowed:{" "}
-                {licence.exportAllowed ? "yes (always)" : "no"}.
-                {usage?.aiProxyEligible ? " AI proxy eligible." : " AI proxy not on this edition."}
+                {licence.exportAllowed ? "yes" : "no"}.
               </p>
             </section>
 
@@ -160,7 +159,7 @@ export function LicencePanel() {
                 <div className="settings-chip-grid">
                   {featureEntries.map(([key, on]) => (
                     <div key={key} className={`settings-chip ${on ? "on" : ""}`}>
-                      <span>{key}</span>
+                      <span>{key.replace(/[._]/g, " ")}</span>
                       <strong>{on ? "On" : "Off"}</strong>
                     </div>
                   ))}

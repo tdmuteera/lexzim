@@ -189,13 +189,12 @@ export function KnowledgePackPanel() {
     <div className="settings-form">
       <div className="settings-form-head">
         <Badge tone={stats?.embeddingsReady ? "open" : "pending"}>
-          {stats?.embeddingsReady ? "Embeddings ready" : "Starter / demo"}
+          {stats?.embeddingsReady ? "Ready" : "Not ready"}
         </Badge>
         {loading ? <span className="muted">Loading…</span> : null}
         <p className="settings-lede">
-          System knowledge pack for RAG (Zimbabwe only). Re-ingest reloads the starter pack, chunks
-          to ~500 to 800 tokens with overlap, then embeds with Gemini into pgvector. See
-          docs/KNOWLEDGE_BASE.md and docs/AI.md.
+          Zimbabwe legal sources the assistant can draw on. Rebuilding the pack refreshes those
+          sources for this firm.
         </p>
         {error ? (
           <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
@@ -205,28 +204,25 @@ export function KnowledgePackPanel() {
       </div>
 
       <section className="settings-section">
-        <h3 className="settings-section-title">Pack stats</h3>
+        <h3 className="settings-section-title">The pack</h3>
         <div className="settings-stat-grid">
           <div className="settings-stat">
             <div className="settings-label">Pack version</div>
             <div className="settings-stat-value">{stats?.packVersion ?? "—"}</div>
           </div>
           <div className="settings-stat">
-            <div className="settings-label">Starter sources</div>
+            <div className="settings-label">Sources in the pack</div>
             <div className="settings-stat-value">{stats?.starterPackSourceCount ?? 0}</div>
           </div>
           <div className="settings-stat">
-            <div className="settings-label">System chunks</div>
+            <div className="settings-label">Passages</div>
             <div className="settings-stat-value">{stats?.systemChunkCount ?? 0}</div>
           </div>
           <div className="settings-stat">
-            <div className="settings-label">Embeddings</div>
+            <div className="settings-label">Indexed</div>
             <div className="settings-stat-value">{stats?.embeddingCount ?? 0}</div>
           </div>
         </div>
-        {stats?.embeddingsModel ? (
-          <p className="settings-hint">Embeddings model: {stats.embeddingsModel}</p>
-        ) : null}
       </section>
 
       <section className="settings-section">
@@ -238,7 +234,7 @@ export function KnowledgePackPanel() {
                 <tr>
                   <SortableTh label="Source" columnKey="source" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                   <SortableTh label="Type" columnKey="type" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Ingested" columnKey="ingested" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Added" columnKey="ingested" activeKey={sortKey} direction={sortDir} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>
@@ -258,7 +254,7 @@ export function KnowledgePackPanel() {
             </table>
           </div>
         ) : (
-          <p className="settings-hint">No starter pack loaded yet. Click Re-ingest knowledge pack.</p>
+          <p className="settings-hint">No sources loaded yet. Use Rebuild knowledge pack.</p>
         )}
 
         {lastSteps.length > 0 ? (
@@ -276,14 +272,14 @@ export function KnowledgePackPanel() {
           onClick={() => void runIngest("all")}
           disabled={reingesting || embeddingOnly || loading}
         >
-          {reingesting ? "Re-ingesting…" : "Re-ingest knowledge pack"}
+          {reingesting ? "Rebuilding…" : "Rebuild knowledge pack"}
         </Button>
         <Button
           variant="outline"
           onClick={() => void runIngest("embed")}
           disabled={reingesting || embeddingOnly || loading}
         >
-          {embeddingOnly ? "Embedding…" : "Embed chunks only"}
+          {embeddingOnly ? "Refreshing…" : "Refresh the index"}
         </Button>
         <Button
           variant="ghost"

@@ -31,14 +31,14 @@ export function mapSmtpError(err: unknown): AuthError {
   ) {
     return new AuthError(
       "validation",
-      "Could not reach the mail server. If LexZim runs on Railway Hobby or Trial, outbound SMTP (ports 465 and 587) is blocked by Railway, not your cPanel host. Upgrade to Railway Pro and redeploy, then test again with the same settings. On Pro, also try port 587 with SSL/TLS off if 465 fails. See docs/user/Email_Setup.md.",
+      "Could not reach the mail server. The host may be blocking that port. The username and password can still be correct.",
     );
   }
 
   if (code === "EENVELOPE" || responseCode === 550 || responseCode === 553) {
     return new AuthError(
       "validation",
-      "The mail server rejected the sender or recipient address. Check From email matches the mailbox (info@tpfiguattorneys.com).",
+      "The mail server rejected the sender or recipient address. Check the From address matches the mailbox.",
     );
   }
 

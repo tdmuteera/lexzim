@@ -108,8 +108,7 @@ export function AboutPanel() {
           {data ? <Badge tone="open">v{data.app.version}</Badge> : null}
           {loading ? <span className="muted">Loading…</span> : null}
           <p className="settings-lede">
-            App version, firm licence, and knowledge pack for this deployment. LexZim is hosted
-            SaaS: there is no desktop updater.
+            App version, this firm&apos;s licence, and the knowledge pack.
           </p>
           {error ? (
             <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.9rem", width: "100%" }}>
@@ -121,7 +120,7 @@ export function AboutPanel() {
         {data && !loading ? (
           <>
             <section className="settings-section">
-              <h3 className="settings-section-title">Deployment</h3>
+              <h3 className="settings-section-title">Version</h3>
               <div className="settings-summary">
                 <div className="settings-summary-row">
                   <span className="settings-label">Product</span>
@@ -129,10 +128,7 @@ export function AboutPanel() {
                 </div>
                 <div className="settings-summary-row">
                   <span className="settings-label">App version</span>
-                  <span className="settings-value">
-                    {data.app.version}
-                    {data.app.channel ? ` (${data.app.channel})` : ""}
-                  </span>
+                  <span className="settings-value">{data.app.version}</span>
                 </div>
                 <div className="settings-summary-row">
                   <span className="settings-label">Firm</span>
@@ -159,7 +155,6 @@ export function AboutPanel() {
                   <span className="settings-label">Seats</span>
                   <span className="settings-value">
                     {data.usage.seatsUsed} / {data.usage.seats}
-                    {data.usage.aiProxyEligible ? " · AI proxy eligible" : ""}
                   </span>
                 </div>
                 <div className="settings-summary-row">
@@ -179,11 +174,11 @@ export function AboutPanel() {
                   <div className="settings-stat-value">{data.knowledge.packVersion}</div>
                 </div>
                 <div className="settings-stat">
-                  <div className="settings-label">KB chunks</div>
+                  <div className="settings-label">Passages</div>
                   <div className="settings-stat-value">{data.knowledge.systemChunkCount}</div>
                 </div>
                 <div className="settings-stat">
-                  <div className="settings-label">Embeddings</div>
+                  <div className="settings-label">Indexed</div>
                   <div className="settings-stat-value">{data.knowledge.embeddingCount}</div>
                 </div>
                 <div className="settings-stat">
@@ -195,16 +190,9 @@ export function AboutPanel() {
                   </div>
                 </div>
               </div>
-              {data.knowledge.quality ? (
-                <p className="settings-hint">Quality: {data.knowledge.quality}</p>
-              ) : null}
             </section>
 
-            <p className="settings-hint">
-              Release notes: repo file <code>{data.app.releaseNotes}</code>. Deploy checklist:{" "}
-              <code>{data.app.releasingDoc}</code>.
-            </p>
-            <p className="settings-hint">{data.note} Export remains available if a licence expires.</p>
+            <p className="settings-hint">A lapsed licence does not block a firm export.</p>
             <p className="settings-hint">
               Diagnostics include version, firm id, and edition only. No matter contents. Nothing is
               uploaded automatically; you choose whether to attach the file to a support ticket.

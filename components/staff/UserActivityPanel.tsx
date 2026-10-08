@@ -154,6 +154,7 @@ export function UserActivityPanel() {
         record, and where they were signed in from.
       </p>
 
+      {!loading ? (
       <div className="user-activity-stats" aria-label="Activity summary">
         <div>
           <strong>{total}</strong>
@@ -172,6 +173,7 @@ export function UserActivityPanel() {
           <span>sign-ins shown</span>
         </div>
       </div>
+      ) : null}
 
       <form className="user-activity-filters" onSubmit={applySearch}>
         <label>

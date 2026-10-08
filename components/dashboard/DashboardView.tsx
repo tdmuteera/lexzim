@@ -352,6 +352,19 @@ export function DashboardView() {
               {dateLine} · {firmLabel}
             </p>
           </div>
+          <div className="dash-hero-actions">
+            {user?.permissions?.includes("ai.use") ? (
+              <Link href="/ai" className="ai-launch">
+                <div className="ai-launch-icon">
+                  <Icon name="robot" />
+                </div>
+                <div className="ai-launch-text">
+                  <strong>AI Assistant</strong>
+                  <em>Ask · Research · Draft</em>
+                </div>
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         <div className="alert-pills">
@@ -534,6 +547,19 @@ export function DashboardView() {
             {dateLine} · {firmLabel}
             {data.viewAll ? " · firm-wide" : " · your matters"}
           </p>
+        </div>
+        <div className="dash-hero-actions">
+          {permissions.ai ? (
+            <Link href="/ai" className="ai-launch">
+              <div className="ai-launch-icon">
+                <Icon name="robot" />
+              </div>
+              <div className="ai-launch-text">
+                <strong>AI Assistant</strong>
+                <em>Ask · Research · Draft</em>
+              </div>
+            </Link>
+          ) : null}
         </div>
       </div>
 

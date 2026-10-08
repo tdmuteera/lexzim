@@ -178,7 +178,7 @@ export function EmailSettingsPanel() {
     setSuccess(null);
     setTestFeedback(null);
     if (!passwordSet && !password.trim()) {
-      setError("Enter the mailbox password before saving SMTP settings.");
+      setError("Enter the mailbox password before saving email settings.");
       setSaving(false);
       return;
     }
@@ -225,7 +225,7 @@ export function EmailSettingsPanel() {
       setTestFeedback(
         passwordSet && !passwordReadable
           ? "Stored password could not be read. Re-enter the mailbox password, save, then test again."
-          : "Save complete SMTP settings (including password) before sending a test email.",
+          : "Save the mail host, port, username, and password before sending a test email.",
       );
       setTesting(false);
       return;
@@ -249,7 +249,7 @@ export function EmailSettingsPanel() {
       toast(`Test email sent to ${recipient}.`);
       void loadHistory();
     } catch {
-      setTestFeedback("Test send failed. Check your connection and SMTP settings.");
+      setTestFeedback("Test send failed. Check the host, port, and password.");
     } finally {
       setTesting(false);
     }
@@ -261,28 +261,14 @@ export function EmailSettingsPanel() {
     <div className="settings-form">
       <div className="settings-form-head">
         <p className="settings-lede">
-          Outbound email uses your firm SMTP server (host, port, credentials). Secrets are stored
-          encrypted and never sent to the browser. Leave blank to fall back to a managed relay if
-          the deployment provides one. Client document email is always manual: review To, Subject,
-          note, and attachment, then click Send. LexZim does not auto-email clients. Allocate which
-          staff address receives tasks and approvals under Settings → Staff notifications.
+          Mail leaves from the mailbox you save here. Nothing goes to a client until someone
+          reviews it and clicks Send. Staff task and approval mail is set under Staff notifications.
         </p>
-        <aside
-          className="settings-hint settings-callout"
-          style={{ marginTop: "0.75rem" }}
-        >
-          <strong>T Pfigu Attorneys (cPanel mail):</strong> SMTP host{" "}
-          <code>mail.tpfiguattorneys.com</code>, port <code>465</code>, enable{" "}
-          <strong>SSL/TLS (465)</strong>, username <code>info@tpfiguattorneys.com</code>, From{" "}
-          <code>info@tpfiguattorneys.com</code>. IMAP/POP3/CalDAV are for phone or Outlook only;
-          LexZim sends outbound mail via SMTP.
-        </aside>
-        <aside className="settings-hint settings-callout" style={{ marginTop: "0.65rem" }}>
-          <strong>Railway hosting:</strong> Hobby and Trial plans block outbound SMTP to cPanel
-          (ports 465/587). If test send times out, upgrade to Railway Pro and redeploy, or see{" "}
-          <code>docs/user/Email_Setup.md</code>. Your cPanel username and password can still be
-          correct.
-        </aside>
+        <p className="settings-hint">
+          Use the mail host your firm already uses. Port 465 is the usual secure port. If a test
+          message times out, the host may be blocking that port. The username and password can
+          still be correct.
+        </p>
         {staffNotifyError ? (
           <StatusBanner tone="warn">
             Last staff task/approval email failed (workflow was not rolled back): {staffNotifyError}
@@ -312,7 +298,7 @@ export function EmailSettingsPanel() {
               className="settings-section"
               style={{ display: "grid", gap: "0.65rem", maxWidth: "34rem" }}
             >
-              <h3 className="settings-section-title">SMTP server</h3>
+              <h3 className="settings-section-title">Mail server</h3>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
                   Host
@@ -320,7 +306,7 @@ export function EmailSettingsPanel() {
                 <input
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
-                  placeholder="mail.tpfiguattorneys.com"
+                  placeholder="mail.example.com"
                   style={inputStyle}
                 />
               </label>
@@ -364,14 +350,14 @@ export function EmailSettingsPanel() {
                 <input
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
-                  placeholder="info@tpfiguattorneys.com"
+                  placeholder="info@example.com"
                   autoComplete="off"
                   style={inputStyle}
                 />
               </label>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
-                  Password {passwordSet ? "(set — leave blank to keep)" : ""}
+                  Password {passwordSet ? "(set. Leave blank to keep)" : ""}
                 </div>
                 <input
                   type="password"
@@ -391,7 +377,7 @@ export function EmailSettingsPanel() {
               <h3 className="settings-section-title">Sender identity</h3>
               <p className="muted" style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>
                 Recipients see this firm name as the sender (not the individual mailbox user). Use
-                the firm period name, for example <strong>T Pfigu Attorneys</strong>.
+                the name of the firm, for example the name on the letterhead.
               </p>
               <label>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
@@ -400,7 +386,7 @@ export function EmailSettingsPanel() {
                 <input
                   value={fromName}
                   onChange={(e) => setFromName(e.target.value)}
-                  placeholder="T Pfigu Attorneys"
+                  placeholder="The firm name"
                   style={inputStyle}
                 />
               </label>
@@ -412,7 +398,7 @@ export function EmailSettingsPanel() {
                   type="email"
                   value={fromEmail}
                   onChange={(e) => setFromEmail(e.target.value)}
-                  placeholder="info@tpfiguattorneys.com"
+                  placeholder="info@example.com"
                   style={inputStyle}
                 />
               </label>
@@ -424,7 +410,7 @@ export function EmailSettingsPanel() {
                   type="email"
                   value={replyTo}
                   onChange={(e) => setReplyTo(e.target.value)}
-                  placeholder="info@tpfiguattorneys.com"
+                  placeholder="info@example.com"
                   style={inputStyle}
                 />
               </label>
@@ -490,9 +476,9 @@ export function EmailSettingsPanel() {
                 </Button>
               </div>
               <p className="muted" style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>
-                Recent outbound mail from this firm: staff notifications, SMTP tests, and client
+                Recent mail from this firm: staff notifications, test messages, and client
                 document emails. Changing a person&apos;s notification address under Staff
-                notifications applies on the next send (no Railway change needed).
+                notifications applies on the next send.
               </p>
               {historyError ? <StatusBanner tone="error">{historyError}</StatusBanner> : null}
               {!historyLoading && !historyError && history.length === 0 ? (

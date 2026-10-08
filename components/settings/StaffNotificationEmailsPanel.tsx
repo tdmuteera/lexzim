@@ -231,10 +231,10 @@ export function StaffNotificationEmailsPanel() {
             Assign up to three addresses per person for task assignments, invoice approvals,
             requisitions, and calendar notices. Use a firm domain address plus a personal
             inbox when the work laptop is unavailable. Every listed address receives the same
-            staff notification. Outbound mail uses Settings → Email (firm SMTP on Railway).
+            staff notification. Outbound mail uses the address saved under Settings, Email.
           </p>
           <aside className="settings-hint settings-callout" style={{ marginTop: "0.75rem" }}>
-            Only admins with <strong>users.manage</strong> can set second and third emails.
+            Only someone who can manage user access can set the second and third emails.
             Staff can still update their primary address under Settings → Account profile.
           </aside>
         </div>

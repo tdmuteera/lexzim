@@ -14,15 +14,6 @@ type Hit = {
   text: string;
 };
 
-type Candidate = {
-  chunkId: string;
-  title: string;
-  headingPath: string | null;
-  score: number;
-  excerpt: string;
-  aboveThreshold: boolean;
-};
-
 type Meta = {
   empty: boolean;
   emptyReason: string | null;
@@ -42,7 +33,6 @@ export function RetrievalDiagnosticPanel() {
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [hits, setHits] = useState<Hit[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
 
   async function onRetrieve() {
     setLoading(true);
@@ -59,24 +49,22 @@ export function RetrievalDiagnosticPanel() {
         data?: {
           hits: Hit[];
           retrievalMeta: Meta;
-          diagnostic?: { candidates: Candidate[] } | null;
         };
         error?: { message: string };
       };
       if (!res.ok || !body.ok || !body.data) {
-        setError(body.error?.message ?? "Retrieval failed.");
+        setError(body.error?.message ?? "Could not check sources.");
         return;
       }
       setHits(body.data.hits);
       setMeta(body.data.retrievalMeta);
-      setCandidates(body.data.diagnostic?.candidates ?? []);
       toast(
         body.data.retrievalMeta.empty
-          ? "No hits above threshold."
-          : `Retrieved ${body.data.retrievalMeta.hitCount} hit(s).`,
+          ? "No sources matched."
+          : `Found ${body.data.retrievalMeta.hitCount} source${body.data.retrievalMeta.hitCount === 1 ? "" : "s"}.`,
       );
     } catch {
-      setError("Retrieval failed.");
+      setError("Could not check sources.");
     } finally {
       setLoading(false);
     }
@@ -86,11 +74,11 @@ export function RetrievalDiagnosticPanel() {
     <div className="settings-form">
       <div className="settings-form-head">
         <Badge tone={meta?.empty === false ? "open" : "pending"}>
-          {meta ? (meta.empty ? "Empty" : "Hits") : "Preview"}
+          {meta ? (meta.empty ? "None" : "Sources") : "Preview"}
         </Badge>
         <p className="settings-lede">
-          Embeds the query and searches pgvector. No LLM answer yet (P2-07). Requires embeddings
-          from Knowledge pack re-ingest.
+          Try a question and see which sources the assistant would use. This does not write an
+          answer. The knowledge pack needs to be ready first.
         </p>
         {error ? (
           <p style={{ color: "var(--danger)", margin: 0 }} role="alert">
@@ -100,9 +88,9 @@ export function RetrievalDiagnosticPanel() {
       </div>
 
       <section className="settings-section">
-        <h3 className="settings-section-title">Test query</h3>
+        <h3 className="settings-section-title">Question</h3>
         <label className="settings-field">
-          <span>Query</span>
+          <span>Question</span>
           <textarea
             className="input"
             value={query}
@@ -113,27 +101,26 @@ export function RetrievalDiagnosticPanel() {
         </label>
         <div className="settings-actions">
           <Button variant="gold" onClick={() => void onRetrieve()} disabled={loading || !query.trim()}>
-            {loading ? "Retrieving…" : "Retrieve context"}
+            {loading ? "Looking…" : "See sources"}
           </Button>
         </div>
         {meta ? (
           <p className="settings-hint">
-            hits={meta.hitCount} candidates={meta.candidateCount} minSimilarity={meta.minSimilarity}{" "}
-            model={meta.embeddingsModel} latency={meta.latencyMs}ms
-            {meta.emptyReason ? ` emptyReason=${meta.emptyReason}` : ""}
-            {meta.errorCode ? ` error=${meta.errorCode}` : ""}
+            {meta.empty
+              ? "No sources matched that question."
+              : `${meta.hitCount} source${meta.hitCount === 1 ? "" : "s"} matched.`}
           </p>
         ) : null}
       </section>
 
       {hits.length > 0 ? (
         <section className="settings-section">
-          <h3 className="settings-section-title">Hits</h3>
+          <h3 className="settings-section-title">Sources</h3>
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
-                  <th>Score</th>
+                  <th>Match</th>
                   <th>Source</th>
                   <th>Excerpt</th>
                 </tr>
@@ -157,20 +144,6 @@ export function RetrievalDiagnosticPanel() {
               </tbody>
             </table>
           </div>
-        </section>
-      ) : null}
-
-      {candidates.length > 0 ? (
-        <section className="settings-section">
-          <h3 className="settings-section-title">Diagnostic candidates</h3>
-          <ul className="muted" style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.8rem" }}>
-            {candidates.map((c) => (
-              <li key={c.chunkId}>
-                {c.score.toFixed(3)} {c.aboveThreshold ? "[pass]" : "[below]"} {c.title}
-                {c.headingPath ? ` / ${c.headingPath}` : ""}: {c.excerpt}
-              </li>
-            ))}
-          </ul>
         </section>
       ) : null}
     </div>

@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         embeddingCount: pack.embeddingCount ?? 0,
         embeddingsReady: pack.embeddingsReady,
       },
-      note: "Hosted SaaS: deploys apply on Railway. There is no separate desktop updater.",
+      note: "A lapsed licence does not block a firm export.",
     });
   } catch (err) {
     return jsonError(err, request);

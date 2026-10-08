@@ -156,8 +156,8 @@ export function FirmProfilePanel() {
       <div className="settings-form">
         <div className="settings-form-head">
           <p className="settings-lede">
-            Name, contact, currency, invoice letterhead, and banking. Each firm (including
-            Isolation) uses its own details on printed invoices.
+            Name, contact, currency, invoice letterhead, and banking. Each firm uses its own
+            details on printed invoices.
           </p>
           {loading ? <span className="muted">Loading…</span> : null}
           {error ? (
@@ -335,7 +335,7 @@ export function FirmProfilePanel() {
             <section className="settings-section">
               <h3 className="settings-section-title">Invoice letterhead</h3>
               <p className="settings-hint">
-                Printed on PDF invoices for this firm only (Isolation keeps Isolation banking).
+                Printed on PDF invoices for this firm only.
               </p>
               <div className="settings-fields">
                 <label className="settings-field">
@@ -344,7 +344,7 @@ export function FirmProfilePanel() {
                     className="input"
                     value={form.invoiceAttorneyLine ?? ""}
                     onChange={set("invoiceAttorneyLine")}
-                    placeholder="e.g. Ms. T Pfigu … years of experience"
+                    placeholder="Years of practice, if you want that on the invoice"
                   />
                 </label>
                 <label className="settings-field">
