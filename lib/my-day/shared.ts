@@ -147,6 +147,16 @@ export function recurrenceLabel(r: Pick<MyDayRecurrenceDto, "rule" | "weekday" |
   return r.rule;
 }
 
+/** Today, the seven days before today, or anything finished before that. */
+export type FinishedBucket = "today" | "week" | "earlier";
+
+export function finishedBucket(completedOn: string | null, today: string): FinishedBucket | null {
+  if (!completedOn || completedOn > today) return null;
+  if (completedOn === today) return "today";
+  if (completedOn >= addDays(today, -7)) return "week";
+  return "earlier";
+}
+
 export function friendlyDay(iso: string, today: string): string {
   const diff = daysBetween(today, iso);
   if (diff === 0) return "Today";

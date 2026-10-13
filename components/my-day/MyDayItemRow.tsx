@@ -170,8 +170,13 @@ export function MyDayItemRow({
         <div className="myday-item-meta">
           {item.status === "moved" ? <span className="myday-chip is-cal">On calendar</span> : null}
           {item.status === "dropped" ? <span className="myday-chip">Won&apos;t do</span> : null}
-          {showDate && item.dueDate ? (
-            <span className="myday-chip is-date">{friendlyDay(item.dueDate, today)}</span>
+          {showDate && (item.status !== "open" && item.completedOn ? item.completedOn : item.dueDate) ? (
+            <span className="myday-chip is-date">
+              {friendlyDay(
+                item.status !== "open" && item.completedOn ? item.completedOn : item.dueDate!,
+                today,
+              )}
+            </span>
           ) : null}
           {item.dueTime ? <span className="myday-chip is-time">{item.dueTime}</span> : null}
           {tag ? (

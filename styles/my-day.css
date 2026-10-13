@@ -1079,6 +1079,17 @@ a.myday-pill:hover {
   border-top: 1px dashed var(--border-2);
 }
 
+.myday-done-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.85rem;
+}
+
+.myday-done-toggle.is-on {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .myday-done-toggle {
   align-self: flex-start;
   padding: 0.25rem 0.1rem;

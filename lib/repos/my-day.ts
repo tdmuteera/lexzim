@@ -350,13 +350,28 @@ export async function getMyDayPayload(
     .where(and(eq(myDayRecurrences.firmId, firmId), eq(myDayRecurrences.userId, userId)))
     .orderBy(asc(myDayRecurrences.createdAt));
 
-  const [rows, recRows, streak] = await Promise.all([
+  const historyQuery = db
+    .select()
+    .from(myDayItems)
+    .where(
+      and(
+        ownerScope(firmId, userId),
+        ne(myDayItems.status, "open"),
+        lt(myDayItems.completedOn, today),
+      ),
+    )
+    .orderBy(desc(myDayItems.completedOn), desc(myDayItems.updatedAt))
+    .limit(200);
+
+  const [rows, historyRows, recRows, streak] = await Promise.all([
     rowsQuery,
+    historyQuery,
     recQuery,
     computeStreak(firmId, userId, today),
   ]);
 
-  const items = await hydrate(rows);
+  const seen = new Set(rows.map((row) => row.id));
+  const items = await hydrate([...rows, ...historyRows.filter((row) => !seen.has(row.id))]);
 
   return {
     today,

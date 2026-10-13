@@ -10,9 +10,11 @@ import { MyDayMotivation } from "@/components/my-day/MyDayMotivation";
 import { useMyDay, type MyDayApi } from "@/components/my-day/useMyDay";
 import {
   addDays,
+  finishedBucket,
   friendlyDay,
   recurrenceLabel,
   tagMeta,
+  type FinishedBucket,
   type MyDayItemDto,
 } from "@/lib/my-day/shared";
 
@@ -66,7 +68,7 @@ export function MyDayView() {
   const { can } = useAuth();
   const canPromote = can("calendar.manage");
   const [promoting, setPromoting] = useState<MyDayItemDto | null>(null);
-  const [showDone, setShowDone] = useState(false);
+  const [doneScope, setDoneScope] = useState<FinishedBucket | null>(null);
   const [planDay, setPlanDay] = useState<string | null>(null);
   const today = api.today;
   const tomorrow = addDays(today, 1);
@@ -75,7 +77,12 @@ export function MyDayView() {
     const items = api.data?.items ?? [];
     const open = items.filter((i) => i.status === "open");
     const todayAll = items.filter((i) => i.dueDate === today && i.status !== "dropped");
-    const closedToday = items.filter((i) => i.status !== "open" && i.completedOn === today);
+    const closed = items
+      .filter((i) => i.status !== "open" && i.completedOn)
+      .sort((a, b) => (a.completedOn! < b.completedOn! ? 1 : a.completedOn! > b.completedOn! ? -1 : 0));
+    const closedToday = closed.filter((i) => finishedBucket(i.completedOn, today) === "today");
+    const closedWeek = closed.filter((i) => finishedBucket(i.completedOn, today) === "week");
+    const closedEarlier = closed.filter((i) => finishedBucket(i.completedOn, today) === "earlier");
     const byDay = new Map<string, MyDayItemDto[]>();
     for (let n = 2; n <= 14; n++) byDay.set(addDays(today, n), []);
     for (const i of open) {
@@ -86,6 +93,8 @@ export function MyDayView() {
       todayDoneCount: todayAll.filter((i) => i.status === "done" || i.status === "moved").length,
       todayTotal: todayAll.length,
       closedToday,
+      closedWeek,
+      closedEarlier,
       tomorrow: open.filter((i) => i.dueDate === tomorrow),
       next: [...byDay.entries()],
       later: open.filter((i) => i.dueDate && i.dueDate > addDays(today, 14)),
@@ -189,14 +198,42 @@ export function MyDayView() {
               </div>
             )}
           </div>
-          {groups.closedToday.length ? (
-            <div className="myday-done-block">
-              <button type="button" className="myday-done-toggle" onClick={() => setShowDone((v) => !v)}>
-                {showDone ? "Hide" : "Show"} finished today ({groups.closedToday.length})
-              </button>
-              {showDone ? groups.closedToday.map((i) => row(i)) : null}
+          <div className="myday-done-block">
+            <div className="myday-done-toggles">
+              {(
+                [
+                  ["today", "finished today", groups.closedToday],
+                  ["week", "finished last week", groups.closedWeek],
+                  ["earlier", "finished earlier", groups.closedEarlier],
+                ] as const
+              ).map(([scope, label, list]) => (
+                <button
+                  key={scope}
+                  type="button"
+                  className={`myday-done-toggle${doneScope === scope ? " is-on" : ""}`}
+                  aria-pressed={doneScope === scope}
+                  onClick={() => setDoneScope((current) => (current === scope ? null : scope))}
+                >
+                  {doneScope === scope ? "Hide" : "Show"} {label} ({list.length})
+                </button>
+              ))}
             </div>
-          ) : null}
+            {doneScope === "today"
+              ? groups.closedToday.length
+                ? groups.closedToday.map((i) => row(i))
+                : <div className="myday-col-empty">Nothing finished today.</div>
+              : null}
+            {doneScope === "week"
+              ? groups.closedWeek.length
+                ? groups.closedWeek.map((i) => row(i, true))
+                : <div className="myday-col-empty">Nothing finished in the last week.</div>
+              : null}
+            {doneScope === "earlier"
+              ? groups.closedEarlier.length
+                ? groups.closedEarlier.map((i) => row(i, true))
+                : <div className="myday-col-empty">Nothing finished earlier.</div>
+              : null}
+          </div>
         </DropZone>
 
         <DropZone api={api} target={tomorrow} className="myday-col">
