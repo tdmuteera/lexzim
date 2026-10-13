@@ -185,6 +185,23 @@ export async function getDashboardCommandKpis(input: {
     .orderBy(asc(matters.nextHearingAt))
     .limit(20);
 
+  let nextHearingAt = hearingRows[0]?.nextHearingAt ?? null;
+  if (!nextHearingAt) {
+    const [upcoming] = await db
+      .select({ nextHearingAt: matters.nextHearingAt })
+      .from(matters)
+      .where(
+        and(
+          matterAccess,
+          isNotNull(matters.nextHearingAt),
+          gte(matters.nextHearingAt, now),
+        ),
+      )
+      .orderBy(asc(matters.nextHearingAt))
+      .limit(1);
+    nextHearingAt = upcoming?.nextHearingAt ?? null;
+  }
+
   const outstandingRows = await db
     .select({
       totalCents: invoices.totalCents,
@@ -225,7 +242,7 @@ export async function getDashboardCommandKpis(input: {
     newClientsThisMonth: newClients?.count ?? 0,
     highPriorityOpen: highPriority?.count ?? 0,
     hearingsThisWeek: hearingRows.length,
-    nextHearingAt: hearingRows[0]?.nextHearingAt?.toISOString() ?? null,
+    nextHearingAt: nextHearingAt ? nextHearingAt.toISOString() : null,
     outstandingFeesCents: outstandingCents,
     outstandingCurrency: currency,
   };
