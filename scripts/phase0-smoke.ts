@@ -105,7 +105,7 @@ async function main() {
   });
   record(ok("MP logout", mpLogout.status === 200 && mpLogout.body.ok === true));
 
-  const secretaryLogin = await login("secretary@lexzim.local", "<set-in-env>");
+  const secretaryLogin = await login("secretary@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   record(
     ok(
       "Secretary login",

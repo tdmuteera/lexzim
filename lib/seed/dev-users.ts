@@ -2,7 +2,7 @@
  * Dev-only demo user definitions (P0-11).
  * Password is documented in docs/DEV_SEEDS.md — never use in production.
  */
-export const DEV_SEED_PASSWORD = "<set-in-env>";
+export const DEV_SEED_PASSWORD = process.env.DEV_SEED_PASSWORD ?? "";
 
 export type DevSeedUserDef = {
   roleCode: "senior_associate" | "junior_associate" | "secretary" | "accounts";

@@ -18,7 +18,7 @@ import { auditLogs, firms, roles, users } from "../lib/db/schema";
 config({ path: ".env.local" });
 
 /** Shared master password for local / pilot DevOps accounts. Change after sharing. */
-export const FIRM_MASTER_PASSWORD = "<set-in-env>";
+export const FIRM_MASTER_PASSWORD = process.env.FIRM_MASTER_PASSWORD ?? "";
 
 function assertAllowed() {
   if (process.env.DEV_SEED_ENABLED !== "1") {

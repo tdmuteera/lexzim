@@ -57,7 +57,7 @@ async function main() {
   let failed = 0;
   const record = (p: boolean) => (p ? (passed += 1) : (failed += 1));
 
-  const isoLogin = await login("isolation@lexzim.local", "<set-in-env>");
+  const isoLogin = await login("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   record(
     ok(
       "Isolation MP login",
@@ -126,7 +126,7 @@ async function main() {
     ),
   );
 
-  const juniorLogin = await login("junior@lexzim.local", "<set-in-env>");
+  const juniorLogin = await login("junior@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   record(ok("Junior login", juniorLogin.status === 200 && juniorLogin.body.ok === true));
 
   const juniorMatters = await fetchJson("/api/matters?bucket=all", {

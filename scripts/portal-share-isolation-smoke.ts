@@ -83,7 +83,7 @@ async function main() {
   console.log(`Portal share isolation smoke against ${BASE}\n`);
 
   const mp = await staffLogin("mp@lexzim.local", "<set-in-env>");
-  const isolationMp = await staffLogin("isolation@lexzim.local", "<set-in-env>");
+  const isolationMp = await staffLogin("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
 
   const pilotMatters = await fetchJson("/api/matters?bucket=all", { cookieJar: mp });
   const pilotItems =

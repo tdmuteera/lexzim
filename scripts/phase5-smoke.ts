@@ -147,7 +147,7 @@ async function main() {
   }
 
   // 7. Trust / fee separation
-  const accounts = await staffLogin("accounts@lexzim.local", "<set-in-env>");
+  const accounts = await staffLogin("accounts@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   const invoices = await fetchJson("/api/invoices", { cookieJar: accounts });
   const trust = await fetchJson("/api/trust/accounts", { cookieJar: accounts });
   check("Fee invoices list (separate from trust)", invoices.status === 200 && invoices.body.ok === true);
@@ -183,7 +183,7 @@ async function main() {
   check("AI grounded ask (or clear key/budget error)", askOk, `status=${ask.status}`);
 
   // 4. Session revoke
-  const secretaryJar = await staffLogin("secretary@lexzim.local", "<set-in-env>");
+  const secretaryJar = await staffLogin("secretary@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   const staffList = await fetchJson("/api/staff", { cookieJar: mp });
   const staffItems =
     (dataOf(staffList.body).items as Array<{ id: string; email?: string }>) ?? [];
@@ -316,7 +316,7 @@ async function main() {
       }
 
       // Cross-tenant: isolation firm portal must not see pilot matter id
-      const isolationMp = await staffLogin("isolation@lexzim.local", "<set-in-env>");
+      const isolationMp = await staffLogin("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
       let isoItems =
         (dataOf(
           (await fetchJson("/api/matters?bucket=all", { cookieJar: isolationMp })).body,

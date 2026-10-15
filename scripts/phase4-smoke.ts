@@ -112,9 +112,9 @@ async function main() {
   );
 
   const mp = await login("mp@lexzim.local", "<set-in-env>");
-  const accounts = await login("accounts@lexzim.local", "<set-in-env>");
-  const secretary = await login("secretary@lexzim.local", "<set-in-env>");
-  const isolation = await login("isolation@lexzim.local", "<set-in-env>");
+  const accounts = await login("accounts@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
+  const secretary = await login("secretary@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
+  const isolation = await login("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
 
   // About / version / licence
   const about = await fetchJson("/api/about", { cookieJar: mp });

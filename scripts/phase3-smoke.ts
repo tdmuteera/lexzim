@@ -79,9 +79,9 @@ async function main() {
   console.log(`Phase 3 smoke against ${BASE}\n`);
 
   const mp = await login("mp@lexzim.local", "<set-in-env>");
-  const accounts = await login("accounts@lexzim.local", "<set-in-env>");
-  const secretary = await login("secretary@lexzim.local", "<set-in-env>");
-  const isolation = await login("isolation@lexzim.local", "<set-in-env>");
+  const accounts = await login("accounts@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
+  const secretary = await login("secretary@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
+  const isolation = await login("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
 
   const health = await fetchJson("/api/health");
   check("Health endpoint", health.status === 200);

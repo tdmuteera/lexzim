@@ -16,7 +16,7 @@ const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:3000";
 const MP_EMAIL = process.env.SMOKE_MP_EMAIL ?? "mp@lexzim.local";
 const MP_PASSWORD = process.env.SMOKE_MP_PASSWORD ?? "<set-in-env>";
 const SECRETARY_EMAIL = process.env.SMOKE_SECRETARY_EMAIL ?? "secretary@lexzim.local";
-const SECRETARY_PASSWORD = process.env.SMOKE_SECRETARY_PASSWORD ?? "<set-in-env>";
+const SECRETARY_PASSWORD = process.env.SMOKE_SECRETARY_PASSWORD ?? process.env.DEV_SEED_PASSWORD ?? "";
 
 type Json = Record<string, unknown>;
 

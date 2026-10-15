@@ -231,7 +231,7 @@ async function main() {
   await exportRes.arrayBuffer().catch(() => null);
 
   // 9. Junior Associate scoping
-  const juniorLogin = await login("junior@lexzim.local", "<set-in-env>");
+  const juniorLogin = await login("junior@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   record(ok("9a. Junior login", juniorLogin.status === 200));
   if (juniorLogin.status === 200) {
     const juniorGet = await fetchJson(`/api/matters/${matterId}`, {
@@ -249,7 +249,7 @@ async function main() {
   }
 
   // 10. Cross-firm isolation
-  const isoLogin = await login("isolation@lexzim.local", "<set-in-env>");
+  const isoLogin = await login("isolation@lexzim.local", (process.env.DEV_SEED_PASSWORD ?? ""));
   if (isoLogin.status === 200) {
     const isoClient = await fetchJson("/api/clients", {
       method: "POST",
