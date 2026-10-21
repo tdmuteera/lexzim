@@ -67,7 +67,7 @@ docs/
 - Every firm-scoped table uses `firm_id`
 - Every firm-scoped query filters by session firm
 - Never trust client-provided firm id without scope check
-- RLS hardening is deferred to later scale phase
+- RLS + Data API lockdown: migration `0058` / `docs/SECURITY.md` (app still enforces `firm_id`)
 
 ## Extension points for Phase 1
 

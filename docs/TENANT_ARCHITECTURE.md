@@ -41,7 +41,7 @@ Firm RBAC roles are **not** platform roles. Platform admins use `requirePlatform
 1. Every firm-scoped table includes `firm_id`.
 2. Every query filters `WHERE firm_id = session.firm.id` (use `tenantFirmId(session)`).
 3. Never trust client-supplied `firm_id` without `requireFirmScope()`.
-4. App-layer isolation now; Postgres **RLS** before multi-customer production launch (Phase 5 hardening).
+4. App-layer isolation for every query. Postgres **RLS is enabled** with no Data API policies for `anon` / `authenticated` (migration `0058`, see `docs/SECURITY.md`). Business access stays on Next.js + Drizzle, not PostgREST.
 
 ## Storage layout (Phase 1+)
 
@@ -80,7 +80,7 @@ Helper: `firmStoragePrefix(firmId)` in `lib/tenant/scope.ts`.
 - Subscriptions, trials billing, feature limits
 - Client portal role (external clients)
 - Per-firm custom color themes
-- RLS policies (documented for Phase 5)
+- Fine-grained per-tenant RLS policies (optional later). Today: RLS on + Data API revoked; app enforces `firm_id`
 
 ## Related docs
 

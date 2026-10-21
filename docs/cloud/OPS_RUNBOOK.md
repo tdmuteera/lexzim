@@ -74,7 +74,9 @@ Set in `next.config.ts` for all routes:
 - `Permissions-Policy` (camera/geolocation off; microphone allowed for same-origin AI dictate)
 - `Strict-Transport-Security` (assume HTTPS in production)
 
-CSP is deferred (tighten later with report-only if needed).
+CSP is shipped as **Content-Security-Policy-Report-Only** in `next.config.ts` (does not block yet; review browser reports before enforcing).
+
+Data API / RLS lockdown: `docs/SECURITY.md` and migration `0058_supabase_data_api_lockdown`. Verify with `npx tsx scripts/verify-data-api-lockdown.ts`.
 
 ## Scale checklist: when to leave free tiers
 

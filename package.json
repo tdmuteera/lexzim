@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "security:verify-data-api": "tsx scripts/verify-data-api-lockdown.ts",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
     "db:seed:rbac": "tsx scripts/seed-rbac.ts",

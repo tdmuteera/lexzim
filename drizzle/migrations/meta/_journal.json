@@ -407,6 +407,13 @@
       "when": 1790000000000,
       "tag": "0057_matter_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790100000000,
+      "tag": "0058_supabase_data_api_lockdown",
+      "breakpoints": true
     }
   ]
 }

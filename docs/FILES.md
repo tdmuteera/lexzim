@@ -30,7 +30,7 @@ The app creates the bucket on first upload if missing (service role).
 
 ## Access model (app-enforced)
 
-LexZim does **not** rely on Storage RLS for multi-tenant isolation in Phase 1.
+LexZim does **not** rely on Storage RLS for multi-tenant isolation. Migration `0058` keeps `firm-files` private and removes broad `storage.objects` policies so JWT roles cannot list or download firm files except through LexZim signed URLs.
 
 1. User authenticates via Supabase Auth cookies.
 2. API routes require `documents.view` / `documents.manage`.
