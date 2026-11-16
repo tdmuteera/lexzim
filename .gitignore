@@ -57,3 +57,8 @@ scripts/find-pooler.ts
 # Local cron secret handoff
 ops-calendar-cron-handoff.md
 
+.vercel
+.env
+.env.*
+!.env.example
+health.json

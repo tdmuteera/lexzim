@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm";
 import {
   AR_AGING_BUCKETS,
+  agingBucketDisplay,
   agingBucketFromDueDate,
   daysBetween,
   type ArAgingBucket,
@@ -33,7 +34,8 @@ import { listAccessibleMatterIds } from "@/lib/repos/matters";
 export type DebtorsFilters = {
   matterId?: string;
   clientId?: string;
-  bucket?: ArAgingBucket;
+  /** Ageing bucket, or "overdue" for every past-due bucket. */
+  bucket?: ArAgingBucket | "overdue";
   from?: Date;
   to?: Date;
 };
@@ -68,14 +70,69 @@ export type DebtorsCurrencySummary = {
   }>;
 };
 
+export type DebtorsMoneyBarSegment = {
+  /** unpaid | current | overdue | 1-30 | 31-60 | 61-90 | 90+ */
+  key: string;
+  label: string;
+  count: number;
+  balanceCents: number;
+  /** When set, applying this chip filters the desk to this ageing bucket (empty = all unpaid). */
+  bucketFilter: ArAgingBucket | "" | "overdue";
+};
+
+export type DebtorsMoneyBar = {
+  currency: string;
+  segments: DebtorsMoneyBarSegment[];
+};
+
 export type DebtorsReport = {
   title: string;
   note: string;
   agingBasis: "due_date";
   asOf: string;
   summaryByCurrency: DebtorsCurrencySummary[];
+  /** Unfiltered-by-bucket strip for QuickBooks-style money bar (respects matter/client filters). */
+  moneyBar: DebtorsMoneyBar | null;
   rows: DebtorsRow[];
 };
+
+function buildMoneyBar(allRows: DebtorsRow[]): DebtorsMoneyBar | null {
+  if (!allRows.length) return null;
+  const currencies = [...new Set(allRows.map((r) => r.currency))];
+  const currency =
+    currencies.sort(
+      (a, b) =>
+        allRows.filter((r) => r.currency === b).reduce((s, r) => s + r.balanceCents, 0) -
+        allRows.filter((r) => r.currency === a).reduce((s, r) => s + r.balanceCents, 0),
+    )[0] ?? "USD";
+  const rows = allRows.filter((r) => r.currency === currency);
+  const seg = (
+    key: string,
+    label: string,
+    bucketFilter: DebtorsMoneyBarSegment["bucketFilter"],
+    predicate: (r: DebtorsRow) => boolean,
+  ): DebtorsMoneyBarSegment => {
+    const matched = rows.filter(predicate);
+    return {
+      key,
+      label,
+      count: matched.length,
+      balanceCents: matched.reduce((s, r) => s + r.balanceCents, 0),
+      bucketFilter,
+    };
+  };
+  return {
+    currency,
+    segments: [
+      seg("unpaid", "Unpaid", "", () => true),
+      seg("current", "Current", "current", (r) => r.bucket === "current"),
+      seg("overdue", "Overdue", "overdue", (r) => r.bucket !== "current"),
+      ...AR_AGING_BUCKETS.filter((b) => b !== "current").map((b) =>
+        seg(b, agingBucketDisplay(b), b, (r) => r.bucket === b),
+      ),
+    ],
+  };
+}
 
 export async function listDebtors(
   firmId: string,
@@ -147,7 +204,6 @@ export async function listDebtors(
     if (balanceCents <= 0) continue;
 
     const bucket = agingBucketFromDueDate(r.invoice.dueDate, now);
-    if (filters.bucket && bucket !== filters.bucket) continue;
 
     const clientName = r.clientType
       ? clientDisplayLabel({
@@ -185,9 +241,18 @@ export async function listDebtors(
     });
   }
 
-  const currencies = [...new Set(rows.map((row) => row.currency))].sort();
+  // Money bar uses all outstanding rows before the ageing-bucket chip filter.
+  const moneyBarSource = rows;
+  const filteredRows =
+    filters.bucket === undefined
+      ? moneyBarSource
+      : filters.bucket === "overdue"
+        ? moneyBarSource.filter((row) => row.bucket !== "current")
+        : moneyBarSource.filter((row) => row.bucket === filters.bucket);
+
+  const currencies = [...new Set(filteredRows.map((row) => row.currency))].sort();
   const summaryByCurrency: DebtorsCurrencySummary[] = currencies.map((currency) => {
-    const currencyRows = rows.filter((row) => row.currency === currency);
+    const currencyRows = filteredRows.filter((row) => row.currency === currency);
     const buckets = AR_AGING_BUCKETS.map((bucket) => ({
       bucket,
       count: currencyRows.filter((row) => row.bucket === bucket).length,
@@ -209,7 +274,8 @@ export async function listDebtors(
     agingBasis: "due_date",
     asOf: now.toISOString(),
     summaryByCurrency,
-    rows,
+    moneyBar: buildMoneyBar(moneyBarSource),
+    rows: filteredRows,
   };
 }
 

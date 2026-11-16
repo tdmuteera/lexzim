@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 export type DonutSlice = {
   key: string;
@@ -34,23 +34,7 @@ export function AnimatedDonutChart({
   slices: DonutSlice[];
   totalLabel?: string;
 }) {
-  const [progress, setProgress] = useState(0);
   const total = slices.reduce((s, x) => s + x.value, 0);
-
-  useEffect(() => {
-    setProgress(0);
-    let raf = 0;
-    const start = performance.now();
-    const duration = 1100;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setProgress(eased);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [slices]);
 
   const arcs = useMemo(() => {
     if (total <= 0) return [];
@@ -58,13 +42,13 @@ export function AnimatedDonutChart({
     return slices
       .filter((s) => s.value > 0)
       .map((s) => {
-        const sweep = (s.value / total) * 360 * progress;
+        const sweep = (s.value / total) * 360;
         const start = angle;
         const end = angle + Math.max(sweep, 0.01);
-        angle += (s.value / total) * 360 * progress;
+        angle += (s.value / total) * 360;
         return { ...s, start, end, path: arcPath(100, 100, 70, start, end) };
       });
-  }, [slices, total, progress]);
+  }, [slices, total]);
 
   return (
     <div className="dash-donut">
@@ -93,7 +77,7 @@ export function AnimatedDonutChart({
           textAnchor="middle"
           className="dash-donut-total"
         >
-          {Math.round(total * progress)}
+          {Math.round(total)}
         </text>
         <text
           x="100"
@@ -125,24 +109,7 @@ export function AnimatedBarChart({
   bars: Array<{ key: string; label: string; value: number; title?: string }>;
   formatValue?: (n: number) => string;
 }) {
-  const [progress, setProgress] = useState(0);
   const max = Math.max(1, ...bars.map((b) => b.value));
-
-  useEffect(() => {
-    setProgress(0);
-    let raf = 0;
-    const start = performance.now();
-    const duration = 1000;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setProgress(eased);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [bars]);
-
   const ticks = [0, 0.5, 1].map((f) => Math.round(max * f));
 
   return (
@@ -162,15 +129,11 @@ export function AnimatedBarChart({
           ))}
         </div>
         <div className="dash-bars-cols">
-          {bars.map((b, i) => {
-            const h = (b.value / max) * 100 * progress;
+          {bars.map((b) => {
+            const h = (b.value / max) * 100;
             const shown = formatValue ? formatValue(b.value) : String(Math.round(b.value));
             return (
-              <div
-                key={b.key}
-                className="dash-bar-col"
-                style={{ animationDelay: `${i * 0.08}s` }}
-              >
+              <div key={b.key} className="dash-bar-col">
                 <div className="dash-bar-stack">
                   <span className="dash-bar-value">{shown}</span>
                   <div className="dash-bar-track">

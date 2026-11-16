@@ -2892,6 +2892,157 @@ export const financeCommissionSettings = pgTable(
   ],
 );
 
+/**
+ * CSV / statement import batch (business or trust bank). No live Open Banking feed —
+ * staff upload a statement, then match or post lines (QuickBooks-style bank inbox).
+ */
+export const bankStatementImports = pgTable(
+  "bank_statement_imports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    /** business_bank | trust_bank */
+    accountKind: text("account_kind").notNull(),
+    /** Business cashbook label (business_bank). */
+    bankAccountLabel: text("bank_account_label"),
+    /** Trust bank account (trust_bank). */
+    trustAccountId: uuid("trust_account_id").references(() => trustAccounts.id, {
+      onDelete: "set null",
+    }),
+    currency: text("currency").notNull().default("USD"),
+    sourceFilename: text("source_filename"),
+    /** open | closed */
+    status: text("status").notNull().default("open"),
+    notes: text("notes"),
+    lineCount: integer("line_count").notNull().default(0),
+    importedBy: uuid("imported_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("bank_statement_imports_firm_status_idx").on(t.firmId, t.status),
+    index("bank_statement_imports_firm_created_idx").on(t.firmId, t.createdAt),
+  ],
+);
+
+export const bankStatementLines = pgTable(
+  "bank_statement_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    importId: uuid("import_id")
+      .notNull()
+      .references(() => bankStatementImports.id, { onDelete: "cascade" }),
+    lineDate: timestamp("line_date", { withTimezone: true }).notNull(),
+    description: text("description").notNull().default(""),
+    reference: text("reference"),
+    /** Signed cents: positive = money in, negative = money out. */
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    /** Dedup within firm + account fingerprint. */
+    rawHash: text("raw_hash").notNull(),
+    /** pending | matched | ignored | posted */
+    status: text("status").notNull().default("pending"),
+    /** cashbook | expense | fee_payment | trust_ledger | null */
+    matchedEntityType: text("matched_entity_type"),
+    matchedEntityId: uuid("matched_entity_id"),
+    appliedRuleId: uuid("applied_rule_id"),
+    suggestedCategory: text("suggested_category"),
+    suggestedPayee: text("suggested_payee"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("bank_statement_lines_firm_import_idx").on(t.firmId, t.importId),
+    index("bank_statement_lines_firm_status_idx").on(t.firmId, t.status),
+    unique("bank_statement_lines_firm_hash_uid").on(t.firmId, t.rawHash),
+  ],
+);
+
+/**
+ * Auto-categorize / ignore rules for imported bank lines (QuickBooks-style bank rules).
+ * Trust imports never auto-post; rules may only suggest ignore or leave pending.
+ */
+export const bankMatchRules = pgTable(
+  "bank_match_rules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** in | out | any */
+    direction: text("direction").notNull().default("any"),
+    /** description | reference */
+    matchField: text("match_field").notNull().default("description"),
+    /** contains | starts_with | equals */
+    matchType: text("match_type").notNull().default("contains"),
+    matchValue: text("match_value").notNull(),
+    priority: integer("priority").notNull().default(100),
+    /** ignore | suggest_expense | suggest_cashbook_in */
+    action: text("action").notNull(),
+    expenseCategory: text("expense_category"),
+    defaultPayee: text("default_payee"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("bank_match_rules_firm_active_idx").on(t.firmId, t.isActive, t.priority),
+  ],
+);
+
+/**
+ * Recurring finance templates (QuickBooks-style): expenses, creditor bills, fee invoices.
+ * scheduled = create when due; reminder = surface due without posting until staff runs;
+ * unscheduled = manual run only.
+ */
+export const financeRecurringTemplates = pgTable(
+  "finance_recurring_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    firmId: uuid("firm_id")
+      .notNull()
+      .references(() => firms.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** expense | creditor_bill | fee_invoice */
+    kind: text("kind").notNull(),
+    /** scheduled | reminder | unscheduled */
+    mode: text("mode").notNull().default("scheduled"),
+    /** weekly | monthly | yearly */
+    intervalUnit: text("interval_unit").notNull().default("monthly"),
+    intervalCount: integer("interval_count").notNull().default(1),
+    nextRunOn: date("next_run_on").notNull(),
+    endOn: date("end_on"),
+    isActive: boolean("is_active").notNull().default(true),
+    currency: text("currency").notNull().default("USD"),
+    /** Used for expense / creditor_bill; fee lines live in payloadJson. */
+    amountCents: integer("amount_cents"),
+    payloadJson: jsonb("payload_json")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    lastRunOn: date("last_run_on"),
+    lastRunStatus: text("last_run_status"),
+    lastRunEntityType: text("last_run_entity_type"),
+    lastRunEntityId: uuid("last_run_entity_id"),
+    lastRunError: text("last_run_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("finance_recurring_firm_active_idx").on(t.firmId, t.isActive),
+    index("finance_recurring_firm_next_idx").on(t.firmId, t.nextRunOn),
+  ],
+);
+
 export const schema = {
   appMeta,
   firms,
@@ -2987,4 +3138,8 @@ export const schema = {
   financeRequisitions,
   staffCommunicationEmails,
   financeCommissionSettings,
+  bankStatementImports,
+  bankStatementLines,
+  bankMatchRules,
+  financeRecurringTemplates,
 };

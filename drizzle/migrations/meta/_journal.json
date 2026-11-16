@@ -414,6 +414,20 @@
       "when": 1790100000000,
       "tag": "0058_supabase_data_api_lockdown",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0059_bank_statement_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0060_finance_recurring",
+      "breakpoints": true
     }
   ]
 }

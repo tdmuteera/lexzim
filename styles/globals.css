@@ -109,3 +109,40 @@ body:has(#login-screen) {
     box-shadow: none !important;
   }
 }
+
+/* Calm UI: no motion, no illuminations */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+.myday-hero-glow,
+.login-splash {
+  display: none !important;
+}
+
+.myday-ring-fill {
+  filter: none !important;
+}
+
+.login-mark,
+.brand-mark,
+.ai-launch-icon {
+  animation: none !important;
+}
+
+.badge-dot {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+.skeleton,
+.skeleton-line,
+[class*="shimmer"] {
+  background-image: none !important;
+}

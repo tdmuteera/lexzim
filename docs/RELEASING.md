@@ -31,8 +31,16 @@ About / Settings reads `APP_VERSION` via `GET /api/about`.
    - Settings → About shows the new version
 
 See `docs/RAILWAY.md` for staging/production split, rollback, sizing, and env rotation.
-8. **Migrations:** run `npx drizzle-kit migrate` against production DB if the release includes SQL (or use your Railway release command).
-9. Smoke a Managing Partner login on the production URL.
+8. **Migrations + security gate:** if the release includes SQL, run migrate against the target DB (`DIRECT_URL`), then verify lockdown and firm-scope static checks:
+   ```bash
+   RELEASE_MIGRATE=1 npm run security:release-gate
+   ```
+   If there is no schema change, still run `npm run security:release-gate` (skips migrate). Migrations stay forward-only; restore from backup if a migration must be undone (support-assisted).
+9. **Tenant isolation smoke** (staging or local with pilot + `isolation@lexzim.local` seeded):
+   ```bash
+   SMOKE_BASE_URL=https://your-staging.example npm run smoke:tenant-isolation
+   ```
+10. Smoke a Managing Partner login on the production URL.
 
 ## Rollback
 

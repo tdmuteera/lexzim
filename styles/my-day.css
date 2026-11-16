@@ -14,11 +14,11 @@
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 1.45fr);
-  gap: 1.5rem;
-  margin: 0.25rem 0 1.1rem;
-  padding: 1.5rem 1.6rem 1.35rem;
-  border-radius: 22px;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.45fr);
+  gap: 1.1rem;
+  margin: 0.15rem 0 0.85rem;
+  padding: 1.1rem 1.25rem 1.05rem;
+  border-radius: 16px;
   color: var(--md-ink);
   background:
     radial-gradient(120% 150% at 0% 0%, #4a3a1f 0%, rgba(74, 58, 31, 0) 55%),
@@ -32,15 +32,7 @@
 }
 
 .myday-hero-glow {
-  position: absolute;
-  inset: -40% auto auto -10%;
-  width: 55%;
-  height: 160%;
-  background: radial-gradient(closest-side, rgba(230, 194, 122, 0.22), transparent 70%);
-  filter: blur(20px);
-  z-index: -1;
-  animation: myday-drift 12s ease-in-out infinite alternate;
-  pointer-events: none;
+  display: none;
 }
 
 .myday-hero.is-complete {
@@ -80,9 +72,9 @@
 }
 
 .myday-hero-date {
-  margin: 0.15rem 0 0;
+  margin: 0.1rem 0 0;
   font-family: var(--font-serif, Georgia, "Times New Roman", serif);
-  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
   font-weight: 600;
   line-height: 1.15;
   color: var(--md-ink);
@@ -90,8 +82,8 @@
 }
 
 .myday-hero-headline {
-  margin: 0.1rem 0 0.6rem;
-  font-size: 0.95rem;
+  margin: 0.1rem 0 0.45rem;
+  font-size: 0.88rem;
   color: var(--md-ink-2);
   max-width: 34ch;
 }
@@ -266,8 +258,8 @@ a.myday-pill:hover {
   fill: none;
   stroke: url(#myday-ring-grad);
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
-  filter: drop-shadow(0 0 6px rgba(230, 194, 122, 0.45));
+  transition: none;
+  filter: none;
 }
 
 .myday-ring-label {
@@ -281,7 +273,7 @@ a.myday-pill:hover {
 }
 
 .myday-ring-label strong {
-  font-size: 1.7rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--md-ink, var(--text));
 }

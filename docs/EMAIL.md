@@ -6,6 +6,13 @@ LexZim sends transactional documents (quotations, invoices, receipts) and generi
 
 **Staff workflow emails are automatic** (in-app + SMTP via `notifyStaffEvent`). Tasks and invoice approval email as soon as they are created. A requisition emails as soon as it is submitted, and only to people who can approve requisitions. Being able to open Requisitions and request money does not put someone on that email. Calendar events do not email on create.
 
+## Finance recurring templates (cron)
+
+Endpoint: `GET`/`POST` `/api/cron/finance-recurring`  
+Auth: `Authorization: Bearer <CRON_SECRET>`  
+
+Runs due **scheduled** templates (creates expense / creditor bill / draft fee invoice) and acknowledges **reminder** templates. See `docs/FINANCE_RECURRING.md`.
+
 ## Calendar event reminder emails (cron)
 
 Endpoint: `GET`/`POST` `/api/cron/calendar-event-emails`  

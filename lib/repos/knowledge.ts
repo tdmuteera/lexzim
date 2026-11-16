@@ -34,12 +34,22 @@ export async function listKnowledgeSources(opts?: {
     .orderBy(asc(knowledgeSources.title));
 }
 
-export async function listChunksForSource(sourceId: string) {
+export async function listChunksForSource(
+  sourceId: string,
+  /** When set, only return chunks for this firm or system (null firm_id) chunks. */
+  firmId?: string | null,
+) {
   const db = getDb();
+  const conditions = [eq(knowledgeChunks.sourceId, sourceId)];
+  if (firmId) {
+    conditions.push(
+      or(isNull(knowledgeChunks.firmId), eq(knowledgeChunks.firmId, firmId))!,
+    );
+  }
   return db
     .select()
     .from(knowledgeChunks)
-    .where(eq(knowledgeChunks.sourceId, sourceId))
+    .where(and(...conditions))
     .orderBy(asc(knowledgeChunks.chunkIndex));
 }
 

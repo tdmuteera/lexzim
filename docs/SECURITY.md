@@ -28,12 +28,33 @@ Drizzle and `service_role` keep working. Do **not** add “allow all authenticat
 ### Verify
 
 ```bash
-npx tsx scripts/verify-data-api-lockdown.ts
+npm run security:verify-data-api
 ```
 
 Expect: no `anon`/`authenticated` table grants, every public table has RLS, REST probe with the anon key is denied.
 
 Also re-check **Supabase → Advisors** after the migration. Critical “RLS disabled” / “sensitive columns exposed” should clear once the Data API cannot reach those tables.
+
+### App-layer tenancy proof (not PostgREST RLS)
+
+LexZim keeps business data off the Data API. Tenant isolation is still enforced in Next.js + Drizzle with `firm_id`. Before a commercial release:
+
+```bash
+# Static: repos/API routes that forget firm scope
+npm run security:check-firm-scope
+
+# Lockdown + static checks (add RELEASE_MIGRATE=1 to run drizzle-kit migrate first)
+npm run security:release-gate
+
+# Runtime IDOR matrix (needs running app + pilot + isolation@lexzim.local)
+npm run smoke:tenant-isolation
+```
+
+Do **not** “fix” multi-tenancy by opening `anon`/`authenticated` grants and adding per-firm PostgREST policies. That fights this lockdown model.
+
+## Bank inbox (CSV)
+
+Statement CSV import (`/finance/bank-inbox`, migration `0059`) stays on the Next.js + Drizzle path. New tables enable RLS with no Data API policies. Trust CSV lines may only **match** existing trust ledger entries; they never invent client-tagged trust receipts.
 
 ## App hardening (related)
 

@@ -20,12 +20,16 @@ function parseDate(value: string | null): Date | undefined {
   return d;
 }
 
-function parseBucket(value: string | null): ArAgingBucket | undefined {
+function parseBucket(value: string | null): ArAgingBucket | "overdue" | undefined {
   if (!value) return undefined;
+  if (value === "overdue") return "overdue";
   if ((AR_AGING_BUCKETS as readonly string[]).includes(value)) {
     return value as ArAgingBucket;
   }
-  throw new AuthError("validation", `Invalid bucket. Use: ${AR_AGING_BUCKETS.join(", ")}`);
+  throw new AuthError(
+    "validation",
+    `Invalid bucket. Use: overdue, ${AR_AGING_BUCKETS.join(", ")}`,
+  );
 }
 
 function filtersFromUrl(url: URL): DebtorsFilters {

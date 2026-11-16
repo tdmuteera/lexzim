@@ -209,6 +209,18 @@ export const navSections: NavSection[] = [
             permission: "finance.requisitions.view",
           },
           {
+            href: "/finance/recurring",
+            label: "Recurring",
+            icon: "list",
+            permission: "finance.post",
+          },
+          {
+            href: "/finance/bank-inbox",
+            label: "Bank inbox",
+            icon: "list",
+            permission: "finance.reconcile",
+          },
+          {
             href: "/finance/reconciliations",
             label: "Reconciliations",
             icon: "check",
@@ -435,6 +447,18 @@ export const routeMeta: Record<string, RouteMeta> = {
     subtitle: "Business · disbursement requests",
     purpose: "Request firm operating funds or matter disbursements (Client then Matter), then approve and pay.",
     phaseBadge: "Phase 11",
+  },
+  "/finance/recurring": {
+    title: "Recurring",
+    subtitle: "Expenses · bills · fee invoices",
+    purpose: "Templates for rent, software, creditor bills, and standing fee invoices. Scheduled creates when due; reminders wait for review.",
+    phaseBadge: "Phase 6+",
+  },
+  "/finance/bank-inbox": {
+    title: "Bank inbox",
+    subtitle: "CSV import · match · rules",
+    purpose: "Import bank statement CSVs, match to cash book or trust ledger, and apply categorization rules. Complements period reconciliations; no live bank feed.",
+    phaseBadge: "Phase 6+",
   },
   "/finance/reconciliations": {
     title: "Reconciliations",

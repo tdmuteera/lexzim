@@ -17,10 +17,11 @@ import {
 } from "@/lib/billing/aging";
 import { centsToDisplay } from "@/lib/billing/money";
 import { invoiceDetailPath } from "@/lib/billing/paths";
-import type { DebtorsReport, DebtorsRow } from "@/lib/repos/debtors";
+import type { DebtorsMoneyBar, DebtorsReport, DebtorsRow } from "@/lib/repos/debtors";
 import { useTableSort } from "@/lib/ui/table-sort";
 
 type MatterOption = { id: string; title: string; matterNumber: string | null };
+type BucketFilter = ArAgingBucket | "" | "overdue";
 
 function formatShortDate(value: string | null) {
   if (!value) return "n/a";
@@ -116,12 +117,20 @@ export function DebtorsView() {
   const [matters, setMatters] = useState<MatterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [bucket, setBucket] = useState<ArAgingBucket | "">("");
+  const [bucket, setBucket] = useState<BucketFilter>("");
   const [matterId, setMatterId] = useState("");
   const [clientIdFilter, setClientIdFilter] = useState(urlClientId);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(
     urlClientId || null,
   );
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [reminderPreview, setReminderPreview] = useState<{
+    subject: string;
+    message: string;
+    to: string | null;
+    invoiceIds: string[];
+  } | null>(null);
 
   useEffect(() => {
     setClientIdFilter(urlClientId);
@@ -193,13 +202,7 @@ export function DebtorsView() {
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [rows]);
 
-  const bucketCounts = useMemo(() => {
-    const counts: Partial<Record<ArAgingBucket, number>> = {};
-    for (const row of rows) {
-      counts[row.bucket] = (counts[row.bucket] ?? 0) + 1;
-    }
-    return counts;
-  }, [rows]);
+  const moneyBar: DebtorsMoneyBar | null = report?.moneyBar ?? null;
 
   const exportQuery = useMemo(
     () => ({
@@ -230,6 +233,96 @@ export function DebtorsView() {
     rows.find((r) => r.clientId === expandedClientId)?.clientName ??
     clientOptions.find((c) => c.id === expandedClientId)?.name;
 
+  function toggleSelected(invoiceId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) next.delete(invoiceId);
+      else next.add(invoiceId);
+      return next;
+    });
+  }
+
+  function selectOverdueInView() {
+    setSelectedIds(new Set(rows.filter((r) => r.bucket !== "current").map((r) => r.invoiceId)));
+  }
+
+  async function previewReminders(invoiceIds: string[]) {
+    if (!invoiceIds.length) return;
+    setReminderBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/finance/debtors/reminders", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceIds }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        data?: {
+          drafts?: Array<{
+            subject: string;
+            message: string;
+            to: string | null;
+            invoiceIds: string[];
+          }>;
+        };
+        error?: { message?: string };
+      };
+      if (!res.ok || !body.ok || !body.data?.drafts?.[0]) {
+        setError(body.error?.message ?? "Could not draft reminder.");
+        return;
+      }
+      const draft = body.data.drafts[0];
+      setReminderPreview({
+        subject: draft.subject,
+        message: draft.message,
+        to: draft.to,
+        invoiceIds: body.data.drafts.flatMap((d) => d.invoiceIds),
+      });
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
+  async function sendReminders() {
+    if (!reminderPreview?.invoiceIds.length) return;
+    setReminderBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/finance/debtors/reminders", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceIds: reminderPreview.invoiceIds,
+          send: true,
+          to: reminderPreview.to || undefined,
+          subject: reminderPreview.subject,
+          message: reminderPreview.message,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        data?: { sent?: Array<{ ok: boolean; error?: string }> };
+        error?: { message?: string };
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error?.message ?? "Could not send reminder.");
+        return;
+      }
+      const failed = (body.data?.sent ?? []).filter((s) => !s.ok);
+      if (failed.length) {
+        setError(failed.map((f) => f.error).filter(Boolean).join("; ") || "Some reminders failed.");
+      }
+      setReminderPreview(null);
+      setSelectedIds(new Set());
+      await load();
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
   return (
     <section className="view active scrollable finance-desk-view" aria-label="Debtors">
       <div className="panel">
@@ -237,10 +330,30 @@ export function DebtorsView() {
           <div>
             <h3>Debtors</h3>
             <p className="panel-subtitle muted">
-              Outstanding fee invoices · weekly collections view · contact timeline
+              Outstanding fee invoices · money bar · payment reminders · contact timeline
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reminderBusy || selectedIds.size === 0}
+              onClick={() => void previewReminders([...selectedIds])}
+            >
+              Remind selected ({selectedIds.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reminderBusy || rows.every((r) => r.bucket === "current")}
+              onClick={() => {
+                selectOverdueInView();
+                const ids = rows.filter((r) => r.bucket !== "current").map((r) => r.invoiceId);
+                void previewReminders(ids);
+              }}
+            >
+              Remind overdue in view
+            </Button>
             <ExportMenu kind="debtors" queryParams={exportQuery} disabled={loading} />
             <Button size="sm" variant="outline" onClick={() => load()} disabled={loading}>
               Refresh
@@ -276,14 +389,44 @@ export function DebtorsView() {
             </div>
           ) : null}
 
+          {moneyBar && moneyBar.segments.some((s) => s.count > 0) ? (
+            <div className="debtors-money-bar" aria-label="Debtors money bar">
+              {moneyBar.segments
+                .filter((s) => s.count > 0 || s.key === "unpaid")
+                .map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className={[
+                      "finance-status-chip",
+                      "debtors-money-chip",
+                      bucket === s.bucketFilter ? "active" : "",
+                      s.key === "overdue" ? "debtors-money-chip-overdue" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() =>
+                      setBucket(bucket === s.bucketFilter ? "" : s.bucketFilter)
+                    }
+                  >
+                    <span>{s.label}</span>
+                    <strong>
+                      {s.count} · {centsToDisplay(s.balanceCents, moneyBar.currency)}
+                    </strong>
+                  </button>
+                ))}
+            </div>
+          ) : null}
+
           <div className="toolbar">
             <select
               className="filter-select"
               value={bucket}
-              onChange={(e) => setBucket(e.target.value as ArAgingBucket | "")}
+              onChange={(e) => setBucket(e.target.value as BucketFilter)}
               aria-label="Filter by ageing bucket"
             >
-              <option value="">All buckets</option>
+              <option value="">All unpaid</option>
+              <option value="overdue">Overdue (all past due)</option>
               {AR_AGING_BUCKETS.map((b) => (
                 <option key={b} value={b}>
                   {agingBucketDisplay(b)}
@@ -330,23 +473,70 @@ export function DebtorsView() {
             )}
           </div>
 
-          {!loading && rows.length > 0 ? (
-            <div className="finance-status-summary" aria-label="Bucket counts">
-              {AR_AGING_BUCKETS.map((b) =>
-                bucketCounts[b] ? (
-                  <button
-                    key={b}
-                    type="button"
-                    className={["finance-status-chip", bucket === b ? "active" : ""]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => setBucket(bucket === b ? "" : b)}
+          {reminderPreview ? (
+            <div className="panel debtors-reminder-preview">
+              <div className="panel-head">
+                <h3>Payment reminder preview</h3>
+                <Button size="sm" variant="ghost" onClick={() => setReminderPreview(null)}>
+                  Close
+                </Button>
+              </div>
+              <div className="panel-body stack gap-sm">
+                <p className="muted">
+                  To: {reminderPreview.to || "No client email on file — add one before send"}
+                </p>
+                <label>
+                  Subject
+                  <input
+                    value={reminderPreview.subject}
+                    onChange={(e) =>
+                      setReminderPreview({ ...reminderPreview, subject: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Message
+                  <textarea
+                    rows={10}
+                    value={reminderPreview.message}
+                    onChange={(e) =>
+                      setReminderPreview({ ...reminderPreview, message: e.target.value })
+                    }
+                  />
+                </label>
+                <div className="row gap-sm wrap">
+                  <Button
+                    disabled={reminderBusy || !reminderPreview.to}
+                    onClick={() => void sendReminders()}
                   >
-                    <span>{agingBucketDisplay(b)}</span>
-                    <strong>{bucketCounts[b]}</strong>
-                  </button>
-                ) : null,
-              )}
+                    Send email + log contact
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={reminderBusy}
+                    onClick={async () => {
+                      setReminderBusy(true);
+                      try {
+                        await fetch("/api/finance/debtors/reminders", {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            invoiceIds: reminderPreview.invoiceIds,
+                            logOnly: true,
+                          }),
+                        });
+                        setReminderPreview(null);
+                        await load();
+                      } finally {
+                        setReminderBusy(false);
+                      }
+                    }}
+                  >
+                    Log only (no email)
+                  </Button>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -373,6 +563,7 @@ export function DebtorsView() {
                 <thead>
                   <tr>
                     <th />
+                    <th aria-label="Select" />
                     <SortableTh
                       label="Invoice"
                       columnKey="invoice"
@@ -447,6 +638,14 @@ export function DebtorsView() {
                             ) : null}
                           </td>
                           <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(row.invoiceId)}
+                              onChange={() => toggleSelected(row.invoiceId)}
+                              aria-label={`Select ${row.invoiceNumber}`}
+                            />
+                          </td>
+                          <td>
                             <Link
                               href={invoiceDetailPath(row.invoiceId)}
                               className="finance-invoice-link"
@@ -454,6 +653,16 @@ export function DebtorsView() {
                               {row.invoiceNumber}
                             </Link>
                             <div className="muted finance-cell-sub">{row.status}</div>
+                            {row.bucket !== "current" ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={reminderBusy}
+                                onClick={() => void previewReminders([row.invoiceId])}
+                              >
+                                Remind
+                              </Button>
+                            ) : null}
                           </td>
                           <td>
                             {row.clientId ? (
@@ -485,7 +694,7 @@ export function DebtorsView() {
                         </tr>
                         {showPanel ? (
                           <tr>
-                            <td colSpan={7}>
+                            <td colSpan={8}>
                               <DebtorCommunicationsPanel
                                 clientId={row.clientId!}
                                 clientName={row.clientName}

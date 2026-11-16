@@ -234,7 +234,7 @@ export async function syncMyDay(firmId: string, userId: string, today: string) {
   return prefs;
 }
 
-async function hydrate(rows: ItemRow[]): Promise<MyDayItemDto[]> {
+async function hydrate(firmId: string, rows: ItemRow[]): Promise<MyDayItemDto[]> {
   if (!rows.length) return [];
   const db = getDb();
   const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))] as string[];
@@ -254,13 +254,13 @@ async function hydrate(rows: ItemRow[]): Promise<MyDayItemDto[]> {
         tradingName: clients.tradingName,
       })
       .from(clients)
-      .where(inArray(clients.id, clientIds))
+      .where(and(eq(clients.firmId, firmId), inArray(clients.id, clientIds)))
       : Promise.resolve([]),
     matterIds.length
       ? db
           .select({ id: matters.id, title: matters.title, matterNumber: matters.matterNumber })
           .from(matters)
-          .where(inArray(matters.id, matterIds))
+          .where(and(eq(matters.firmId, firmId), inArray(matters.id, matterIds)))
       : Promise.resolve([]),
   ]);
 
@@ -371,7 +371,10 @@ export async function getMyDayPayload(
   ]);
 
   const seen = new Set(rows.map((row) => row.id));
-  const items = await hydrate([...rows, ...historyRows.filter((row) => !seen.has(row.id))]);
+  const items = await hydrate(firmId, [
+    ...rows,
+    ...historyRows.filter((row) => !seen.has(row.id)),
+  ]);
 
   return {
     today,
@@ -444,7 +447,7 @@ export async function createMyDayItem(
     })
     .returning();
   if (!row) throw new AuthError("server", "Could not add item.");
-  const [dto] = await hydrate([row]);
+  const [dto] = await hydrate(firmId, [row]);
   return { itemId: row.id, item: dto };
 }
 
@@ -461,7 +464,7 @@ export async function getMyDayItem(firmId: string, userId: string, id: string) {
 export async function getMyDayItemDto(firmId: string, userId: string, id: string) {
   const row = await getMyDayItem(firmId, userId, id);
   if (!row) return null;
-  const [dto] = await hydrate([row]);
+  const [dto] = await hydrate(firmId, [row]);
   return dto ?? null;
 }
 
@@ -609,7 +612,7 @@ export async function listMyDayRange(
       ),
     )
     .orderBy(asc(myDayItems.dueDate), sql`${myDayItems.dueTime} ASC NULLS LAST`);
-  return hydrate(rows);
+  return hydrate(firmId, rows);
 }
 
 export function assertIsoDate(value: unknown, label: string): string {

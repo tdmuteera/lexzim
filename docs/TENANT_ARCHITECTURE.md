@@ -43,6 +43,17 @@ Firm RBAC roles are **not** platform roles. Platform admins use `requirePlatform
 3. Never trust client-supplied `firm_id` without `requireFirmScope()`.
 4. App-layer isolation for every query. Postgres **RLS is enabled** with no Data API policies for `anon` / `authenticated` (migration `0058`, see `docs/SECURITY.md`). Business access stays on Next.js + Drizzle, not PostgREST.
 
+## Proof before commercial launch
+
+| Check | Command | What it proves |
+|---|---|---|
+| Static firm scope | `npm run security:check-firm-scope` | Repos/API routes did not obviously drop `firmId` |
+| Data API lockdown | `npm run security:verify-data-api` | Browser JWT roles still cannot CRUD public tables |
+| Release gate | `npm run security:release-gate` | Both of the above (optional migrate with `RELEASE_MIGRATE=1`) |
+| Runtime IDOR | `npm run smoke:tenant-isolation` | Firm A cannot GET/PATCH firm B clients, matters, invoices, trust |
+
+Fine-grained per-tenant RLS policies for PostgREST remain optional later and are **not** required while the Data API stays locked down.
+
 ## Storage layout (Phase 1+)
 
 Supabase Storage paths:

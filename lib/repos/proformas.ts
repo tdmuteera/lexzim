@@ -191,24 +191,32 @@ export type ListProformasOpts = {
   clientId?: string;
 };
 
-async function hydrateRow(row: {
-  proforma: typeof proFormas.$inferSelect;
-  clientNumber: string | null;
-  clientType: string;
-  clientFirstName: string | null;
-  clientSurname: string | null;
-  clientFullName: string | null;
-  clientLegalName: string | null;
-  clientRegisteredName: string | null;
-  clientTradingName: string | null;
-  matterTitle: string | null;
-  matterNumber: string | null;
-}) {
+async function hydrateRow(
+  firmId: string,
+  row: {
+    proforma: typeof proFormas.$inferSelect;
+    clientNumber: string | null;
+    clientType: string;
+    clientFirstName: string | null;
+    clientSurname: string | null;
+    clientFullName: string | null;
+    clientLegalName: string | null;
+    clientRegisteredName: string | null;
+    clientTradingName: string | null;
+    matterTitle: string | null;
+    matterNumber: string | null;
+  },
+) {
   const db = getDb();
   const lines = await db
     .select()
     .from(proFormaLines)
-    .where(eq(proFormaLines.proformaId, row.proforma.id))
+    .where(
+      and(
+        eq(proFormaLines.firmId, firmId),
+        eq(proFormaLines.proformaId, row.proforma.id),
+      ),
+    )
     .orderBy(asc(proFormaLines.sortOrder));
   const sums = lineTotals(lines);
   return {
@@ -258,7 +266,7 @@ export async function listProformas(firmId: string, opts?: ListProformasOpts) {
 
   const results = [];
   for (const row of rows) {
-    results.push(await hydrateRow(row));
+    results.push(await hydrateRow(firmId, row));
   }
   return results;
 }
@@ -286,7 +294,7 @@ export async function getProforma(firmId: string, id: string) {
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  return hydrateRow(row);
+  return hydrateRow(firmId, row);
 }
 
 /** Open (non-void) pro forma pipeline totals for dashboard. */
